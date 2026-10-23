@@ -1,0 +1,20 @@
+# TermForms pinned toolchain.
+#
+# Minimums are the oldest versions the build is known to work with; pinned
+# versions must match exactly, because they change output (formatting) or
+# code generation.
+
+[minimum]
+cmake            = 3.21
+ninja            = 1.10
+clang            = 15        # or Apple clang from current Xcode Command Line Tools
+gcc              = 11
+msvc             = 2022      # Visual Studio 2022 or later, x64
+python           = 3.10
+
+[pinned]
+clang-format     = 23.1.3    # pip install clang-format==23.1.3
+doctest          = 2.5.3     # vendored in third_party/doctest
+
+[pinned-later]
+zig              = 0.16.x    # pinned to an exact release when Phase 2 adds zig cc

@@ -58,6 +58,26 @@ Sub cmdGreet_Click()
 End Sub
 ```
 
+## Building
+
+Nothing compiles BASIC yet; the build produces the compiler skeleton (`tfc`),
+the runtime library and the test suites. Requirements are in
+[`toolchain.txt`](toolchain.txt).
+
+```sh
+# macOS and Linux
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+
+# Windows (Visual Studio 2022 or later)
+cmake --preset vs
+cmake --build --preset vs
+ctest --preset vs
+```
+
+See [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md) before contributing.
+
 ## Licence
 
 - The compiler, tools and everything else in this repository are under the

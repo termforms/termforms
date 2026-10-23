@@ -1,0 +1,86 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": { "TF_BUILD_TESTS": "ON" }
+        },
+        {
+            "name": "unix-base",
+            "hidden": true,
+            "inherits": "base",
+            "generator": "Ninja",
+            "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "dev",
+            "displayName": "Development (Debug, Ninja)",
+            "description": "Everyday debug build on macOS and Linux",
+            "inherits": "unix-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "release",
+            "displayName": "Release (Ninja)",
+            "inherits": "unix-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+        },
+        {
+            "name": "asan",
+            "displayName": "Debug with AddressSanitizer and UBSan",
+            "inherits": "unix-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "TF_SANITIZE": "ON" }
+        },
+        {
+            "name": "ci-unix",
+            "displayName": "CI (macOS and Linux)",
+            "inherits": "unix-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "TF_WARNINGS_AS_ERRORS": "ON" }
+        },
+        {
+            "name": "ci-asan",
+            "displayName": "CI with sanitizers",
+            "inherits": "unix-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "TF_SANITIZE": "ON",
+                "TF_WARNINGS_AS_ERRORS": "ON"
+            }
+        },
+        {
+            "name": "vs",
+            "displayName": "Visual Studio (Windows x64)",
+            "description": "Uses the newest installed Visual Studio generator; no developer prompt needed",
+            "inherits": "base",
+            "architecture": { "value": "x64", "strategy": "set" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "ci-windows",
+            "displayName": "CI (Windows x64)",
+            "inherits": "vs",
+            "cacheVariables": { "TF_WARNINGS_AS_ERRORS": "ON" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "dev",        "configurePreset": "dev" },
+        { "name": "release",    "configurePreset": "release" },
+        { "name": "asan",       "configurePreset": "asan" },
+        { "name": "ci-unix",    "configurePreset": "ci-unix" },
+        { "name": "ci-asan",    "configurePreset": "ci-asan" },
+        { "name": "vs",         "configurePreset": "vs",         "configuration": "Debug" },
+        { "name": "ci-windows", "configurePreset": "ci-windows", "configuration": "Debug" }
+    ],
+    "testPresets": [
+        { "name": "dev",        "configurePreset": "dev",        "output": { "outputOnFailure": true } },
+        { "name": "release",    "configurePreset": "release",    "output": { "outputOnFailure": true } },
+        { "name": "asan",       "configurePreset": "asan",       "output": { "outputOnFailure": true } },
+        { "name": "ci-unix",    "configurePreset": "ci-unix",    "output": { "outputOnFailure": true } },
+        { "name": "ci-asan",    "configurePreset": "ci-asan",    "output": { "outputOnFailure": true } },
+        { "name": "vs",         "configurePreset": "vs",         "configuration": "Debug", "output": { "outputOnFailure": true } },
+        { "name": "ci-windows", "configurePreset": "ci-windows", "configuration": "Debug", "output": { "outputOnFailure": true } }
+    ]
+}

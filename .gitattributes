@@ -1,0 +1,9 @@
+# Normalise text files to LF in the repository; Windows checkouts stay LF too,
+# so generated-C golden files compare byte for byte on every platform.
+* text=auto eol=lf
+
+# Batch files need CRLF to run reliably under cmd.exe.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.png binary
