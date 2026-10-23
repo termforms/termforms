@@ -19,18 +19,30 @@ void fail(CommandLine &result, const std::string &message)
     }
 }
 
-bool startsWith(const std::string &text, const char *prefix)
+bool startsWith(const std::string &text, const std::string &prefix)
 {
     return text.rfind(prefix, 0) == 0;
 }
+
+struct ValueOption
+{
+    const char *name; // "-o", "--cc", ...
+    std::string CommandLine::*field;
+};
+
+const ValueOption kValueOptions[] = {
+    {"-o", &CommandLine::outputPath},
+    {"--cc", &CommandLine::cCompiler},
+    {"--runtime", &CommandLine::runtimeDir},
+};
 
 } // namespace
 
 CommandLine parseCommandLine(const std::vector<std::string> &args)
 {
     CommandLine result;
-    bool outputSeen = false;
     bool optionsEnded = false;
+    std::vector<std::string> seenValueOptions;
 
     for (std::size_t i = 0; i < args.size(); ++i)
     {
@@ -47,45 +59,83 @@ CommandLine parseCommandLine(const std::vector<std::string> &args)
         if (arg == "--")
         {
             optionsEnded = true;
+            continue;
         }
-        else if (arg == "-h" || arg == "--help")
+        if (arg == "-h" || arg == "--help")
         {
             result.showHelp = true;
+            continue;
         }
-        else if (arg == "--version")
+        if (arg == "--version")
         {
             result.showVersion = true;
+            continue;
         }
-        else if (arg == "-o" || startsWith(arg, "-o="))
+        if (arg == "--emit-c")
         {
-            if (outputSeen)
+            result.emitC = true;
+            continue;
+        }
+        if (arg == "--keep-c")
+        {
+            result.keepC = true;
+            continue;
+        }
+        if (arg == "--release")
+        {
+            result.release = true;
+            continue;
+        }
+        if (arg == "-v" || arg == "--verbose")
+        {
+            result.verbose = true;
+            continue;
+        }
+
+        bool matched = false;
+        for (const ValueOption &option : kValueOptions)
+        {
+            const std::string name = option.name;
+            if (arg != name && !startsWith(arg, name + "="))
             {
-                fail(result, "-o given more than once");
                 continue;
             }
-            outputSeen = true;
+            matched = true;
 
-            if (arg == "-o")
+            for (const std::string &seen : seenValueOptions)
+            {
+                if (seen == name)
+                {
+                    fail(result, name + " given more than once");
+                }
+            }
+            seenValueOptions.push_back(name);
+
+            std::string value;
+            if (arg == name)
             {
                 // The value is the next argument; an option there is a mistake,
-                // not a file name.
-                if (i + 1 >= args.size() || startsWith(args[i + 1], "-"))
+                // not a value. A lone "-" is a value (standard output).
+                if (i + 1 >= args.size() || (startsWith(args[i + 1], "-") && args[i + 1] != "-"))
                 {
-                    fail(result, "-o needs a file name");
-                    continue;
+                    fail(result, name + " needs a value");
+                    break;
                 }
-                result.outputPath = args[++i];
+                value = args[++i];
             }
             else
             {
-                result.outputPath = arg.substr(3);
-                if (result.outputPath.empty())
+                value = arg.substr(name.size() + 1);
+                if (value.empty())
                 {
-                    fail(result, "-o needs a file name");
+                    fail(result, name + " needs a value");
+                    break;
                 }
             }
+            result.*option.field = value;
+            break;
         }
-        else
+        if (!matched)
         {
             fail(result, "unknown option '" + arg + "'");
         }
@@ -102,12 +152,23 @@ CommandLine parseCommandLine(const std::vector<std::string> &args)
 
 std::string usageText()
 {
-    return "Usage: tfc [options] <file.bas | project.vbp>...\n"
+    return "Usage: tfc [options] <file.bas>\n"
+           "\n"
+           "Compiles a TermForms BASIC program to a native executable, via C.\n"
            "\n"
            "Options:\n"
-           "  -o <file>     Name of the executable to produce\n"
-           "  -h, --help    Show this help and exit\n"
-           "  --version     Show the compiler version and exit\n";
+           "  -o <file>         Name of the executable (or, with --emit-c, the C file;\n"
+           "                    '-' writes the C to standard output)\n"
+           "  --emit-c          Write the generated C and stop\n"
+           "  --keep-c          Keep the generated C next to the executable\n"
+           "  --release         Optimise and leave out debug information\n"
+           "  --cc <command>    C compiler command, e.g. \"zig cc -target x86_64-linux-musl\"\n"
+           "                    (default: $TFC_CC, else cc; on Windows zig cc or cl)\n"
+           "  --runtime <dir>   TermForms runtime directory (default: $TERMFORMS_RUNTIME,\n"
+           "                    else the runtime this tfc was built with)\n"
+           "  -v, --verbose     Show the C compiler command\n"
+           "  -h, --help        Show this help and exit\n"
+           "  --version         Show the compiler version and exit\n";
 }
 
 } // namespace tf::driver

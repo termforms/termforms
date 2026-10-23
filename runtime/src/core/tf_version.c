@@ -2,12 +2,9 @@
 /*
  * tf_version.c -- runtime version reporting.
  */
-#include "termforms/tf_runtime.h"
+#include "termforms/tf_version.h"
 
-/* Supplied by the build (runtime/CMakeLists.txt); guard against a bare compile. */
-#ifndef TF_RUNTIME_VERSION
-#error "TF_RUNTIME_VERSION must be defined by the build"
-#endif
+#include "termforms/tf_runtime.h"
 
 const char *tf_runtime_version(void)
 {

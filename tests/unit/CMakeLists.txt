@@ -9,7 +9,8 @@ target_include_directories(doctest SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/third_
 
 add_executable(tf_unit_tests
     main.cpp
-    test_command_line.cpp)
+    test_command_line.cpp
+    test_frontend.cpp)
 
 target_link_libraries(tf_unit_tests PRIVATE tfc_lib doctest)
 tf_set_warnings(tf_unit_tests)

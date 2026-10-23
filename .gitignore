@@ -39,3 +39,10 @@ zig-out/
 *~
 .DS_Store
 Thumbs.db
+
+# --- tfc output ---------------------------------------------------------------
+*.tf.c
+*.tf-obj/
+# Programs built from the examples (everything but the sources).
+/examples/*
+!/examples/*.bas

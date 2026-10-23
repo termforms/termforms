@@ -4,6 +4,11 @@
 # macOS (Apple Silicon) and Windows x64, with warnings treated as errors.
 # Runner images are pinned to explicit versions rather than "-latest", so an
 # image upgrade is a deliberate change here, not a surprise.
+#
+# The run tests compile real TermForms programs with whichever C compiler
+# TFC_CC names, so the jobs below cover each supported compiler: gcc, clang,
+# Apple clang, MSVC (cl) and zig cc, plus the zig cross build from macOS to a
+# static Linux binary that is the everyday deployment path.
 
 name: CI
 
@@ -21,6 +26,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  ZIG_VERSION: "0.17.0" # keep in step with toolchain.txt
+
 jobs:
   build-test:
     name: ${{ matrix.name }}
@@ -29,23 +37,30 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: Linux gcc,       os: ubuntu-24.04,  preset: ci-unix,    cc: gcc,   cxx: g++ }
-          - { name: Linux clang,     os: ubuntu-24.04,  preset: ci-unix,    cc: clang, cxx: clang++ }
-          - { name: macOS clang,     os: macos-15,      preset: ci-unix,    cc: clang, cxx: clang++ }
-          - { name: Windows MSVC,    os: windows-2025,  preset: ci-windows, cc: "",    cxx: "" }
+          - { name: Linux gcc,        os: ubuntu-24.04, preset: ci-unix,    cc: gcc,   cxx: g++,     tfc_cc: gcc }
+          - { name: Linux clang,      os: ubuntu-24.04, preset: ci-unix,    cc: clang, cxx: clang++, tfc_cc: clang }
+          - { name: macOS clang,      os: macos-15,     preset: ci-unix,    cc: clang, cxx: clang++, tfc_cc: cc }
+          - { name: Windows MSVC,     os: windows-2025, preset: ci-windows, cc: "",    cxx: "",      tfc_cc: cl }
     env:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
+      TFC_CC: ${{ matrix.tfc_cc }}
     steps:
       - uses: actions/checkout@v5
 
-      # Python supplies Ninja on every platform (Windows uses the Visual Studio
-      # generator and ignores it).
+      # Python runs the end-to-end tests and supplies Ninja on every platform
+      # (Windows builds with the Visual Studio generator and ignores Ninja).
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install Ninja
         run: python -m pip install ninja
+
+      # Programs built by tfc with cl need the MSVC environment; tfc itself
+      # is built by the Visual Studio generator, which finds it on its own.
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
@@ -53,6 +68,74 @@ jobs:
         run: cmake --build --preset ${{ matrix.preset }}
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
+
+  zig:
+    name: zig cc (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Linux,   os: ubuntu-24.04, preset: ci-unix }
+          - { name: macOS,   os: macos-15,     preset: ci-unix }
+          - { name: Windows, os: windows-2025, preset: ci-windows }
+    env:
+      TFC_CC: python -m ziglang cc
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      # zig from PyPI: one pinned version, the same on every platform.
+      - name: Install Ninja and zig
+        run: python -m pip install ninja ziglang==${{ env.ZIG_VERSION }}
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+      - name: Run tests with zig cc
+        run: ctest --preset ${{ matrix.preset }} -L run
+
+  cross-build:
+    name: Cross build (macOS to Linux x86-64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Ninja and zig
+        run: python -m pip install ninja ziglang==${{ env.ZIG_VERSION }}
+      - name: Build tfc
+        run: |
+          cmake --preset ci-unix
+          cmake --build --preset ci-unix --target tfc
+      - name: Cross-compile hello.bas to a static Linux binary
+        working-directory: examples
+        run: |
+          ../build/ci-unix/compiler/tfc -v \
+            --cc "python -m ziglang cc -target x86_64-linux-musl" \
+            -o hello-linux-x86_64 hello.bas
+          file hello-linux-x86_64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hello-linux-x86_64
+          path: examples/hello-linux-x86_64
+
+  cross-run:
+    name: Run the cross build on Linux
+    needs: cross-build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: hello-linux-x86_64
+      - name: Run headless
+        run: |
+          chmod +x hello-linux-x86_64
+          file hello-linux-x86_64 | grep -q "statically linked"
+          TERMFORMS_HEADLESS='CI{TAB}{ENTER}' ./hello-linux-x86_64 | tee screen.txt
+          grep -q "Hello, CI! (1)" screen.txt
 
   sanitizers:
     name: Sanitizers (${{ matrix.name }})
@@ -92,5 +175,5 @@ jobs:
         run: python -m pip install clang-format==23.1.3
       - name: Check formatting
         run: |
-          git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' \
+          git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' ':!:tests/golden/**' \
             | xargs clang-format --dry-run --Werror

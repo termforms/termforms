@@ -12,9 +12,11 @@ VB-DOS or QuickBASIC, while dropping what made those hard to maintain
 
 ## Status
 
-**Design stage. Nothing is usable yet.** The design has been settled and the
-project plan written; the first milestone is a vertical slice — one form, two
-controls and one event handler, built on macOS and run over SSH on Linux.
+**Early development: the vertical slice works.** A program with one form, a
+TextBox, a CommandButton and a Click handler compiles to C and runs in a
+terminal on Linux, macOS and Windows, including as a static Linux binary
+cross-compiled with `zig cc`. See [`docs/LANGUAGE.md`](docs/LANGUAGE.md) for
+exactly what the language supports today.
 
 ## Planned shape (v1)
 
@@ -60,9 +62,7 @@ End Sub
 
 ## Building
 
-Nothing compiles BASIC yet; the build produces the compiler skeleton (`tfc`),
-the runtime library and the test suites. Requirements are in
-[`toolchain.txt`](toolchain.txt).
+Requirements are in [`toolchain.txt`](toolchain.txt).
 
 ```sh
 # macOS and Linux
@@ -74,6 +74,14 @@ ctest --preset dev
 cmake --preset vs
 cmake --build --preset vs
 ctest --preset vs
+```
+
+Then try the example:
+
+```sh
+cd examples
+../build/dev/compiler/tfc hello.bas
+./hello
 ```
 
 See [`docs/CODING_STANDARDS.md`](docs/CODING_STANDARDS.md) before contributing.

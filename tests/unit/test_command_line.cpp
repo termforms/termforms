@@ -53,10 +53,37 @@ TEST_CASE("-o takes the next argument or an = value")
 
 TEST_CASE("-o errors")
 {
-    CHECK(parseCommandLine({"hello.bas", "-o"}).error == "-o needs a file name");
-    CHECK(parseCommandLine({"-o=", "hello.bas"}).error == "-o needs a file name");
-    CHECK(parseCommandLine({"-o", "--version"}).error == "-o needs a file name");
+    CHECK(parseCommandLine({"hello.bas", "-o"}).error == "-o needs a value");
+    CHECK(parseCommandLine({"-o=", "hello.bas"}).error == "-o needs a value");
+    CHECK(parseCommandLine({"-o", "--version"}).error == "-o needs a value");
     CHECK(parseCommandLine({"-o", "a", "-o", "b", "x.bas"}).error == "-o given more than once");
+}
+
+TEST_CASE("-o - means standard output")
+{
+    const CommandLine cmd = parseCommandLine({"--emit-c", "-o", "-", "x.bas"});
+    REQUIRE(cmd.ok());
+    CHECK(cmd.outputPath == "-");
+    CHECK(cmd.emitC);
+}
+
+TEST_CASE("--cc keeps a multi-word command intact")
+{
+    const CommandLine cmd = parseCommandLine({"--cc", "zig cc -target x86_64-linux-musl", "x.bas"});
+    REQUIRE(cmd.ok());
+    CHECK(cmd.cCompiler == "zig cc -target x86_64-linux-musl");
+
+    const CommandLine eq = parseCommandLine({"--cc=clang", "x.bas"});
+    CHECK(eq.cCompiler == "clang");
+}
+
+TEST_CASE("flags")
+{
+    const CommandLine cmd = parseCommandLine({"--keep-c", "--release", "-v", "x.bas"});
+    REQUIRE(cmd.ok());
+    CHECK(cmd.keepC);
+    CHECK(cmd.release);
+    CHECK(cmd.verbose);
 }
 
 TEST_CASE("unknown options are reported by name")

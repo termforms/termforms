@@ -7,11 +7,32 @@
 #   runtime/  C tests for the runtime library
 #   cli       command-line behaviour of the tfc executable (defined below)
 #
-# Golden tests (.bas -> expected C) and run tests (.bas -> expected output)
-# arrive in Phase 2, once the compiler produces C.
+#   golden/   .bas -> expected generated C           (tools/tf_test.py golden)
+#   errors/   .bas -> expected diagnostics           (tools/tf_test.py errors)
+#   run/      .bas + key script -> expected screen   (tools/tf_test.py run)
+#
+# Adding a case is adding files: the directories are scanned at configure
+# time (re-run CMake after adding one). TF_UPDATE_EXPECTED=1 rewrites the
+# expected files from actual output.
 
 add_subdirectory(unit)
 add_subdirectory(runtime)
+
+find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+set(TF_TEST_TOOL ${CMAKE_CURRENT_SOURCE_DIR}/tools/tf_test.py)
+
+foreach(mode golden errors run)
+    file(GLOB sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${mode}/*.bas)
+    foreach(source ${sources})
+        get_filename_component(name ${source} NAME_WE)
+        add_test(NAME ${mode}.${name}
+            COMMAND ${Python3_EXECUTABLE} ${TF_TEST_TOOL} ${mode}
+                --tfc $<TARGET_FILE:tfc>
+                --source ${source}
+                --work ${CMAKE_CURRENT_BINARY_DIR}/run-work)
+        set_tests_properties(${mode}.${name} PROPERTIES LABELS ${mode})
+    endforeach()
+endforeach()
 
 # ---------------------------------------------------------------------------
 # Command-line tests: run tfc and match its output. When
@@ -42,5 +63,5 @@ set_tests_properties(cli.unknown-option PROPERTIES
 add_test(NAME cli.no-inputs-exit COMMAND tfc)
 set_tests_properties(cli.no-inputs-exit PROPERTIES LABELS cli WILL_FAIL TRUE)
 
-add_test(NAME cli.not-implemented-exit COMMAND tfc hello.bas)
-set_tests_properties(cli.not-implemented-exit PROPERTIES LABELS cli WILL_FAIL TRUE)
+add_test(NAME cli.missing-file-exit COMMAND tfc no-such-file.bas)
+set_tests_properties(cli.missing-file-exit PROPERTIES LABELS cli WILL_FAIL TRUE)

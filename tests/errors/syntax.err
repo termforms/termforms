@@ -1,0 +1,3 @@
+syntax.bas:3:13: error: expected a type but found end of line
+syntax.bas:4:9: error: expected an expression but found '='
+syntax.bas:5:13: error: expected 'Then' but found end of line

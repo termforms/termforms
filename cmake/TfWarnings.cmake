@@ -12,6 +12,8 @@ function(tf_set_warnings target)
         # /W4: high warning level; /permissive-: standards conformance;
         # /utf-8: source and execution character sets are UTF-8 on every platform.
         target_compile_options(${target} PRIVATE /W4 /permissive- /utf-8)
+        # getenv, sscanf and friends are standard C; MSVC's "use _s" advice is not portable.
+        target_compile_definitions(${target} PRIVATE _CRT_SECURE_NO_WARNINGS)
         if(TF_WARNINGS_AS_ERRORS)
             target_compile_options(${target} PRIVATE /WX)
         endif()
