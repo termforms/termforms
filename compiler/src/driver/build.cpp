@@ -98,18 +98,21 @@ std::string chooseCompiler(const CommandLine &cmd, std::string &problem)
     {
         return "cc";
     }
-    // Windows: zig cc needs no developer prompt; cl only works inside one.
-    if (onPath("zig"))
+    else
     {
-        return "zig cc";
+        // Windows: zig cc needs no developer prompt; cl only works inside one.
+        if (onPath("zig"))
+        {
+            return "zig cc";
+        }
+        if (onPath("cl"))
+        {
+            return "cl";
+        }
+        problem = "no C compiler found: install zig (and put it on PATH), run tfc from a "
+                  "Visual Studio developer prompt, or name a compiler with --cc";
+        return {};
     }
-    if (onPath("cl"))
-    {
-        return "cl";
-    }
-    problem = "no C compiler found: install zig (and put it on PATH), run tfc from a Visual "
-              "Studio developer prompt, or name a compiler with --cc";
-    return {};
 }
 
 // --runtime, then $TERMFORMS_RUNTIME, then the runtime this tfc was built with.
@@ -151,12 +154,15 @@ std::string quote(const std::string &arg)
     {
         return "\"" + arg + "\""; // Windows file names cannot contain '"'
     }
-    std::string out = "'";
-    for (char c : arg)
+    else
     {
-        out += c == '\'' ? std::string("'\\''") : std::string(1, c);
+        std::string out = "'";
+        for (char c : arg)
+        {
+            out += c == '\'' ? std::string("'\\''") : std::string(1, c);
+        }
+        return out + "'";
     }
-    return out + "'";
 }
 
 std::string lowerFileStem(const std::string &word)
