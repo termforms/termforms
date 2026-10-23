@@ -521,12 +521,17 @@ static void ui_shutdown(void)
 
 static void ui_open(void)
 {
-    const char *script = tf_platform_getenv("TERMFORMS_HEADLESS");
+    /* Copied: tf_platform_getenv's result only lives until its next call. */
+    static char *script = NULL;
+    const char *headless_keys = tf_platform_getenv("TERMFORMS_HEADLESS");
     int cols = 80;
     int rows = 25;
 
-    if (script != NULL)
+    if (headless_keys != NULL)
     {
+        const size_t length = strlen(headless_keys);
+        script = tf_xmalloc(length + 1);
+        memcpy(script, headless_keys, length + 1);
         headless = 1;
         use_utf8 = 1; /* deterministic output for tests */
         parse_size(tf_platform_getenv("TERMFORMS_HEADLESS_SIZE"), &cols, &rows);

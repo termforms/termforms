@@ -58,8 +58,9 @@ std::string getEnv(const char *name)
     return value != nullptr ? value : "";
 }
 
-// Finds an executable on PATH; returns true if present.
-bool onPath(const std::string &name)
+// Finds an executable on PATH; returns true if present. Only the Windows
+// default-compiler search uses it.
+[[maybe_unused]] bool onPath(const std::string &name)
 {
     const std::string path = getEnv("PATH");
     const char separator = kWindowsHost ? ';' : ':';

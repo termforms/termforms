@@ -103,6 +103,9 @@ def run(tfc: str, source: Path, work: Path) -> bool:
 
 
 def main() -> int:
+    # Expected screens contain box-drawing characters; a Windows console
+    # code page cannot print them otherwise.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["golden", "errors", "run"])
     parser.add_argument("--tfc", required=True)
