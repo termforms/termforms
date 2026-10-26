@@ -34,25 +34,19 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (26 Oct 2026)
+## Status (26 Oct 2026, Phase 2 closed)
 
 - **Phase 1 (foundations): done.**
-- **Phase 2 (vertical slice): built, green in CI on all 12 jobs.** Jim ran
-  `examples/hello.bas` in iTerm2 on his M4 Mac successfully. Outstanding
-  manual checks, which Jim is doing now and will report:
+- **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
+  for all three targets ran without errors or differences on the Mac, the
+  Win11 ThinkPad and a DreamHost Linux server (over SSH, static musl
+  binary). Carried into the Phase 4 terminal matrix, not yet confirmed:
   1. Terminal.app (with "Use Option as Meta key") and Ghostty on the Mac.
-  2. Cross-built static binary over SSH on his x86-64 Linux server
-     (`tfc --cc "zig cc -target x86_64-linux-musl" ...`), including dropping
-     the SSH connection mid-run (terminal must be restored, SIGHUP path).
-  3. ThinkPad (Win11 x64): `hello.exe` cross-built with
-     `zig cc -target x86_64-windows-gnu`, run by double-click (console host
-     or Windows Terminal?) and from Windows Terminal.
+  2. Dropping the SSH connection mid-run restores the terminal (SIGHUP).
+  3. Windows: double-click launch (console host or Windows Terminal?).
   4. Resize behaviour: re-centring, and the "Please resize" overlay.
-  5. **Deferred:** can Visual Studio debug zig-built (MinGW ABI, DWARF)
-     programs? Needs VS on the ThinkPad. If not, Windows debug builds use
-     MSVC (`--cc cl`).
-- Fix anything those checks turn up first, then close Phase 2 and update the
-  plan doc's status line (or ask Jim to).
+  5. Can Visual Studio debug zig-built (MinGW ABI, DWARF) programs? Needs
+     VS on the ThinkPad. If not, Windows debug builds use MSVC (`--cc cl`).
 - **Next: Phase 3 (language core) and Phase 4 (TUI runtime)**, interleaved.
   Ask Jim which to start with; suggested first steps are in "Next work".
 
@@ -89,6 +83,9 @@ authoritative for design rationale.
   GoTo into/out of Try. Uncaught error in an event handler: restore
   terminal, report file:line, exit. **Lowering: status checks + goto to the
   Catch/cleanup label, not setjmp/longjmp.**
+- **Parameters (26 Oct 2026):** ByVal is the default (VB.NET, not VB-DOS);
+  `ByRef` marks a parameter the callee may assign to. Exact ByRef rules
+  (call-site marker? what may be passed ByRef?) still to settle with Jim.
 - **Events:** `Sub <Control>_<Event>` wired at compile time into dispatch
   (no reflection). `Form_Load` runs before the form shows.
 - **Forms:** fixed size per form (Width/Height include border), absolute
@@ -198,7 +195,9 @@ git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' ':!:tests/golden/**
 - **M4 Mac mini, macOS 27**: main dev machine. Checkout at `~/code/termforms`.
   Uses the Command Line Tools toolchain only (an out-of-date full Xcode
   caused `ld: tapi error ... arm64e.x1`; Xcode was removed). Homebrew cmake,
-  ninja, pipx clang-format, zig via Homebrew. Terminals: iTerm2 (verified),
+  ninja, pipx clang-format. The pinned zig 0.16.0 is the pipx `ziglang`
+  package, run as `python-zig` (`--cc "python-zig cc -target ..."`); plain
+  `zig` on PATH is Homebrew's 0.17.0 and must not be used for builds. Terminals: iTerm2 (verified),
   Terminal.app, Ghostty.
 - **Linux server, x86-64**: deployment target over SSH; runs static musl
   binaries, nothing installed.
@@ -235,8 +234,7 @@ buffer is reused by the next call (copy what you keep).
 
 Phase 3, language core:
 1. Loops (For/Next, Do/Loop, While), Exit, Function with return values,
-   parameters (ByVal default? — ask Jim: VB.NET is ByVal default, VB-DOS
-   ByRef), local scope rules.
+   parameters (ByVal default, `ByRef` opt-in), local scope rules.
 2. Long and Double (+ `/`, CInt/CLng/CDbl, Str$/Val), Option Strict
    conversions.
 3. Try/Catch/Finally lowering (status checks + goto), Err, Throw.
