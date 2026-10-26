@@ -84,8 +84,14 @@ authoritative for design rationale.
   terminal, report file:line, exit. **Lowering: status checks + goto to the
   Catch/cleanup label, not setjmp/longjmp.**
 - **Parameters (26 Oct 2026):** ByVal is the default (VB.NET, not VB-DOS);
-  `ByRef` marks a parameter the callee may assign to. Exact ByRef rules
-  (call-site marker? what may be passed ByRef?) still to settle with Jim.
+  `ByRef` marks a parameter the callee may assign to. ByVal/ByRef appear
+  only in the signature, never at the call site (as VB6). A ByRef argument
+  must be assignable (variable, array element, Type field); anything else
+  is a compile error. A user Type passed ByVal is copied whole. An array
+  passed ByVal is read-only in the callee (element assignment, ReDim, or
+  passing it on ByRef is a compile error) — no copy is made; pass ByRef to
+  modify. A `Ref` passed ByVal copies the reference: the callee can change
+  the object's fields but not rebind the caller's variable.
 - **Events:** `Sub <Control>_<Event>` wired at compile time into dispatch
   (no reflection). `Form_Load` runs before the form shows.
 - **Forms:** fixed size per form (Width/Height include border), absolute
