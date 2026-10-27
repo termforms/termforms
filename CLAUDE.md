@@ -58,7 +58,7 @@ authoritative for design rationale.
   CInt/CLng/CDbl/CStr/Str$/Val/Fix/Int. Jim settled the Double text
   format, Str$'s space, banker's rounding and errors instead of
   Infinity/NaN, then (same day) the remaining number rules in
-  `docs/REFERENCE.md`. Nothing is Proposed at present.
+  `docs/REFERENCE.md`.
   Step 3 done (27 Oct 2026): Try/Catch [When]/Finally, Throw, Err.Raise
   (VB's Number, Source, Description), Err.Clear, Err.Number/Description/
   Source/Line. Jim settled Err.Raise's form and out of memory being fatal;
@@ -73,9 +73,9 @@ authoritative for design rationale.
   catchable (checked before allocating); out of memory stays 7, fatal.
   **Const (and Enum unless complex) added to v1 scope** (Jim, 27 Oct
   2026); their detailed rules are still to be settled with him.
-  Step 4 done (27 Oct 2026): Const and Enum, CType, as settled; the
-  smaller details in REFERENCE.md ("Constants and enumerations
-  (Proposed)") still want Jim's confirmation.
+  Step 4 done (27 Oct 2026): Const and Enum, CType; all their rules
+  settled, including the details. Still Proposed: "Errors (Proposed)" in
+  REFERENCE.md (Catch/Err details).
 - **Next:** Phase 3 step 5 (arrays, Types and Ref, Dictionary), or Phase 4
   work; ask Jim.
 
@@ -146,8 +146,7 @@ authoritative for design rationale.
   comes from its value unless As/suffix says otherwise. Enum members are
   always qualified (`Color.Red`); an Enum is a distinct type (widens to
   Integer/Long implicitly, Integer to Enum needs `CType(n, Color)`); as
-  text an Enum value is its number. Details in REFERENCE.md (the smaller
-  ones Proposed).
+  text an Enum value is its number. Details in REFERENCE.md.
 - **Debugging:** `#line` before every statement (one C line per BASIC
   statement); pretty-printers for gdb, lldb, .natvis. DAP debugger later.
 - **Toolchain:** v1 bundles nothing; driver uses `--cc`, `$TFC_CC`, else

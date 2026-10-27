@@ -313,7 +313,7 @@ c = CType(n, Color)                   ' Integer to Color needs CType
 - **As text an Enum value is its number**: `"" & Color.Red` is `"0"`, as
   VB6 and VB.NET's CStr.
 
-### Constants and enumerations (Proposed)
+### Constants and enumerations: details (Settled, 27 Oct 2026)
 
 - A Const's value is a constant expression: literals, other Consts, Enum
   members, and the operators (`+ - * / \ Mod ^ & = <> < > <= >= Not And
