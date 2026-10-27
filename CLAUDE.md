@@ -230,8 +230,14 @@ authoritative for design rationale.
   place (`drawn`, `at_x`...) and `control_at` hit-tests, menus first;
   act on release over the pressed control; key scripts {CLICK x,y} etc.;
   tests/runtime/test_keys.c covers the decoder's terminal bytes).
-- **Next:** Phase 4 step 9: Unicode width tables (tools/ script from
-  Python's unicodedata; runtime/THIRD_PARTY_NOTICES).
+  Step 4.9 done: Unicode widths (tools/gen_width_tables.py writes
+  runtime/src/tui/tf_width_tables.c from Python's unicodedata, Unicode
+  17.0 with Python 3.15; tf_char_width/tf_text_cells in tf_width.c; the
+  screen keeps a wide character's second cell as TF_CELL_TAIL; captions,
+  wrapping and the TextBox measure in cells). **Phase 4 is complete**
+  apart from the terminal matrix checks (Phase 2's list above).
+- **Next:** waiting for Jim: review the Proposed rules of Phase 4, and
+  decide the known gaps below (Select Case first) and Phase 5's scope.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -311,9 +317,10 @@ authoritative for design rationale.
 - **Files:** `.bas` modules/forms, `.frm` later, `.vbp` project file in our
   own format. **Name:** TermForms; the language "TermForms BASIC".
 - **Licence:** compiler/tools BSD-2-Clause; `runtime/` 0BSD (compiled
-  programs carry no obligation). Unicode width tables: ship the Unicode
-  notice in `runtime/THIRD_PARTY_NOTICES` when the tables arrive (see
-  `docs/LICENSING.md`). Every source file starts with an SPDX line.
+  programs carry no obligation). The Unicode width tables are generated
+  (`tools/gen_width_tables.py`) and their notice is in
+  `runtime/THIRD_PARTY_NOTICES` (see `docs/LICENSING.md`). Every source
+  file starts with an SPDX line.
 
 ## Repository map
 
@@ -527,17 +534,16 @@ buffer is reused by the next call (copy what you keep). MSVC's C4701
 ("potentially uninitialized") only shows in CI's Windows jobs: initialise
 a variable that is filled in only when a call succeeds.
 
-## Known limitations of the slice (intentional, to be replaced)
+## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- One source file, one form; no arrays, no Types, no
-  Select Case, no `For i As Integer = ...` inline declaration, no
-  `Dim x As Integer = 5` initialisers.
-- Controls: TextBox and CommandButton only; no Label, menus, MsgBox.
-- Ctrl+Q closes the form (placeholder until menus/End/close semantics).
-- Every code point is one cell (no width tables yet); no mouse yet
-  (SGR mouse is planned); no Alt keys (ESC-prefix dropped in tf_keys.c).
-- Generated `main()` uses `tf_form_run`, a blocking loop; modal stacks and
-  DoEvents come with Phase 4.
+- No Select Case, no `For i As Integer = ...` inline declaration, no
+  `Dim x As Integer = 5` initialisers (none is in REFERENCE.md yet).
+- No DoEvents (the handover lists it with the TUI runtime).
+- No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
+  the overlay); no MouseDown/Up/Move events; the clipboard is the
+  program's own.
+- Combining marks are not drawn (a cell holds one character); text
+  that relies on them shows the base letters.
 
 ## Next work (suggested order — confirm with Jim)
 
@@ -554,9 +560,9 @@ Phase 3, language core:
 Not planned (Jim, 27 Oct 2026): warnings for a local assigned but never
 read. Not worth the effort for TermForms' use; do not propose it again.
 
-Phase 4, TUI runtime: Label, CheckBox, OptionButton, ListBox, Frame, Timer;
-menus (F10, Alt+letter); MsgBox/InputBox and a modal form stack; overlay
-layer; edit-buffer TextBox; SGR mouse; Unicode width tables (+ notice file).
+Phase 4, TUI runtime: ~~Label, CheckBox, OptionButton, ListBox, Frame,
+Timer; menus; MsgBox/InputBox and a modal form stack; edit-buffer TextBox;
+SGR mouse; Unicode width tables~~ (done 28 Oct 2026).
 
 Each step: unit tests for rules/messages, golden C for codegen shape, run
 tests for behaviour; update `docs/LANGUAGE.md` and `docs/REFERENCE.md`.

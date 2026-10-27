@@ -156,6 +156,14 @@ void tf_screen_invalidate(void);
 /* Prints the screen as plain text, one line per row, trailing spaces cut. */
 void tf_screen_dump(FILE *out);
 
+/* Cells a character takes on a terminal: 2 wide (CJK, emoji), 0 for one
+   drawn with the character before it (a combining mark) or not at all
+   (controls, format characters), else 1 (tf_width.c). */
+int tf_char_width(uint32_t cp);
+
+/* Cells UTF-8 text takes: the sum of its characters' widths. */
+int tf_text_cells(const char *utf8);
+
 /* Decodes one UTF-8 code point; returns bytes consumed (at least 1). */
 int tf_utf8_decode(const char *s, int length, uint32_t *cp);
 

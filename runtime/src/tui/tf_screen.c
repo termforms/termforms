@@ -5,6 +5,12 @@
  * Drawing goes into the back buffer. A flush compares it with the front
  * buffer (what the terminal is known to show) and sends only the cells that
  * differ, which keeps updates small over slow or high-latency SSH links.
+ *
+ * A wide character (two cells) is kept in its first cell, with a tail
+ * marker in the second, so the buffer's columns stay those the terminal
+ * shows. Writing over either half of one turns the other half to a space.
+ * Characters of width 0 are not drawn: a cell holds one character, and
+ * leaving them out keeps the columns right on every terminal.
  */
 #include "tf_tui.h"
 
@@ -20,6 +26,9 @@ typedef struct tf_cell
 
 /* A front-buffer value that never matches a real cell, forcing a redraw. */
 #define TF_CELL_INVALID 0xFFFFFFFFu
+
+/* The second cell of a wide character (never a real code point). */
+#define TF_CELL_TAIL 0xFFFFFFFEu
 
 static tf_cell *back = NULL;
 static tf_cell *front = NULL;
@@ -183,14 +192,46 @@ void tf_screen_invalidate(void)
     }
 }
 
+/* Before cell x of a row is written: a wide character it is half of
+   loses its other half (a space, so nothing is left half drawn). */
+static void break_wide(tf_cell *row, int x)
+{
+    if (row[x].ch == TF_CELL_TAIL && x > 0)
+    {
+        row[x - 1].ch = ' ';
+    }
+    else if (x + 1 < width && row[x + 1].ch == TF_CELL_TAIL)
+    {
+        row[x + 1].ch = ' ';
+    }
+}
+
 void tf_screen_put(int x, int y, uint32_t ch, int fg, int bg)
 {
-    if (x >= 0 && y >= 0 && x < width && y < height)
+    if (x < 0 || y < 0 || x >= width || y >= height)
     {
-        tf_cell *cell = &back[y * width + x];
-        cell->ch = ch;
-        cell->fg = (uint8_t)fg;
-        cell->bg = (uint8_t)bg;
+        return;
+    }
+    const int cells = tf_char_width(ch);
+    if (cells == 0)
+    {
+        return;
+    }
+    tf_cell *row = &back[y * width];
+    if (cells == 2 && x + 1 >= width)
+    {
+        ch = ' '; /* half a wide character cannot be shown */
+    }
+    break_wide(row, x);
+    row[x].ch = ch;
+    row[x].fg = (uint8_t)fg;
+    row[x].bg = (uint8_t)bg;
+    if (cells == 2 && ch != ' ')
+    {
+        break_wide(row, x + 1);
+        row[x + 1].ch = TF_CELL_TAIL;
+        row[x + 1].fg = (uint8_t)fg;
+        row[x + 1].bg = (uint8_t)bg;
     }
 }
 
@@ -207,18 +248,22 @@ void tf_screen_fill(int x, int y, int w, int h, uint32_t ch, int fg, int bg)
 
 int tf_screen_text(int x, int y, const char *utf8, int max_cells, int fg, int bg)
 {
-    /* Every code point takes one cell here; wide characters come later with
-     * the Unicode width tables. */
+    /* A wide character that would cross max_cells ends the text there. */
     int cells = 0;
     int length = (int)strlen(utf8);
-    while (length > 0 && cells < max_cells)
+    while (length > 0)
     {
         uint32_t cp = 0;
         const int used = tf_utf8_decode(utf8, length, &cp);
+        const int w = tf_char_width(cp);
+        if (cells + w > max_cells)
+        {
+            break;
+        }
         tf_screen_put(x + cells, y, cp, fg, bg);
         utf8 += used;
         length -= used;
-        cells++;
+        cells += w;
     }
     return cells;
 }
@@ -255,6 +300,11 @@ void tf_screen_flush(void)
             {
                 continue;
             }
+            if (b->ch == TF_CELL_TAIL)
+            {
+                *f = *b; /* drawn by the character before it */
+                continue;
+            }
             if (x != last_x || y != last_y)
             {
                 emitf_move(x, y);
@@ -268,7 +318,7 @@ void tf_screen_flush(void)
             char encoded[4];
             emit(encoded, (size_t)tf_utf8_encode(b->ch, encoded));
             *f = *b;
-            last_x = x + 1;
+            last_x = x + (x + 1 < width && back[y * width + x + 1].ch == TF_CELL_TAIL ? 2 : 1);
             last_y = y;
         }
     }
@@ -290,6 +340,10 @@ void tf_screen_dump(FILE *stream)
         size_t keep = 0; /* length up to the last non-space character */
         for (int x = 0; x < width; ++x)
         {
+            if (back[y * width + x].ch == TF_CELL_TAIL)
+            {
+                continue; /* the wide character before it fills it */
+            }
             char encoded[4];
             const int n = tf_utf8_encode(back[y * width + x].ch, encoded);
             if (used + (size_t)n >= sizeof line)

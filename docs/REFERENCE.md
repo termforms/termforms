@@ -1156,6 +1156,30 @@ off. The rest:
   with cells counted from 0,0 at the screen's top left.
 - No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
 
+### Character widths (Proposed)
+
+Settled: the tables come from Python's unicodedata by a script in
+tools/, and the Unicode notice ships in runtime/THIRD_PARTY_NOTICES.
+
+- **2 cells**: East_Asian_Width W or F (CJK, Hangul syllables, fullwidth
+  forms, and the emoji shown as emoji by default), and the unassigned
+  code points of the ideograph blocks.
+- **0 cells, not drawn**: combining marks (Mn, Me), format characters
+  (Cf, except the soft hyphen and the prepended concatenation marks),
+  Hangul medial vowels and final consonants, and controls. A cell holds
+  one character, so a combining accent is left out (precomposed text,
+  the norm, shows in full); leaving them out keeps every column where the
+  terminal puts it.
+- **1 cell**: everything else, the ambiguous width (A) included, as
+  terminals draw it outside a CJK locale.
+- Text is measured in cells wherever it is laid out: captions, the
+  title, Label wrapping, dialogs, menus, ListBox items, the TextBox
+  (which scrolls by whole characters). A wide character that would cross
+  the edge of its space is left out. `Len`, `Mid$`, SelStart and the rest
+  still count code points.
+- `python3 tools/gen_width_tables.py` remakes the tables; run it with a
+  newer Python for a newer Unicode, and commit the result.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

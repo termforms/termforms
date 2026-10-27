@@ -769,18 +769,10 @@ static void strip_accelerator(const char *caption, char *out, size_t capacity)
     out[used] = '\0';
 }
 
-/* Cells needed to show UTF-8 text (one per code point in this version). */
+/* Cells needed to show UTF-8 text (a wide character takes two). */
 static int utf8_cells(const char *text)
 {
-    int cells = 0;
-    for (const char *p = text; *p != '\0'; ++p)
-    {
-        if (((unsigned char)*p & 0xC0u) != 0x80u)
-        {
-            cells++;
-        }
-    }
-    return cells;
+    return tf_text_cells(text);
 }
 
 /* Byte offset of the code point with the given index. */
@@ -795,8 +787,52 @@ static const char *skip_code_points(const char *bytes, int32_t count)
     return bytes;
 }
 
+/* The cells a TextBox shows code point i in: its own width, or the
+   PasswordChar's. */
+static int box_cell_width(const tf_control *tb, uint32_t cp)
+{
+    return tf_char_width(tb->password_char != 0 ? tb->password_char : cp);
+}
+
+/* Cells from code point `from` up to (not including) code point `to`. */
+static int box_cells(const tf_control *tb, int32_t from, int32_t to)
+{
+    const char *p = skip_code_points(tf_str_cstr(tb->edit.text), from);
+    int cells = 0;
+    for (int32_t i = from; i < to && *p != '\0'; ++i)
+    {
+        uint32_t cp = 0;
+        p += tf_utf8_decode(p, (int)strlen(p), &cp);
+        cells += box_cell_width(tb, cp);
+    }
+    return cells;
+}
+
+/* The code point a click `cells` across the shown text lands on: the one
+   it is in (the end, past the text). */
+static int32_t box_code_point_at(const tf_control *tb, int cells)
+{
+    const char *p = skip_code_points(tf_str_cstr(tb->edit.text), tb->scroll);
+    int32_t i = tb->scroll;
+    int used = 0;
+    while (*p != '\0')
+    {
+        uint32_t cp = 0;
+        const int n = tf_utf8_decode(p, (int)strlen(p), &cp);
+        used += box_cell_width(tb, cp);
+        if (used > cells)
+        {
+            break;
+        }
+        p += n;
+        ++i;
+    }
+    return i;
+}
+
 /* The text from the first code point shown; the selection stands out while
-   the box has the focus (as Windows hides it otherwise). */
+   the box has the focus (as Windows hides it otherwise). The window scrolls
+   by code points but is measured in cells, so wide characters fit. */
 static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focused)
 {
     const int w = tb->width < max_width ? (int)tb->width : max_width;
@@ -806,29 +842,37 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
     }
     tf_screen_fill(x, y, w, 1, ' ', TF_BLACK, TF_WHITE);
 
-    /* Keep the caret inside the visible window. */
+    /* Keep the caret inside the visible window (its cell before the box's
+       last). */
     const int32_t caret = tf_edit_cursor_index(&tb->edit);
     if (caret < tb->scroll)
     {
         tb->scroll = caret;
     }
-    else if (caret >= tb->scroll + w)
+    while (tb->scroll < caret && box_cells(tb, tb->scroll, caret) >= w)
     {
-        tb->scroll = caret - w + 1;
+        tb->scroll++;
     }
 
     const char *p = skip_code_points(tf_str_cstr(tb->edit.text), tb->scroll);
-    for (int i = 0; i < w && *p != '\0'; ++i)
+    int cells = 0;
+    for (int32_t i = tb->scroll; *p != '\0'; ++i)
     {
         uint32_t cp = 0;
         p += tf_utf8_decode(p, (int)strlen(p), &cp);
-        const int lit = focused && tf_edit_selected(&tb->edit, tb->scroll + i);
-        tf_screen_put(x + i, y, tb->password_char != 0 ? tb->password_char : cp,
-                      lit ? TF_WHITE : TF_BLACK, lit ? TF_BLUE : TF_WHITE);
+        const uint32_t shown_as = tb->password_char != 0 ? tb->password_char : cp;
+        const int cw = tf_char_width(shown_as);
+        if (cells + cw > w)
+        {
+            break;
+        }
+        const int lit = focused && tf_edit_selected(&tb->edit, i);
+        tf_screen_put(x + cells, y, shown_as, lit ? TF_WHITE : TF_BLACK, lit ? TF_BLUE : TF_WHITE);
+        cells += cw;
     }
     if (focused)
     {
-        tf_screen_cursor(x + (int)(caret - tb->scroll), y, 1);
+        tf_screen_cursor(x + box_cells(tb, tb->scroll, caret), y, 1);
     }
 }
 
@@ -900,9 +944,14 @@ static int draw_caption(int x, int y, const tf_string *caption, int max_cells, i
         }
         uint32_t cp = 0;
         p += tf_utf8_decode(p, (int)strlen(p), &cp);
+        const int w = tf_char_width(cp);
+        if (cells + w > max_cells)
+        {
+            break; /* a wide character that would not fit */
+        }
         tf_screen_put(x + cells, y, cp, next_hot ? hot : fg, bg);
         next_hot = 0;
-        ++cells;
+        cells += w;
     }
     return cells;
 }
@@ -991,10 +1040,16 @@ static void draw_label(const tf_control *label, int x, int y, int w, int h)
         const char *line_end = p;
         const char *last_space = NULL;
         int cells = 0;
-        for (const char *q = p; *q != '\0' && cells < w; ++cells)
+        for (const char *q = p; *q != '\0';)
         {
             uint32_t cp = 0;
-            q += tf_utf8_decode(q, (int)strlen(q), &cp);
+            const int used = tf_utf8_decode(q, (int)strlen(q), &cp);
+            if (cells + tf_char_width(cp) > w)
+            {
+                break;
+            }
+            cells += tf_char_width(cp);
+            q += used;
             if (cp == ' ')
             {
                 last_space = q - 1;
@@ -2397,7 +2452,7 @@ static void form_mouse(tf_control *form, tf_key key)
             }
             if (c->type == TF_CTL_TEXTBOX)
             {
-                const int32_t cp = c->scroll + (key.x - c->at_x);
+                const int32_t cp = box_code_point_at(c, key.x - c->at_x);
                 if (double_click)
                 {
                     tf_edit_select_word(&c->edit, cp);
@@ -2417,7 +2472,7 @@ static void form_mouse(tf_control *form, tf_key key)
             if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn)
             {
                 const int dx = key.x - pressed->at_x;
-                tf_edit_place(&pressed->edit, pressed->scroll + (dx < 0 ? 0 : dx), 1);
+                tf_edit_place(&pressed->edit, box_code_point_at(pressed, dx < 0 ? 0 : dx), 1);
             }
             break;
         case TF_MOUSE_RELEASE:
@@ -2905,22 +2960,27 @@ static int prompt_lines(const char *prompt, int width, char lines[][256], int mo
         {
             ++end;
         }
-        /* Wrap this line at width code points, at a space if there is one. */
+        /* Wrap this line at width cells, at a space if there is one. */
         const char *from = p;
         do
         {
             const char *cut = from;
             const char *space = NULL;
             int cells = 0;
-            while (cut < end && cells < width)
+            while (cut < end)
             {
+                uint32_t cp = 0;
+                const int used = tf_utf8_decode(cut, (int)(end - cut), &cp);
+                if (cells + tf_char_width(cp) > width)
+                {
+                    break;
+                }
                 if (*cut == ' ')
                 {
                     space = cut;
                 }
-                uint32_t cp = 0;
-                cut += tf_utf8_decode(cut, (int)(end - cut), &cp);
-                ++cells;
+                cut += used;
+                cells += tf_char_width(cp);
             }
             if (cut < end && space != NULL && space > from)
             {

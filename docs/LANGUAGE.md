@@ -78,6 +78,7 @@ End Sub
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
+| Text on screen | UTF-8; wide characters (CJK, emoji) take two cells; combining marks are not drawn |
 | Comments | `'` and `REM`; ` _` at the end of a line continues it |
 
 Option Explicit is always on and Option Strict is on: widening is implicit

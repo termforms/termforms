@@ -33,3 +33,8 @@ Assessment (not legal advice):
 Decision: generate the tables from the UCD in Phase 4, and add
 `runtime/THIRD_PARTY_NOTICES` with the Unicode notice in the same change. The
 runtime's own licence stays 0BSD. Revisit only if the Unicode licence changes.
+
+Done (28 Oct 2026): `tools/gen_width_tables.py` writes
+`runtime/src/tui/tf_width_tables.c` (SPDX `0BSD AND Unicode-3.0`) from
+Python's `unicodedata`, and `runtime/THIRD_PARTY_NOTICES` carries the
+Unicode License v3 text as published at unicode.org.
