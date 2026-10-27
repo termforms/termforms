@@ -65,3 +65,22 @@ set_tests_properties(cli.no-inputs-exit PROPERTIES LABELS cli WILL_FAIL TRUE)
 
 add_test(NAME cli.missing-file-exit COMMAND tfc no-such-file.bas)
 set_tests_properties(cli.missing-file-exit PROPERTIES LABELS cli WILL_FAIL TRUE)
+
+# A missing C compiler, and one that runs but fails: tfc explains each in the
+# programmer's terms instead of passing on C compiler output. Python, which
+# ignores the arguments after -c's script, stands in for a broken compiler.
+set(TF_CLI_WORK ${CMAKE_CURRENT_BINARY_DIR}/cli-work)
+file(MAKE_DIRECTORY ${TF_CLI_WORK})
+add_test(NAME cli.no-compiler
+    COMMAND tfc --cc tf-no-such-compiler -o ${TF_CLI_WORK}/none
+        ${PROJECT_SOURCE_DIR}/examples/hello.bas)
+set_tests_properties(cli.no-compiler PROPERTIES
+    LABELS cli
+    PASS_REGULAR_EXPRESSION "cannot run the C compiler 'tf-no-such-compiler'; is it installed")
+
+add_test(NAME cli.compiler-fails
+    COMMAND tfc --cc "\"${Python3_EXECUTABLE}\" -c \"raise SystemExit(1)\"" -o ${TF_CLI_WORK}/broken
+        ${PROJECT_SOURCE_DIR}/examples/hello.bas)
+set_tests_properties(cli.compiler-fails PROPERTIES
+    LABELS cli
+    PASS_REGULAR_EXPRESSION "internal error: .*not in your program")

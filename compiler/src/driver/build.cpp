@@ -18,6 +18,10 @@
 #include <sstream>
 #include <system_error>
 
+#if !defined(_WIN32)
+#include <sys/wait.h> // WIFEXITED, for the status std::system returns
+#endif
+
 namespace fs = std::filesystem;
 
 namespace tf::driver
@@ -183,6 +187,16 @@ CompilerStyle compilerStyle(const std::string &command)
     return stem == "cl" || stem == "clang-cl" ? CompilerStyle::Msvc : CompilerStyle::Gcc;
 }
 
+// The shell's "no such command": 127 from sh, 9009 from cmd.exe.
+static bool commandNotFound(int status)
+{
+#if defined(_WIN32)
+    return status == 9009;
+#else
+    return WIFEXITED(status) && WEXITSTATUS(status) == 127;
+#endif
+}
+
 std::string compileCommand(const std::string &compiler, CompilerStyle style,
                            const std::vector<std::string> &sources, const std::string &includeDir,
                            const std::string &output, const std::string &objectDir, bool release)
@@ -192,7 +206,9 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
     std::string command = compiler;
     if (style == CompilerStyle::Msvc)
     {
-        command += " /nologo /utf-8 /D_CRT_SECURE_NO_WARNINGS";
+        // /w: warnings about generated C are tfc's to fix (the tests compile
+        // it with every warning an error), never the BASIC programmer's.
+        command += " /nologo /w /utf-8 /D_CRT_SECURE_NO_WARNINGS";
         command += release ? " /O2 /DNDEBUG" : " /Od /Z7";
         command += " /I" + quote(includeDir);
         for (const std::string &s : sources)
@@ -209,7 +225,7 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
     }
     else
     {
-        command += " -std=c99";
+        command += " -std=c99 -w"; // -w: as /w above
         command += release ? " -O2 -DNDEBUG" : " -O0 -g";
         command += " -I" + quote(includeDir);
         for (const std::string &s : sources)
@@ -330,6 +346,13 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     {
         err << command << '\n';
     }
+    // The C compiler's messages go to a log, not the terminal: they are about
+    // C the programmer did not write. Shown with -v, or kept on failure.
+    const std::string logFile = output + ".tf-log";
+    if (!cmd.verbose)
+    {
+        command += " > " + quote(logFile) + " 2>&1";
+    }
     // cmd.exe strips one pair of outer quotes when the line starts with one.
     if constexpr (kWindowsHost)
     {
@@ -344,16 +367,34 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     {
         fs::remove_all(objectDir, ec);
     }
-    if (!cmd.keepC)
+    if (status == 0)
     {
-        fs::remove(cFile, ec);
+        if (!cmd.keepC)
+        {
+            fs::remove(cFile, ec);
+        }
+        fs::remove(logFile, ec);
+        return kExitOk;
     }
-    if (status != 0)
+
+    // The program passed every check, so a C compiler that runs but fails
+    // means tfc wrote bad C (or the compiler is broken): either way not the
+    // programmer's mistake, so say so in their terms, and keep what a bug
+    // report needs.
+    if (commandNotFound(status))
     {
-        err << "tfc: error: the C compiler failed (run with -v to see the command)\n";
+        err << "tfc: error: cannot run the C compiler '" << compiler
+            << "'; is it installed? (choose one with --cc or TFC_CC)\n";
+        fs::remove(cFile, ec);
+        fs::remove(logFile, ec);
         return kExitCompile;
     }
-    return kExitOk;
+    err << "tfc: internal error: the C compiler '" << compiler
+        << "' could not build the C that tfc made from '" << inputPath.string() << "'.\n"
+        << "This is a problem in tfc or in the C compiler, not in your program. Please\n"
+        << "report it with your program and these files: " << cFile
+        << (cmd.verbose ? "" : " and " + logFile + " (the C compiler's messages)") << "\n";
+    return kExitCompile;
 }
 
 } // namespace tf::driver
