@@ -1,0 +1,6 @@
+listbox.bas:7:9: error: 'ListCount' is read-only: it cannot be set
+listbox.bas:15:9: error: 'ListCount' is read-only: it can be read, not set
+listbox.bas:16:9: error: a ListBox's statements are AddItem, RemoveItem and Clear, not 'Sort'
+listbox.bas:17:7: error: a CommandButton has no 'AddItem'
+listbox.bas:18:17: error: the item of 'AddItem' must be a String, not an Integer; use CStr(value) to convert
+listbox.bas:19:18: error: the index of 'List' must be an Integer, not a String; use CInt(value) to convert

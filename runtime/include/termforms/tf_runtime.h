@@ -607,7 +607,8 @@ typedef enum tf_control_type
     TF_CTL_LABEL,
     TF_CTL_CHECKBOX,
     TF_CTL_OPTIONBUTTON,
-    TF_CTL_FRAME
+    TF_CTL_FRAME,
+    TF_CTL_LISTBOX
 } tf_control_type;
 
 /* Properties a control may have; the compiler checks which apply to which. */
@@ -623,13 +624,20 @@ typedef enum tf_prop
     TF_PROP_DEFAULT, /* CommandButton: pressed by Enter anywhere on the form */
     TF_PROP_CANCEL,  /* CommandButton: pressed by Esc */
     TF_PROP_ENABLED,
-    TF_PROP_VISIBLE
+    TF_PROP_VISIBLE,
+    TF_PROP_LISTCOUNT, /* ListBox, read only */
+    TF_PROP_LISTINDEX, /* ListBox: the selected (or, with MultiSelect, the current) item; -1 none */
+    TF_PROP_MULTISELECT, /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
+    TF_PROP_SORTED,      /* ListBox: AddItem keeps the items in order, ignoring case */
+    TF_PROP_SELCOUNT,    /* ListBox, read only: how many items are selected */
+    TF_PROP_TOPINDEX     /* ListBox: the first item shown */
 } tf_prop;
 
 typedef enum tf_event
 {
     TF_EVENT_CLICK,
     TF_EVENT_CHANGE,
+    TF_EVENT_DBLCLICK,
     TF_EVENT_COUNT
 } tf_event;
 
@@ -652,6 +660,21 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value);
 tf_string *tf_get_str(const tf_control *control, tf_prop prop);
 void tf_set_int(tf_control *control, tf_prop prop, int32_t value);
 int32_t tf_get_int(const tf_control *control, tf_prop prop);
+
+/*
+ * A ListBox's items. index -1 adds at the end (or, Sorted, in order); an
+ * index out of range is error 5 (as VB's AddItem and List). Item returns
+ * an owned string. Selected(i) for one item selects it (it becomes
+ * ListIndex); with MultiSelect it marks it. Changing the selection fires
+ * Click, as VB.
+ */
+void tf_list_add(tf_control *list, const tf_string *item, int32_t index);
+void tf_list_remove(tf_control *list, int32_t index);
+void tf_list_clear(tf_control *list);
+tf_string *tf_list_item(const tf_control *list, int32_t index);
+void tf_list_set_item(tf_control *list, int32_t index, const tf_string *item);
+int tf_list_selected(const tf_control *list, int32_t index);
+void tf_list_set_selected(tf_control *list, int32_t index, int selected);
 
 /*
  * Shows the form and runs its event loop until the user closes it

@@ -925,6 +925,7 @@ Module=lib/stock.bas
 | CheckBox | `[X] Caption` (`[ ]`, `[-]` for 2) | Caption, Value (0, 1, 2) | Click |
 | OptionButton | `(•) Caption` | Caption, Value (Boolean) | Click |
 | Frame | a box with its Caption in the top line | Caption | (none) |
+| ListBox | a box of items, scrolling (↑ ↓ in its border when there is more) | Text (the current item), ListIndex, ListCount (read only), MultiSelect (0, 1, 2), Sorted, SelCount (read only), TopIndex; `List(i)`, `Selected(i)` | Click, DblClick |
 
 - Setting `Value` in code fires Click when it changes (as VB); a CheckBox
   Value outside 0-2 is error 380. Selecting an OptionButton clears the
@@ -938,6 +939,20 @@ Module=lib/stock.bas
 - Enter and Esc in a TextBox go to the Default and Cancel buttons.
 - Tab order is the order the controls are written in the form block.
 - `Ctrl+Q` no longer closes a form (Ctrl+F4 or Alt+F4 does).
+- A ListBox's statements are `AddItem item [, index]`, `RemoveItem
+  index` and `Clear`; `List(i)` reads or sets an item's text and
+  `Selected(i)` its selection. An index out of range is error 5 (setting
+  ListIndex out of range, 380). With Sorted, AddItem without an index puts
+  the item in order (A-Z case ignored); with an index, there.
+- ListBox keys: arrows, PgUp/PgDn, Home/End move the current item; a
+  letter goes to the next item starting with it; Enter is DblClick when
+  the program has a DblClick handler (else the Default button).
+  MultiSelect 1: moving does not select, Space toggles the current item.
+  MultiSelect 2: moving selects just the current item, Space adds or
+  removes it (VB's Shift+arrow extension comes when Shift on arrows is
+  read).
+- Changing the selection (by key or in code) fires Click; removing the
+  current item leaves no current item (ListIndex -1), as VB.
 
 ## Forms and events (Settled, 23 Oct 2026)
 

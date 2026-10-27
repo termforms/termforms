@@ -70,6 +70,8 @@ typedef enum tf_key_kind
     TF_KEY_DOWN,
     TF_KEY_HOME,
     TF_KEY_END,
+    TF_KEY_PGUP,
+    TF_KEY_PGDN,
     TF_KEY_ESC,
     TF_KEY_ALT, /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
     TF_KEY_F,   /* function key; .ch is its number, 1-12; .mods as pressed */

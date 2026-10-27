@@ -84,6 +84,10 @@ static tf_key_kind tilde_key(int n)
         case 4:
         case 8:
             return TF_KEY_END;
+        case 5:
+            return TF_KEY_PGUP;
+        case 6:
+            return TF_KEY_PGDN;
         default:
             return TF_KEY_NONE;
     }

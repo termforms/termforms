@@ -458,8 +458,8 @@ private:
             {
                 diagnostics_.error(child->location, "unknown control type '" + child->typeName +
                                                         "' (this version has Label, TextBox, "
-                                                        "CommandButton, CheckBox, OptionButton "
-                                                        "and Frame)");
+                                                        "CommandButton, CheckBox, OptionButton, "
+                                                        "Frame and ListBox)");
                 continue;
             }
             if (claimModuleName(child->name, child->location, "control"))
@@ -509,6 +509,11 @@ private:
             if (prop == nullptr)
             {
                 unknownProperty(*type, s.name, s.location);
+                continue;
+            }
+            if (prop->readOnly)
+            {
+                diagnostics_.error(s.location, "'" + s.name + "' is read-only: it cannot be set");
                 continue;
             }
             if (!seen.insert(s.name).second)
@@ -855,6 +860,31 @@ private:
     void checkAssignment(Stmt &s)
     {
         Expr &target = *s.target;
+        // lst.List(i) = x and lst.Selected(i) = b: calls that set them.
+        if (target.kind == ExprKind::Index && target.left != nullptr &&
+            target.left->kind == ExprKind::Member && target.left->left != nullptr &&
+            (target.left->text == "List" || target.left->text == "Selected") &&
+            isListBox(*target.left->left))
+        {
+            const bool item = target.left->text == "List";
+            auto call = std::make_unique<Expr>();
+            call->kind = ExprKind::Call;
+            call->builtin = item ? Builtin::ListSetItem : Builtin::ListSetSelected;
+            call->text = item ? "List" : "Selected";
+            call->location = target.location;
+            call->args.push_back(std::move(target.left->left));
+            for (auto &index : target.args)
+            {
+                call->args.push_back(std::move(index));
+            }
+            call->args.push_back(std::move(s.value));
+            s.kind = StmtKind::Library;
+            s.target.reset();
+            s.args.clear();
+            s.args.push_back(std::move(call));
+            checkExpr(*s.args[0]);
+            return;
+        }
         if (target.kind == ExprKind::Name)
         {
             const Variable *v = lookupVariable(target.text);
@@ -911,6 +941,19 @@ private:
                 requireAssignable(infoOf(target), infoOf(*s.value), s.value->location);
             }
             return;
+        }
+        if (target.kind == ExprKind::Member && target.left != nullptr &&
+            target.left->control != nullptr)
+        {
+            const catalog::ControlType *type = catalog::findType(target.left->control->typeName);
+            const catalog::Property *prop =
+                type != nullptr ? catalog::findProperty(*type, target.text) : nullptr;
+            if (prop != nullptr && prop->readOnly)
+            {
+                diagnostics_.error(target.location,
+                                   "'" + target.text + "' is read-only: it can be read, not set");
+                return;
+            }
         }
         if (target.kind == ExprKind::Name || target.kind == ExprKind::Member)
         {
@@ -2022,6 +2065,11 @@ private:
     // o.Lines(i): an element of an array member.
     Type checkMemberIndex(Expr &e)
     {
+        if (e.left->kind == ExprKind::Member && e.left->left != nullptr &&
+            (e.left->text == "List" || e.left->text == "Selected") && isListBox(*e.left->left))
+        {
+            return listIndexed(e);
+        }
         // Utils.Clean(s) or Utils.names(2): a Function or array element of a
         // module, named through it.
         if (e.left->kind == ExprKind::Member && e.left->left != nullptr)
@@ -2327,6 +2375,17 @@ private:
             diagnostics_.error(member->location, "expected '=' after this");
             return;
         }
+        if (member->left != nullptr && isListBox(*member->left))
+        {
+            listMethod(s, *member, args);
+            return;
+        }
+        if (member->left != nullptr && member->left->control != nullptr)
+        {
+            diagnostics_.error(member->location, "a " + member->left->control->typeName +
+                                                     " has no '" + member->text + "'");
+            return;
+        }
         // Utils.Report x: a Sub (or Function) of a module, called through it.
         if (member->left != nullptr)
         {
@@ -2428,6 +2487,69 @@ private:
             call->args.push_back(std::move(args[0]));
         }
         s.value = std::move(call);
+    }
+
+    // -- ListBox methods ----------------------------------------------------
+
+    // object, if it is a ListBox (lst, or frmMain.lst): checked, else left.
+    bool isListBox(Expr &object)
+    {
+        const bool named =
+            (object.kind == ExprKind::Name && controls_.count(object.text) != 0) ||
+            (object.kind == ExprKind::Name && object.control != nullptr) ||
+            (object.kind == ExprKind::Member && object.left != nullptr &&
+             object.left->kind == ExprKind::Name && controls_.count(object.left->text) != 0);
+        if (!named)
+        {
+            return false;
+        }
+        checkExpr(object);
+        return object.control != nullptr && object.control->typeName == "ListBox";
+    }
+
+    // lst.List(i) / lst.Selected(i), read: calls of the library's routines.
+    Type listIndexed(Expr &e)
+    {
+        ExprPtr list = std::move(e.left->left);
+        const bool item = e.left->text == "List";
+        e.kind = ExprKind::Call;
+        e.text = item ? "List" : "Selected";
+        e.builtin = item ? Builtin::ListItem : Builtin::ListSelected;
+        e.left.reset();
+        e.args.insert(e.args.begin(), std::move(list));
+        return checkExpr(e);
+    }
+
+    // lst.AddItem x [, i], lst.RemoveItem i, lst.Clear: library statements.
+    bool listMethod(Stmt &s, Expr &member, std::vector<ExprPtr> &args)
+    {
+        const std::string &m = member.text;
+        const Builtin id = m == "AddItem"      ? Builtin::ListAdd
+                           : m == "RemoveItem" ? Builtin::ListRemove
+                           : m == "Clear"      ? Builtin::ListClear
+                                               : Builtin::None;
+        if (id == Builtin::None)
+        {
+            diagnostics_.error(member.location, "a ListBox's statements are AddItem, RemoveItem "
+                                                "and Clear, not '" +
+                                                    m + "'");
+            return true;
+        }
+        auto call = std::make_unique<Expr>();
+        call->kind = ExprKind::Call;
+        call->builtin = id;
+        call->text = m;
+        call->location = member.location;
+        call->args.push_back(std::move(member.left));
+        for (auto &arg : args)
+        {
+            call->args.push_back(std::move(arg));
+        }
+        s.kind = StmtKind::Library;
+        s.args.clear();
+        s.args.push_back(std::move(call));
+        checkExpr(*s.args[0]);
+        return true;
     }
 
     // -- With ----------------------------------------------------------------
@@ -3173,9 +3295,21 @@ private:
                 continue;
             }
             checkExpr(arg);
+            if (want == 'C')
+            {
+                if (arg.type != Type::Error &&
+                    (arg.control == nullptr || arg.control->typeName != "ListBox"))
+                {
+                    diagnostics_.error(arg.location, "'" + name + "' is for a ListBox");
+                    ok = false;
+                }
+                ok = ok && arg.type != Type::Error;
+                continue;
+            }
             const TypeInfo got = infoOf(arg);
             const TypeInfo needed(want == 'S'   ? Type::String
                                   : want == 'L' ? Type::Long
+                                  : want == 'Y' ? Type::Boolean
                                                 : Type::Integer);
             if (got.type != Type::Error && !assignable(needed, got))
             {
@@ -3240,6 +3374,17 @@ private:
             case Builtin::FilePrint:
             case Builtin::LineInput:
                 return i == 0 ? "the file number" : "argument " + std::to_string(i + 1);
+            // A ListBox's routines: argument 0 is the ListBox itself.
+            case Builtin::ListAdd:
+                return i == 1 ? "the item" : "the index";
+            case Builtin::ListSetItem:
+                return i == 1 ? "the index" : "the item";
+            case Builtin::ListSetSelected:
+                return i == 1 ? "the index" : "the value";
+            case Builtin::ListRemove:
+            case Builtin::ListItem:
+            case Builtin::ListSelected:
+                return "the index";
             default:
                 return "argument " + std::to_string(i + 1);
         }

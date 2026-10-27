@@ -111,6 +111,14 @@ enum class Builtin
     Lof,
     FreeFile,
     SeekPos, // Seek(n)
+    // A ListBox's methods and indexed properties (step 4.2): args[0] is it.
+    ListAdd,
+    ListRemove,
+    ListClear,
+    ListItem,
+    ListSetItem,
+    ListSelected,
+    ListSetSelected,
     FileGet,
     FilePut,
     FileSeek, // Seek #n, offset
@@ -148,8 +156,8 @@ enum class Builtin
 
 // The library functions' signatures (strings, files), for checking and for
 // C; statements such as Open are made into calls of these too. Each parameter
-// S (a String), I (an Integer), L (a Long), A (a whole String array) or B (a
-// whole Byte array with one dimension); the first
+// S (a String), I (an Integer), L (a Long), Y (a Boolean), A (a whole String
+// array), B (a whole Byte array with one dimension) or C (a ListBox); the first
 // `required` must be given and the rest default to `defaults` (S: text, I:
 // a number), except that InStr's optional parameter comes first
 // (InStr([start,] s, find)). fails: a bad argument can raise an error.
@@ -196,6 +204,13 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::SeekPos, "I", 1, {}, Type::Long, "tf_file_seek_pos", true},
     // Get/Put #n, [offset], buffer [, count]: the parser gives a flag (1 if
     // written) before each optional part, so no value is a "missing" mark.
+    {Builtin::ListAdd, "CSI", 2, {nullptr, nullptr, "-1"}, Type::Void, "tf_list_add", true},
+    {Builtin::ListRemove, "CI", 2, {}, Type::Void, "tf_list_remove", true},
+    {Builtin::ListClear, "C", 1, {}, Type::Void, "tf_list_clear", false},
+    {Builtin::ListItem, "CI", 2, {}, Type::String, "tf_list_item", true},
+    {Builtin::ListSetItem, "CIS", 3, {}, Type::Void, "tf_list_set_item", true},
+    {Builtin::ListSelected, "CI", 2, {}, Type::Boolean, "tf_list_selected", true},
+    {Builtin::ListSetSelected, "CIY", 3, {}, Type::Void, "tf_list_set_selected", true},
     {Builtin::FileGet, "IILBII", 6, {}, Type::Void, "tf_file_get", true},
     {Builtin::FilePut, "IILBII", 6, {}, Type::Void, "tf_file_put", true},
     {Builtin::FileSeek, "IL", 2, {}, Type::Void, "tf_file_seek", true},
@@ -522,6 +537,7 @@ enum class EventKind
     None,
     Click,
     Change,
+    DblClick,
     Load
 };
 

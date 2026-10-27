@@ -19,7 +19,8 @@ struct Property
 {
     const char *name; // as written in BASIC, e.g. "Caption"
     ast::Type type;
-    const char *cName; // runtime enum, e.g. "TF_PROP_CAPTION"
+    const char *cName;     // runtime enum, e.g. "TF_PROP_CAPTION"
+    bool readOnly = false; // ListCount: read, never set (in the form block or in code)
 };
 
 struct Event

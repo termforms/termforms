@@ -52,6 +52,17 @@ struct tf_control
      * first visible code point. */
     int32_t cursor;
     int32_t scroll;
+
+    /* ListBox only: the items, which are selected, the current item
+     * (ListIndex), the first shown (TopIndex), MultiSelect and Sorted. */
+    tf_string **items;
+    unsigned char *selected;
+    int32_t item_count;
+    int32_t item_capacity;
+    int32_t list_index;
+    int32_t top_index;
+    int32_t multi;
+    int sorted;
 };
 
 /* ------------------------------------------------------------------------ */
@@ -88,8 +99,10 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
     control->name = copy_name(name);
     control->form = form;
     control->parent = form;
-    control->width = type == TF_CTL_TEXTBOX ? 20 : type == TF_CTL_FRAME ? 20 : 10;
-    control->height = type == TF_CTL_FRAME ? 5 : 1;
+    const int boxed = type == TF_CTL_FRAME || type == TF_CTL_LISTBOX;
+    control->width = type == TF_CTL_TEXTBOX || boxed ? 20 : 10;
+    control->height = boxed ? 5 : 1;
+    control->list_index = -1;
     control->enabled = 1;
     control->visible = 1;
 
@@ -144,6 +157,37 @@ static void select_option(tf_control *option)
     }
 }
 
+/* Makes item the ListBox's current one (ListIndex), shown; with only (one
+   item at a time) it is the selection too. Click fires on a change. */
+static void list_choose(tf_control *list, int32_t item, int only)
+{
+    const int was = list->list_index;
+    int changed = was != item;
+    list->list_index = item;
+    if (only)
+    {
+        for (int32_t i = 0; i < list->item_count; ++i)
+        {
+            const unsigned char want = i == item;
+            changed = changed || list->selected[i] != want;
+            list->selected[i] = want;
+        }
+    }
+    const int32_t rows = list->height - 2 > 0 ? list->height - 2 : 1;
+    if (item >= 0 && item < list->top_index)
+    {
+        list->top_index = item;
+    }
+    else if (item >= list->top_index + rows)
+    {
+        list->top_index = item - rows + 1;
+    }
+    if (changed)
+    {
+        fire(list, TF_EVENT_CLICK);
+    }
+}
+
 /* Only one Default (and one Cancel) button per form, as VB. */
 static void make_only(tf_control *button, tf_prop prop)
 {
@@ -181,6 +225,12 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
 
 tf_string *tf_get_str(const tf_control *control, tf_prop prop)
 {
+    if (control->type == TF_CTL_LISTBOX && prop == TF_PROP_TEXT)
+    {
+        /* The current item's text (VB's Text of a ListBox). */
+        const int32_t i = control->list_index;
+        return i >= 0 && i < control->item_count ? control->items[i] : NULL;
+    }
     return prop == TF_PROP_TEXT ? control->text : control->caption;
 }
 
@@ -249,6 +299,23 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_VISIBLE:
             control->visible = value != 0;
             break;
+        case TF_PROP_LISTINDEX:
+            if (value < -1 || value >= control->item_count)
+            {
+                tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
+                break;
+            }
+            list_choose(control, value, control->multi == 0);
+            break;
+        case TF_PROP_MULTISELECT:
+            control->multi = value < 0 ? 0 : value > 2 ? 2 : value;
+            break;
+        case TF_PROP_SORTED:
+            control->sorted = value != 0;
+            break;
+        case TF_PROP_TOPINDEX:
+            control->top_index = value < 0 ? 0 : value;
+            break;
         default:
             break;
     }
@@ -276,8 +343,179 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->enabled;
         case TF_PROP_VISIBLE:
             return control->visible;
+        case TF_PROP_LISTCOUNT:
+            return control->item_count;
+        case TF_PROP_LISTINDEX:
+            return control->list_index;
+        case TF_PROP_MULTISELECT:
+            return control->multi;
+        case TF_PROP_SORTED:
+            return control->sorted;
+        case TF_PROP_SELCOUNT:
+        {
+            int32_t n = 0;
+            for (int32_t i = 0; i < control->item_count; ++i)
+            {
+                n += control->selected[i] != 0;
+            }
+            return n;
+        }
+        case TF_PROP_TOPINDEX:
+            return control->top_index;
         default:
             return 0;
+    }
+}
+
+/* ------------------------------------------------------------------------ */
+/* ListBox items                                                            */
+/* ------------------------------------------------------------------------ */
+
+/* Compares for Sorted: A-Z case ignored, then byte order. */
+static int item_order(const tf_string *a, const tf_string *b)
+{
+    const char *x = tf_str_cstr(a);
+    const char *y = tf_str_cstr(b);
+    for (;; ++x, ++y)
+    {
+        int cx = (unsigned char)*x;
+        int cy = (unsigned char)*y;
+        cx = cx >= 'A' && cx <= 'Z' ? cx - 'A' + 'a' : cx;
+        cy = cy >= 'A' && cy <= 'Z' ? cy - 'A' + 'a' : cy;
+        if (cx != cy || cx == 0)
+        {
+            return cx - cy;
+        }
+    }
+}
+
+void tf_list_add(tf_control *list, const tf_string *item, int32_t index)
+{
+    if (index < -1 || index > list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    if (index == -1)
+    {
+        index = list->item_count;
+        if (list->sorted)
+        {
+            index = 0;
+            while (index < list->item_count && item_order(list->items[index], item) <= 0)
+            {
+                ++index;
+            }
+        }
+    }
+    if (list->item_count == list->item_capacity)
+    {
+        list->item_capacity = list->item_capacity == 0 ? 16 : list->item_capacity * 2;
+        list->items = tf_xrealloc(list->items, (size_t)list->item_capacity * sizeof *list->items);
+        list->selected = tf_xrealloc(list->selected, (size_t)list->item_capacity);
+    }
+    const size_t after = (size_t)(list->item_count - index);
+    memmove(&list->items[index + 1], &list->items[index], after * sizeof *list->items);
+    memmove(&list->selected[index + 1], &list->selected[index], after);
+    list->items[index] = (tf_string *)item;
+    tf_str_retain(list->items[index]);
+    list->selected[index] = 0;
+    ++list->item_count;
+    if (list->list_index >= index)
+    {
+        ++list->list_index; /* the current item keeps its place */
+    }
+}
+
+void tf_list_remove(tf_control *list, int32_t index)
+{
+    if (index < 0 || index >= list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    tf_str_release(list->items[index]);
+    const size_t after = (size_t)(list->item_count - index - 1);
+    memmove(&list->items[index], &list->items[index + 1], after * sizeof *list->items);
+    memmove(&list->selected[index], &list->selected[index + 1], after);
+    --list->item_count;
+    if (list->list_index == index)
+    {
+        list->list_index = -1; /* as VB: no current item */
+    }
+    else if (list->list_index > index)
+    {
+        --list->list_index;
+    }
+}
+
+void tf_list_clear(tf_control *list)
+{
+    for (int32_t i = 0; i < list->item_count; ++i)
+    {
+        tf_str_release(list->items[i]);
+    }
+    list->item_count = 0;
+    list->list_index = -1;
+    list->top_index = 0;
+}
+
+tf_string *tf_list_item(const tf_control *list, int32_t index)
+{
+    if (index < 0 || index >= list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return NULL;
+    }
+    return tf_str_ref(list->items[index]);
+}
+
+void tf_list_set_item(tf_control *list, int32_t index, const tf_string *item)
+{
+    if (index < 0 || index >= list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    tf_string *v = (tf_string *)item;
+    tf_str_retain(v);
+    tf_str_assign(&list->items[index], v);
+}
+
+int tf_list_selected(const tf_control *list, int32_t index)
+{
+    if (index < 0 || index >= list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return 0;
+    }
+    return list->multi == 0 ? index == list->list_index : list->selected[index] != 0;
+}
+
+void tf_list_set_selected(tf_control *list, int32_t index, int selected)
+{
+    if (index < 0 || index >= list->item_count)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    if (list->multi == 0)
+    {
+        if (selected)
+        {
+            list_choose(list, index, 1);
+        }
+        else if (index == list->list_index)
+        {
+            list_choose(list, -1, 1);
+        }
+        return;
+    }
+    const int was = list->selected[index];
+    list->selected[index] = selected != 0;
+    if (was != list->selected[index])
+    {
+        fire(list, TF_EVENT_CLICK);
     }
 }
 
@@ -560,6 +798,56 @@ static void draw_check(const tf_control *c, int x, int y, int w, int focused)
     }
 }
 
+static void draw_frame(const tf_control *frame, int x, int y, int w, int h);
+
+/* A box of items; selected ones highlighted, the current one under the
+   cursor when focused, arrows in the border when there is more. */
+static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
+{
+    draw_frame(list, x, y, w, h);
+    const int on = usable(list);
+    const int rows = (int)list->height - 2;
+    const int inner = (int)list->width - 2;
+    if (list->top_index > list->item_count - rows && list->item_count > rows)
+    {
+        list->top_index = list->item_count - rows;
+    }
+    for (int r = 0; r < rows && r + 1 < h; ++r)
+    {
+        const int32_t i = list->top_index + r;
+        int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+        int bg = TF_GREY;
+        if (i < list->item_count && list->selected[i])
+        {
+            fg = TF_WHITE;
+            bg = focused ? TF_BLUE : TF_BRIGHT + TF_BLACK;
+        }
+        const int cells = inner < w - 1 ? inner : w - 1;
+        tf_screen_fill(x + 1, y + 1 + r, cells, 1, ' ', fg, bg);
+        if (i < list->item_count)
+        {
+            tf_screen_text(x + 1, y + 1 + r, tf_str_cstr(list->items[i]), cells, fg, bg);
+        }
+    }
+    const int right = x + (int)list->width - 1;
+    if (right < x + w)
+    {
+        if (list->top_index > 0)
+        {
+            tf_screen_put(right, y + 1, box(0x2191, '^'), TF_BLACK, TF_GREY);
+        }
+        if (list->top_index + rows < list->item_count && rows > 0)
+        {
+            tf_screen_put(right, y + rows, box(0x2193, 'v'), TF_BLACK, TF_GREY);
+        }
+    }
+    const int32_t current = list->list_index;
+    if (focused && current >= list->top_index && current < list->top_index + rows)
+    {
+        tf_screen_cursor(x + 1, y + 1 + (int)(current - list->top_index), 1);
+    }
+}
+
 static void draw_frame(const tf_control *frame, int x, int y, int w, int h)
 {
     const int fg = usable(frame) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
@@ -723,6 +1011,9 @@ static void draw_form(tf_control *form)
             case TF_CTL_FRAME:
                 draw_frame(c, x, y, room, rows_left);
                 break;
+            case TF_CTL_LISTBOX:
+                draw_list(c, x, y, room, rows_left, focused);
+                break;
             default:
                 break;
         }
@@ -736,7 +1027,8 @@ static void draw_form(tf_control *form)
 static int focusable(const tf_control *c)
 {
     return (c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMMANDBUTTON ||
-            c->type == TF_CTL_CHECKBOX || c->type == TF_CTL_OPTIONBUTTON) &&
+            c->type == TF_CTL_CHECKBOX || c->type == TF_CTL_OPTIONBUTTON ||
+            c->type == TF_CTL_LISTBOX) &&
            usable(c);
 }
 
@@ -965,6 +1257,79 @@ static int is_space(tf_key key)
     return key.kind == TF_KEY_CHAR && key.ch == ' ';
 }
 
+/* A key in a ListBox. Arrows, PgUp/PgDn, Home/End move the current item
+   (selecting it, unless MultiSelect is 1); Space toggles the current item
+   with MultiSelect; a letter goes to the next item starting with it; Enter
+   is DblClick if the program handles it. */
+static int list_key(tf_control *list, tf_key key)
+{
+    if (list->item_count == 0)
+    {
+        return 0;
+    }
+    const int32_t rows = list->height - 2 > 0 ? list->height - 2 : 1;
+    const int32_t at = list->list_index < 0 ? -1 : list->list_index;
+    int32_t to = at;
+    switch (key.kind)
+    {
+        case TF_KEY_DOWN:
+            to = at + 1;
+            break;
+        case TF_KEY_UP:
+            to = at - 1;
+            break;
+        case TF_KEY_PGDN:
+            to = at + rows;
+            break;
+        case TF_KEY_PGUP:
+            to = at - rows;
+            break;
+        case TF_KEY_HOME:
+            to = 0;
+            break;
+        case TF_KEY_END:
+            to = list->item_count - 1;
+            break;
+        case TF_KEY_ENTER:
+            if (list->handlers[TF_EVENT_DBLCLICK] != NULL && at >= 0)
+            {
+                fire(list, TF_EVENT_DBLCLICK);
+                return 1;
+            }
+            return 0;
+        case TF_KEY_CHAR:
+            if (key.ch == ' ' && list->multi != 0 && at >= 0)
+            {
+                tf_list_set_selected(list, at, !list->selected[at]);
+                return 1;
+            }
+            if (key.ch > ' ' && key.ch < 0x7F)
+            {
+                /* The next item starting with that letter, round the end. */
+                const int32_t c =
+                    (int32_t)(key.ch >= 'A' && key.ch <= 'Z' ? key.ch - 'A' + 'a' : key.ch);
+                for (int32_t k = 1; k <= list->item_count; ++k)
+                {
+                    const int32_t i = (at + k + list->item_count) % list->item_count;
+                    int32_t first = (unsigned char)tf_str_cstr(list->items[i])[0];
+                    first = first >= 'A' && first <= 'Z' ? first - 'A' + 'a' : first;
+                    if (first == c)
+                    {
+                        list_choose(list, i, list->multi != 1);
+                        return 1;
+                    }
+                }
+                return 1;
+            }
+            return 0;
+        default:
+            return 0;
+    }
+    to = to < 0 ? 0 : to >= list->item_count ? list->item_count - 1 : to;
+    list_choose(list, to, list->multi != 1);
+    return 1;
+}
+
 /* A key for the focused control; 0 if it does not use it (so Enter can
    press the Default button). */
 static int control_key(tf_control *form, tf_control *c, tf_key key)
@@ -1002,6 +1367,8 @@ static int control_key(tf_control *form, tf_control *c, tf_key key)
                 return 1;
             }
             return 0;
+        case TF_CTL_LISTBOX:
+            return list_key(c, key);
         case TF_CTL_OPTIONBUTTON:
             if (is_space(key))
             {

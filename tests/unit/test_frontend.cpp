@@ -680,3 +680,12 @@ TEST_CASE("Frames hold controls, and new controls have their properties")
     CHECK(check("Begin Form f\n    Begin Label l\n        Begin Label m\n        End\n    End\n"
                 "End\n") != "");
 }
+
+TEST_CASE("a ListBox has AddItem, RemoveItem, Clear, List(i) and Selected(i)")
+{
+    const std::string form = "Begin Form f\n    Begin ListBox lst\n    End\nEnd\n";
+    CHECK(check(form + "Sub lst_DblClick()\n    lst.AddItem lst.Text, 0\n    lst.RemoveItem 0\n"
+                       "    lst.List(0) = \"x\"\n    If lst.Selected(0) Then lst.Clear\n"
+                       "End Sub\n") == "");
+    CHECK(check(form + "Sub lst_Click()\n    lst.ListCount = 2\nEnd Sub\n") != "");
+}

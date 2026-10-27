@@ -4,7 +4,7 @@ Begin Form f
     Begin TextBox t
         Colour = 4
     End
-    Begin ListBox l
+    Begin Grid l
     End
 End
 

@@ -42,6 +42,7 @@ static const named_key NAMED_KEYS[] = {
     {"BKSP", TF_KEY_BACKSPACE}, {"DEL", TF_KEY_DELETE}, {"LEFT", TF_KEY_LEFT},
     {"RIGHT", TF_KEY_RIGHT},    {"UP", TF_KEY_UP},      {"DOWN", TF_KEY_DOWN},
     {"HOME", TF_KEY_HOME},      {"END", TF_KEY_END},    {"ESC", TF_KEY_ESC},
+    {"PGUP", TF_KEY_PGUP},      {"PGDN", TF_KEY_PGDN},
 };
 
 static tf_key next_scripted(void)

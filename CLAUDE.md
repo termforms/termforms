@@ -187,7 +187,10 @@ authoritative for design rationale.
   Default/Cancel buttons, Alt access keys, Ctrl+F4/Alt+F4 closing. The
   key decoder now gives Alt+key (ESC prefix), F1-F12 and modifiers; key
   scripts take {ALT+x}, {F4}, {CTRL+F4}.
-- **Next:** Phase 4 step 2: ListBox (multi-select too).
+  Step 4.2 done: ListBox (items in the runtime's tf_control; methods and
+  List(i)/Selected(i) are library routines with a ListBox parameter, kind
+  C; read-only properties flagged in the catalog; PgUp/PgDn decoded).
+- **Next:** Phase 4 step 3: Timer.
 
 ## Settled design decisions (do not relitigate without Jim)
 

@@ -59,6 +59,18 @@ const std::vector<ControlType> &types()
          placed({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}),
          {click}},
         {"Frame", "TF_CTL_FRAME", placed({caption}), {}},
+        // AddItem, RemoveItem, Clear, List(i) and Selected(i) are library
+        // routines (ast.hpp's kStringFunctions), checked in sema.
+        {"ListBox",
+         "TF_CTL_LISTBOX",
+         placed({{"Text", Type::String, "TF_PROP_TEXT"},
+                 {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
+                 {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
+                 {"MultiSelect", Type::Integer, "TF_PROP_MULTISELECT"},
+                 {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
+                 {"SelCount", Type::Integer, "TF_PROP_SELCOUNT", true},
+                 {"TopIndex", Type::Integer, "TF_PROP_TOPINDEX"}}),
+         {click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}}},
     };
     return kTypes;
 }
