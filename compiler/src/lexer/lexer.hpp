@@ -6,7 +6,9 @@
 //   * Keywords are case-insensitive and reserved: "dim", "Dim" and "DIM" are
 //     all the keyword DIM. Every other identifier is case-sensitive.
 //   * An identifier may end in a type suffix (% & # $), which is kept apart
-//     from the name: "Name$" is the name "Name" with suffix '$'.
+//     from the name: "Name$" is the name "Name" with suffix '$'. A number
+//     may carry % (Integer), & (Long) or # (Double) the same way.
+//   * Numbers: 42, 1.5, 2.5E-3, &HFF (hexadecimal), &O17 (octal).
 //   * Statements end at a newline or ':'. A line ending in " _" continues on
 //     the next line.
 //   * Comments start with ' or with the REM keyword and run to the end of
@@ -29,10 +31,11 @@ enum class TokenKind
     EndOfFile,
     EndOfStatement, // newline or ':'
     Identifier,
-    Keyword, // text holds the upper-case keyword, e.g. "DIM"
-    IntegerLiteral,
-    StringLiteral, // text holds the decoded value
-    Symbol         // operators and punctuation; text holds e.g. "<=" or "("
+    Keyword,        // text holds the upper-case keyword, e.g. "DIM"
+    IntegerLiteral, // suffix holds a type suffix written on it (5&), or 0
+    DoubleLiteral,  // 1.5, 2E10, 5#
+    StringLiteral,  // text holds the decoded value
+    Symbol          // operators and punctuation; text holds e.g. "<=" or "("
 };
 
 struct Token
@@ -41,6 +44,7 @@ struct Token
     std::string text;
     char suffix = 0;          // type suffix on an identifier, or 0
     std::int64_t integer = 0; // value of an IntegerLiteral
+    double real = 0;          // value of a DoubleLiteral
     Location location;
     std::string spelling; // keyword as written, for messages
 

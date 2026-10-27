@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
+#include <cstdlib>
 
 namespace tf
 {
@@ -153,6 +155,12 @@ private:
             string(start);
             return;
         }
+        if (c == '&' && (peek(1) == 'H' || peek(1) == 'h' || peek(1) == 'O' || peek(1) == 'o') &&
+            isDigitIn(peek(2), peek(1) == 'H' || peek(1) == 'h' ? 16 : 8))
+        {
+            radixNumber(start);
+            return;
+        }
         symbol(start);
     }
 
@@ -213,38 +221,136 @@ private:
 
     void number(Location start)
     {
+        const std::size_t begin = pos_;
         Token t;
         t.kind = TokenKind::IntegerLiteral;
         t.location = start;
-        bool tooBig = false;
-        while (std::isdigit(static_cast<unsigned char>(peek())) != 0)
+        t.integer = digits(10, start);
+        bool fraction = false;
+        if (peek() == '.' && isDigit(peek(1)))
         {
-            const int digit = peek() - '0';
-            if (t.integer > (INT64_MAX - digit) / 10)
+            fraction = true;
+            advance();
+            while (isDigit(peek()))
+            {
+                advance();
+            }
+        }
+        // An exponent counts only when digits follow it.
+        if ((peek() == 'E' || peek() == 'e') &&
+            (isDigit(peek(1)) || ((peek(1) == '+' || peek(1) == '-') && isDigit(peek(2)))))
+        {
+            fraction = true;
+            advance();
+            if (peek() == '+' || peek() == '-')
+            {
+                advance();
+            }
+            while (isDigit(peek()))
+            {
+                advance();
+            }
+        }
+        t.text = std::string(source_.substr(begin, pos_ - begin));
+        if (fraction)
+        {
+            // The compiler runs in the "C" locale, so '.' is the separator.
+            t.kind = TokenKind::DoubleLiteral;
+            t.real = std::strtod(t.text.c_str(), nullptr);
+            if (!std::isfinite(t.real))
+            {
+                diagnostics_.error(start, "number too large for a Double");
+            }
+        }
+        numberSuffix(t, start);
+        tokens_.push_back(std::move(t));
+    }
+
+    // &H1F and &O17: hexadecimal and octal Integer or Long literals.
+    void radixNumber(Location start)
+    {
+        advance(); // '&'
+        const char letter = peek();
+        advance();
+        Token t;
+        t.kind = TokenKind::IntegerLiteral;
+        t.location = start;
+        t.text = std::string("&") + letter;
+        if (!isDigitIn(peek(), letter == 'H' || letter == 'h' ? 16 : 8))
+        {
+            diagnostics_.error(start, std::string("expected digits after '&") + letter + "'");
+        }
+        t.integer = digits(letter == 'H' || letter == 'h' ? 16 : 8, start);
+        numberSuffix(t, start);
+        tokens_.push_back(std::move(t));
+    }
+
+    // Reads digits in the given radix; values beyond a Long are an error.
+    std::int64_t digits(int radix, Location start)
+    {
+        std::int64_t value = 0;
+        bool tooBig = false;
+        while (isDigitIn(peek(), radix))
+        {
+            const int digit = digitValue(peek());
+            if (value > (INT64_MAX - digit) / radix)
             {
                 tooBig = true;
             }
             else
             {
-                t.integer = t.integer * 10 + digit;
+                value = value * radix + digit;
             }
-            t.text += peek();
             advance();
-        }
-        if (peek() == '.')
-        {
-            diagnostics_.error(start, "floating-point numbers are not supported yet");
-            advance();
-            while (std::isdigit(static_cast<unsigned char>(peek())) != 0)
-            {
-                advance();
-            }
         }
         if (tooBig)
         {
             diagnostics_.error(start, "number too large");
         }
-        tokens_.push_back(std::move(t));
+        return value;
+    }
+
+    // A type suffix written on a number: 5% (Integer), 5& (Long), 5# (Double).
+    void numberSuffix(Token &t, Location start)
+    {
+        const char c = peek();
+        if (c != '%' && c != '&' && c != '#')
+        {
+            return;
+        }
+        // "5 & x" is concatenation; "5&" directly followed by a name or
+        // a quote would be ambiguous, and VB reads it as a Long too.
+        advance();
+        if (t.kind == TokenKind::DoubleLiteral && c != '#')
+        {
+            diagnostics_.error(start, std::string("a number with a fraction cannot have the "
+                                                  "suffix '") +
+                                          c + "'");
+            return;
+        }
+        if (c == '#' && t.kind == TokenKind::IntegerLiteral)
+        {
+            t.kind = TokenKind::DoubleLiteral;
+            t.real = static_cast<double>(t.integer);
+            return;
+        }
+        t.suffix = c;
+    }
+
+    static bool isDigit(char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; }
+
+    static bool isDigitIn(char c, int radix)
+    {
+        if (radix == 16)
+        {
+            return std::isxdigit(static_cast<unsigned char>(c)) != 0;
+        }
+        return c >= '0' && c < '0' + radix;
+    }
+
+    static int digitValue(char c)
+    {
+        return isDigit(c) ? c - '0' : std::tolower(static_cast<unsigned char>(c)) - 'a' + 10;
     }
 
     // "..." with "" standing for one quote; strings end on the same line.
@@ -298,7 +404,7 @@ private:
         }
 
         const char c = peek();
-        static constexpr std::string_view kSingle = "&+-*/\\=<>().,";
+        static constexpr std::string_view kSingle = "&+-*/\\^=<>().,";
         if (kSingle.find(c) == std::string_view::npos)
         {
             diagnostics_.error(start, std::string("unexpected character '") + c + "'");

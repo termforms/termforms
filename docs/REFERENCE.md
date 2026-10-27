@@ -49,6 +49,41 @@ that will catch people out.
 - `Len`, `Mid$` and the other string functions count code points; `LenB`
   counts bytes.
 
+### Numbers (Settled, 27 Oct 2026)
+
+- A Double prints (with `&`, `CStr`, `Str$`) as the **shortest text that
+  reads back as exactly the same value**: `0.1`, `3`, `0.30000000000000004`
+  for 0.1 + 0.2, `1E+20`. Exponent form from 1E15 up and below 0.0001, as
+  VB.NET. So `Val(CStr(x)) = x` always.
+- `Str$` keeps VB's leading space for zero and positive numbers:
+  `Str$(5)` is `" 5"`. `CStr(5)` and `"" & 5` are `"5"`.
+- `CInt` and `CLng` round halves to even, as VB: `CInt(2.5)` = 2,
+  `CInt(3.5)` = 4. `Fix` truncates towards zero, `Int` rounds down.
+- Doubles never hold Infinity or NaN: division by zero is error 11, a
+  result too large is error 6 (Overflow), and an undefined power such as
+  `(-8) ^ 0.5` is error 5, as VB6.
+
+### Numbers (Proposed)
+
+- A whole-number literal is an Integer if it fits, otherwise a Long (as
+  VB.NET); `5&` forces Long, `5#` Double. `1.5`, `2E10` are Doubles.
+  `&HFF` and `&O17` are hexadecimal and octal, always non-negative.
+- Long → Double is an implicit widening (as VB.NET), although a Double
+  holds whole numbers exactly only up to 2^53.
+- `/` and `^` always give a Double. `\` needs Integer or Long operands (a
+  Double is a compile error). `Mod` works on all three; its sign follows
+  the left operand: `-7 Mod 3` = -1. Precedence, highest first: `^`,
+  unary `-`, `* /`, `\`, `Mod`, `+ -`, `&` (so `-2 ^ 2` = -4, and `^`
+  groups to the left: `2 ^ 3 ^ 2` = 64).
+- `CInt`, `CLng`, `CDbl` accept a number or a String; from a String the
+  whole text (less surrounding spaces) must be a number, else error 13
+  (Type mismatch). `Val` is lenient as in VB: it ignores spaces, stops at
+  the first stray character and returns 0 for no number. `CStr` also
+  takes a Boolean ("True"/"False"); no conversion turns a Boolean into a
+  number.
+- Built-in function names (`CInt`, `CLng`, `CDbl`, `CStr`, `Str`/`Str$`,
+  `Val`, `Fix`, `Int`) cannot be reused for variables or procedures.
+
 ## Sub and Function
 
 ### Parameters (Settled, 26 Oct 2026)

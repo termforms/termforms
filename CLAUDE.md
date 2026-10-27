@@ -36,7 +36,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (27 Oct 2026, Phase 3 step 1 done)
+## Status (27 Oct 2026, Phase 3 step 2 done)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -54,7 +54,12 @@ authoritative for design rationale.
   results, the three call syntaxes, For/Do/While loops, Exit, block scope.
   Jim settled (27 Oct 2026) the For semantics, a Dim inside a loop
   resetting each pass, and strict left-to-right evaluation.
-- **Next:** Phase 3 step 2 (Long and Double), or Phase 4 work; ask Jim.
+  Step 2 done (27 Oct 2026): Long and Double, `/ \ Mod ^`, widening,
+  CInt/CLng/CDbl/CStr/Str$/Val/Fix/Int. Jim settled the Double text
+  format, Str$'s space, banker's rounding and errors instead of
+  Infinity/NaN; the smaller defaults are *Proposed* in `docs/REFERENCE.md`
+  ("Numbers (Proposed)") — confirm them with Jim.
+- **Next:** Phase 3 step 3 (Try/Catch/Finally), or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -189,6 +194,12 @@ Key mechanisms:
   variable, ByRef parameter, local passed ByRef in that statement,
   property) is snapshotted first (`StatementScope::pendingCalls`).
   `prepare()` must run on a statement's expressions before `expr()`.
+- **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
+  Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
+  *result* type; narrower operands widen through the prototypes. Built-in
+  functions (`Expr::builtin`, table `kBuiltins` in sema) are pure, so they
+  are not hoisted like Function calls (`countCalls` skips them). Double
+  literals are written with the shortest exact digits.
 - **Headless mode:** `TERMFORMS_HEADLESS='keys{TAB}{ENTER}'` replaces the
   terminal with a key script and dumps the final screen to stdout;
   `TERMFORMS_HEADLESS_SIZE=60x14`. Runtime errors print
@@ -248,6 +259,10 @@ instruments tfc and the runtime tests, and `TFC_CC` with `-fsanitize`
 instruments the programs the run tests build; clang-format.
 Runner images pinned (ubuntu-24.04, macos-15, windows-2025).
 
+Linking: the driver passes `-lm` to gcc-style compilers (glibc keeps
+`pow`/`fmod` in libm; macOS, musl and zig's MinGW accept it). The `tfrt`
+CMake target links `m` on UNIX for the same reason.
+
 Lessons from getting CI green: MSVC flags unreachable code after an
 `if (constexpr-bool) return` (use `if constexpr … else`); clang flags unused
 static functions behind a constexpr branch (`[[maybe_unused]]`); Windows
@@ -256,7 +271,7 @@ buffer is reused by the next call (copy what you keep).
 
 ## Known limitations of the slice (intentional, to be replaced)
 
-- One source file, one form; no Long/Double, no arrays, no Types, no
+- One source file, one form; no arrays, no Types, no
   Select Case, no `For i As Integer = ...` inline declaration, no
   `Dim x As Integer = 5` initialisers.
 - Controls: TextBox and CommandButton only; no Label, menus, MsgBox.
@@ -271,8 +286,7 @@ buffer is reused by the next call (copy what you keep).
 
 Phase 3, language core:
 1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
-2. Long and Double (+ `/`, CInt/CLng/CDbl, Str$/Val), Option Strict
-   conversions.
+2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
 3. Try/Catch/Finally lowering (status checks + goto), Err, Throw.
 4. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
 5. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.

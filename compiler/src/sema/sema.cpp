@@ -18,6 +18,32 @@ namespace
 
 using namespace tf::ast;
 
+// Built-in functions. Their names are case-sensitive like all names, and
+// cannot be reused for variables or procedures.
+struct BuiltinInfo
+{
+    const char *name;
+    Builtin id;
+    bool dollarForm; // may also be written with $ (Str$)
+};
+
+constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false}, {"CLng", Builtin::CLng, false},
+                                     {"CDbl", Builtin::CDbl, false}, {"CStr", Builtin::CStr, false},
+                                     {"Str", Builtin::Str, true},    {"Val", Builtin::Val, false},
+                                     {"Fix", Builtin::Fix, false},   {"Int", Builtin::Int, false}};
+
+const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
+{
+    for (const BuiltinInfo &b : kBuiltins)
+    {
+        if (name == b.name && (suffix == 0 || (suffix == '$' && b.dollarForm)))
+        {
+            return &b;
+        }
+    }
+    return nullptr;
+}
+
 class Checker
 {
 public:
@@ -27,6 +53,10 @@ public:
 
     bool run()
     {
+        for (const BuiltinInfo &b : kBuiltins)
+        {
+            moduleNames_[b.name] = "built-in function";
+        }
         registerControls();
         registerGlobals();
         registerProcedures();
@@ -107,6 +137,7 @@ private:
             }
             const Type valueType = s.value->kind == ExprKind::StringLiteral    ? Type::String
                                    : s.value->kind == ExprKind::BooleanLiteral ? Type::Boolean
+                                   : s.value->kind == ExprKind::DoubleLiteral  ? Type::Double
                                                                                : Type::Integer;
             if (valueType != prop->type)
             {
@@ -348,6 +379,11 @@ private:
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a control");
             return;
         }
+        if (findBuiltin(v.name, 0) != nullptr)
+        {
+            diagnostics_.error(v.location, "'" + v.name + "' is the name of a built-in function");
+            return;
+        }
         scopes_.back()[v.name] = &v;
     }
 
@@ -399,19 +435,42 @@ private:
         diagnostics_.error(target.location, "this cannot be assigned to");
     }
 
-    void requireAssignable(Type target, Type value, Location where)
+    // Option Strict: the same type, or a numeric widening.
+    static bool assignable(Type target, Type value)
     {
         if (target == Type::Error || value == Type::Error || target == value)
         {
-            return;
+            return true;
         }
-        std::string message = std::string("cannot assign ") + article(value) + " to " +
-                              article(target) + " (Option Strict)";
-        if (target == Type::String && value == Type::Integer)
+        return isNumeric(target) && isNumeric(value) && widerNumeric(target, value) == target;
+    }
+
+    void requireAssignable(Type target, Type value, Location where)
+    {
+        if (!assignable(target, value))
         {
-            message += "; use \"\" & value to convert";
+            diagnostics_.error(where, std::string("cannot assign ") + article(value) + " to " +
+                                          article(target) + " (Option Strict)" +
+                                          conversionHint(target, value));
         }
-        diagnostics_.error(where, message);
+    }
+
+    // "; use CInt(...) to convert", or nothing when no conversion exists.
+    static std::string conversionHint(Type target, Type value)
+    {
+        const char *convert = target == Type::Integer  ? "CInt"
+                              : target == Type::Long   ? "CLng"
+                              : target == Type::Double ? "CDbl"
+                              : target == Type::String ? "CStr"
+                                                       : nullptr;
+        const bool convertible =
+            (isNumeric(target) && (isNumeric(value) || value == Type::String)) ||
+            (target == Type::String && (isNumeric(value) || value == Type::Boolean));
+        if (convert == nullptr || !convertible)
+        {
+            return "";
+        }
+        return std::string("; use ") + convert + "(value) to convert";
     }
 
     // -- Calls -------------------------------------------------------------
@@ -432,11 +491,20 @@ private:
             return;
         }
         std::string message = "no Sub or Function named '" + name + "'";
-        for (const auto &[known, proc] : procedures_)
+        std::vector<std::string> known;
+        for (const auto &[procName, proc] : procedures_)
         {
-            if (catalog::equalsIgnoringCase(known, name))
+            known.push_back(procName);
+        }
+        for (const BuiltinInfo &b : kBuiltins)
+        {
+            known.emplace_back(b.name);
+        }
+        for (const std::string &k : known)
+        {
+            if (catalog::equalsIgnoringCase(k, name))
             {
-                message += " (did you mean '" + known + "'? names are case-sensitive)";
+                message += " (did you mean '" + k + "'? names are case-sensitive)";
                 break;
             }
         }
@@ -450,6 +518,14 @@ private:
             return;
         }
         s.procedure = findProcedure(s.callee);
+        if (s.procedure == nullptr && findBuiltin(s.callee, 0) != nullptr)
+        {
+            diagnostics_.error(s.location, "'" + s.callee +
+                                               "' is a built-in function; use its result, as "
+                                               "in x = " +
+                                               s.callee + "(...)");
+            return;
+        }
         if (s.procedure == nullptr)
         {
             unknownCallee(s.callee, s.location);
@@ -503,11 +579,12 @@ private:
                 }
                 continue;
             }
-            if (arg.type != param.type)
+            if (!assignable(param.type, arg.type))
             {
                 diagnostics_.error(arg.location, which + " must be " + article(param.type) +
                                                      ", not " + article(arg.type) +
-                                                     " (Option Strict)");
+                                                     " (Option Strict)" +
+                                                     conversionHint(param.type, arg.type));
             }
         }
     }
@@ -517,6 +594,16 @@ private:
         e.procedure = findProcedure(e.text);
         if (e.procedure == nullptr)
         {
+            if (const BuiltinInfo *b = findBuiltin(e.text, e.suffix))
+            {
+                return checkBuiltin(e, *b);
+            }
+            if (e.suffix != 0 && findBuiltin(e.text, 0) != nullptr)
+            {
+                diagnostics_.error(e.location, "'" + e.text + "' is written without a '" +
+                                                   std::string(1, e.suffix) + "' suffix");
+                return Type::Error;
+            }
             unknownCallee(e.text, e.location);
             for (auto &arg : e.args)
             {
@@ -535,30 +622,92 @@ private:
         return e.procedure->result->type;
     }
 
+    // Conversions and number functions; each takes one argument.
+    Type checkBuiltin(Expr &e, const BuiltinInfo &b)
+    {
+        e.builtin = b.id;
+        const std::string name = e.text + (e.suffix != 0 ? std::string(1, e.suffix) : ""); // Str$
+        for (auto &arg : e.args)
+        {
+            checkExpr(*arg);
+        }
+        if (e.args.size() != 1)
+        {
+            diagnostics_.error(e.location, "'" + name + "' takes 1 argument, not " +
+                                               std::to_string(e.args.size()));
+            return Type::Error;
+        }
+        const Type t = e.args[0]->type;
+        if (t == Type::Error)
+        {
+            return Type::Error;
+        }
+        auto wrongArgument = [&](const char *needs) {
+            diagnostics_.error(e.args[0]->location,
+                               "'" + name + "' needs " + needs + ", not " + article(t));
+            return Type::Error;
+        };
+        switch (b.id)
+        {
+            case Builtin::CInt:
+            case Builtin::CLng:
+            case Builtin::CDbl:
+                if (!isNumeric(t) && t != Type::String)
+                {
+                    return wrongArgument("a number or a String");
+                }
+                return b.id == Builtin::CInt   ? Type::Integer
+                       : b.id == Builtin::CLng ? Type::Long
+                                               : Type::Double;
+            case Builtin::CStr:
+                if (!isNumeric(t) && t != Type::String && t != Type::Boolean)
+                {
+                    return wrongArgument("a number, a String or a Boolean");
+                }
+                return Type::String;
+            case Builtin::Str:
+                return isNumeric(t) ? Type::String : wrongArgument("a number");
+            case Builtin::Val:
+                return t == Type::String ? Type::Double : wrongArgument("a String");
+            case Builtin::Fix:
+            case Builtin::Int:
+                return isNumeric(t) ? t : wrongArgument("a number");
+            case Builtin::None:
+                break;
+        }
+        return Type::Error;
+    }
+
     // -- Loops and leaving them --------------------------------------------
 
     void checkFor(Stmt &s)
     {
         const Type varType = checkExpr(*s.target);
-        if (varType != Type::Error && (s.target->variable == nullptr || varType != Type::Integer))
+        const bool numericVariable = s.target->variable != nullptr && isNumeric(varType);
+        if (varType != Type::Error && !numericVariable)
         {
-            diagnostics_.error(s.target->location, "the For loop variable must be an Integer "
-                                                   "variable");
+            diagnostics_.error(s.target->location, "the For loop variable must be a numeric "
+                                                   "variable (Integer, Long or Double)");
         }
-        auto requireInteger = [this](Expr &e, const char *what) {
+        auto requireFits = [&](Expr &e, const char *what) {
             const Type t = checkExpr(e);
-            if (t != Type::Integer && t != Type::Error)
+            if (numericVariable && !assignable(varType, t))
             {
-                diagnostics_.error(e.location, std::string("the ") + what +
-                                                   " of a For loop must be an Integer, not " +
-                                                   article(t));
+                // Converting a fractional Step would round it (0.5 to 0, a
+                // loop that never ends): the variable's type is what to fix.
+                const std::string hint =
+                    isNumeric(t) ? std::string("; declare the loop variable As ") + typeName(t)
+                                 : conversionHint(varType, t);
+                diagnostics_.error(e.location, std::string("the ") + what + " of a For loop over " +
+                                                   article(varType) + " must be " +
+                                                   article(varType) + ", not " + article(t) + hint);
             }
         };
-        requireInteger(*s.value, "start");
-        requireInteger(*s.limit, "end");
+        requireFits(*s.value, "start");
+        requireFits(*s.limit, "end");
         if (s.step != nullptr)
         {
-            requireInteger(*s.step, "Step");
+            requireFits(*s.step, "Step");
         }
         if (!s.nextName.empty() && s.nextName != s.target->text)
         {
@@ -631,13 +780,23 @@ private:
         switch (e.kind)
         {
             case ExprKind::IntegerLiteral:
-                if (!fitsInteger(e.integer))
+                // Integer if it fits (or says %), else Long, as in VB.NET.
+                if (e.suffix == '&')
                 {
-                    diagnostics_.error(e.location, "number does not fit in an Integer "
-                                                   "(Long is not supported yet)");
+                    return Type::Long;
+                }
+                if (fitsInteger(e.integer))
+                {
+                    return Type::Integer;
+                }
+                if (e.suffix == '%')
+                {
+                    diagnostics_.error(e.location, "number does not fit in an Integer");
                     return Type::Error;
                 }
-                return Type::Integer;
+                return Type::Long;
+            case ExprKind::DoubleLiteral:
+                return Type::Double;
             case ExprKind::StringLiteral:
                 return Type::String;
             case ExprKind::BooleanLiteral:
@@ -699,6 +858,15 @@ private:
         {
             e.control = c->second;
             return Type::Control;
+        }
+
+        if (findBuiltin(e.text, e.suffix) != nullptr)
+        {
+            diagnostics_.error(e.location, "'" + e.text +
+                                               "' is a built-in function and needs an "
+                                               "argument: " +
+                                               e.text + "(...)");
+            return Type::Error;
         }
 
         std::string message = "'" + e.text + "' is not declared (add a Dim)";
@@ -770,12 +938,12 @@ private:
         }
         if (e.text == "-")
         {
-            if (t != Type::Integer)
+            if (!isNumeric(t))
             {
                 diagnostics_.error(e.location, std::string("cannot negate ") + article(t));
                 return Type::Error;
             }
-            return Type::Integer;
+            return t;
         }
         // Not
         if (t != Type::Boolean)
@@ -786,6 +954,8 @@ private:
         return Type::Boolean;
     }
 
+    // Arithmetic on mixed numeric types is done in the wider type; / and ^
+    // always give a Double, as in VB.
     Type checkBinary(Expr &e)
     {
         const Type l = checkExpr(*e.left);
@@ -795,41 +965,38 @@ private:
             return Type::Error;
         }
         const std::string &op = e.text;
+        const bool numeric = isNumeric(l) && isNumeric(r);
 
         if (op == "&")
         {
-            // The one implicit conversion: Integer and Boolean operands become text.
+            // The one implicit conversion: numbers and Booleans become text.
             if (l == Type::Control || r == Type::Control)
             {
                 return operandError(e, l, r);
             }
             return Type::String;
         }
-        if (op == "+")
+        if (op == "+" && l == Type::String && r == Type::String)
         {
-            if (l == Type::Integer && r == Type::Integer)
-            {
-                return Type::Integer;
-            }
-            if (l == Type::String && r == Type::String)
-            {
-                return Type::String;
-            }
-            return operandError(e, l, r);
+            return Type::String;
         }
-        if (op == "-" || op == "*" || op == "\\")
+        if (op == "+" || op == "-" || op == "*" || op == "Mod")
         {
-            if (l == Type::Integer && r == Type::Integer)
-            {
-                return Type::Integer;
-            }
-            return operandError(e, l, r);
+            return numeric ? widerNumeric(l, r) : operandError(e, l, r);
         }
-        if (op == "/")
+        if (op == "/" || op == "^")
         {
-            diagnostics_.error(e.location, "'/' produces a Double, which is not supported yet; "
-                                           "use '\\' for integer division");
-            return Type::Error;
+            return numeric ? Type::Double : operandError(e, l, r);
+        }
+        if (op == "\\")
+        {
+            if (numeric && (l == Type::Double || r == Type::Double))
+            {
+                diagnostics_.error(e.location, "'\\' divides Integers and Longs; use '/' for a "
+                                               "Double, or convert with CLng first");
+                return Type::Error;
+            }
+            return numeric ? widerNumeric(l, r) : operandError(e, l, r);
         }
         if (op == "And" || op == "Or")
         {
@@ -839,9 +1006,9 @@ private:
             }
             return operandError(e, l, r);
         }
-        // Comparisons: both sides the same comparable type.
-        if (l == r && (l == Type::Integer || l == Type::String ||
-                       (l == Type::Boolean && (op == "=" || op == "<>"))))
+        // Comparisons: two numbers of any types, or the same comparable type.
+        if (numeric ||
+            (l == r && (l == Type::String || (l == Type::Boolean && (op == "=" || op == "<>")))))
         {
             return Type::Boolean;
         }
@@ -883,6 +1050,10 @@ private:
         {
             case '%':
                 return Type::Integer;
+            case '&':
+                return Type::Long;
+            case '#':
+                return Type::Double;
             case '$':
                 return Type::String;
             default:
@@ -896,6 +1067,10 @@ private:
         {
             case Type::Integer:
                 return "an Integer";
+            case Type::Long:
+                return "a Long";
+            case Type::Double:
+                return "a Double";
             case Type::String:
                 return "a String";
             case Type::Boolean:

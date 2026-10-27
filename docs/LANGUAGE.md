@@ -5,9 +5,9 @@ each phase; the full design lives in the project's design documents.
 
 Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
-language core step by step; so far: Sub and Function with parameters, and
-the loops. `docs/REFERENCE.md` has every rule as decided, including the
-ones not built yet.
+language core step by step; so far: Sub and Function with parameters, the
+loops, and the Long and Double types. `docs/REFERENCE.md` has every rule
+as decided, including the ones not built yet.
 
 ## Rules that differ from VB
 
@@ -54,17 +54,40 @@ End Sub
 
 | Area | Supported |
 | --- | --- |
-| Types | `Integer` (32-bit, overflow is a runtime error), `String` (UTF-8), `Boolean` |
-| Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` and `$` |
+| Types | `Integer` (32-bit), `Long` (64-bit), `Double`, `String` (UTF-8), `Boolean`; overflow is a runtime error |
+| Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` `&` `#` `$` |
 | Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `End` |
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
-| Operators | `&` (Integers and Booleans become text), `+ - *`, `\` (integer division), `= <> < > <= >=`, `And Or Not`, unary `-` |
+| Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
+| Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
 | Comments | `'` and `REM`; ` _` at the end of a line continues it |
 
-Option Explicit is always on and Option Strict is on: no implicit
-conversions except through `&`. `/` and `Long`/`Double` are reported as not
-supported yet.
+Option Explicit is always on and Option Strict is on: widening is implicit
+(Integer → Long → Double), but narrowing needs `CInt` or `CLng`, and text
+and numbers convert only explicitly (`CStr`, `Val`, `CDbl`...) or through
+`&`.
+
+## Numbers
+
+```vb
+Dim n As Long, d As Double, i%
+n = 5000000000                  ' too big for an Integer, so a Long literal
+d = 10 / 4                      ' / always gives a Double: 2.5
+i = CInt(d)                     ' 2: halves round to even, as in VB
+i = 7 \ 2 + 7 Mod 2             ' 3 + 1
+d = 2 ^ 10 + &HFF + 1.5E-3      ' 1024 + 255 + 0.0015
+```
+
+- A Double prints as the shortest text that reads back exactly: `0.1`,
+  `2.5`, `1E+20`, `0.30000000000000004` (for 0.1 + 0.2). `Str$` adds VB's
+  leading space for zero and positive numbers: `Str$(5)` is `" 5"`.
+- Division by zero, a result too large and `CInt` of a value out of range
+  are runtime errors; a Double is never Infinity or NaN.
+- `CInt("12")`, `CDbl("1.5")` need the whole text to be a number (else
+  error 13, Type mismatch); `Val("12abc")` is lenient and gives 12.
+- `^` binds tighter than unary minus: `-2 ^ 2` is -4.
+- For loops work over Long and Double variables too: `For d = 0 To 1 Step 0.25`.
 
 ## Subs and Functions
 
@@ -115,7 +138,8 @@ While n > 0                     ' VB-DOS spelling
 Wend                            ' End While (VB.NET) also works
 ```
 
-- The For variable is an Integer variable declared beforehand. The start,
+- The For variable is a numeric variable (Integer, Long or Double)
+  declared beforehand. The start,
   limit and Step are evaluated once, before the first pass. After the loop
   the variable holds the first value past the limit (or the start, if the
   loop never ran). A loop that ends exactly at the largest Integer

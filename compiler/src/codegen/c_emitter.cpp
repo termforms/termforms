@@ -30,6 +30,8 @@
 
 #include "sema/catalog.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <sstream>
@@ -487,6 +489,7 @@ private:
     {
         const int id = enterLoop(s);
         const std::string var = variableValue(*s.target->variable);
+        const Type varType = s.target->variable->type;
         StatementScope scope;
         prepare(scope, {s.value.get(), s.limit.get(), s.step.get()});
 
@@ -498,19 +501,22 @@ private:
         std::string start = forOperand(*s.value, scope);
         if (!isConstant(*s.value) && (!limitConst || !stepConst))
         {
-            code += "const int32_t from_" + std::to_string(id) + " = " + start + "; ";
+            code += "const " + declaration(varType, "from_" + std::to_string(id)) + " = " + start +
+                    "; ";
             start = "from_" + std::to_string(id);
         }
         std::string limit = forOperand(*s.limit, scope);
         if (!limitConst)
         {
-            code += "const int32_t to_" + std::to_string(id) + " = " + limit + "; ";
+            code +=
+                "const " + declaration(varType, "to_" + std::to_string(id)) + " = " + limit + "; ";
             limit = "to_" + std::to_string(id);
         }
         std::string step = s.step == nullptr ? "1" : forOperand(*s.step, scope);
         if (!stepConst)
         {
-            code += "const int32_t step_" + std::to_string(id) + " = " + step + "; ";
+            code +=
+                "const " + declaration(varType, "step_" + std::to_string(id)) + " = " + step + "; ";
             step = "step_" + std::to_string(id);
         }
         code += var + " = " + start + ";";
@@ -525,7 +531,7 @@ private:
         std::string test;
         if (stepConst)
         {
-            const bool down = s.step != nullptr && constantValue(*s.step) < 0;
+            const bool down = s.step != nullptr && isNegativeConstant(*s.step);
             test = var + (down ? " < " : " > ") + limit;
         }
         else
@@ -535,7 +541,8 @@ private:
         out << indent(inner) << "for (;;)\n" << indent(inner) << "{\n";
         emitLine(out, s.location, inner + 1, "if (" + test + ") break;");
         emitBlock(out, s.body, inner + 1);
-        emitLine(out, s.nextLocation, inner + 1, var + " = tf_i32_add(" + var + ", " + step + ");");
+        emitLine(out, s.nextLocation, inner + 1,
+                 var + " = " + opPrefix(varType) + "add(" + var + ", " + step + ");");
         out << indent(inner) << "}\n";
         leaveLoop(out, s, inner);
         if (braced)
@@ -639,18 +646,37 @@ private:
     // A For bound: a literal (possibly negated) is written as a plain number.
     std::string forOperand(const Expr &e, StatementScope &scope)
     {
-        return isConstant(e) ? std::to_string(constantValue(e)) : expr(e, scope).code;
+        if (!isConstant(e))
+        {
+            return expr(e, scope).code;
+        }
+        const bool negated = e.kind == ExprKind::Unary;
+        const Expr &literal = negated ? *e.left : e;
+        if (literal.kind == ExprKind::DoubleLiteral)
+        {
+            return doubleLiteral(negated ? -literal.real : literal.real);
+        }
+        return std::to_string(negated ? -literal.integer : literal.integer);
+    }
+
+    static bool isLiteralNumber(const Expr &e)
+    {
+        return e.kind == ExprKind::IntegerLiteral || e.kind == ExprKind::DoubleLiteral;
     }
 
     static bool isConstant(const Expr &e)
     {
-        return e.kind == ExprKind::IntegerLiteral || (e.kind == ExprKind::Unary && e.text == "-" &&
-                                                      e.left->kind == ExprKind::IntegerLiteral);
+        return isLiteralNumber(e) ||
+               (e.kind == ExprKind::Unary && e.text == "-" && isLiteralNumber(*e.left));
     }
 
-    static std::int64_t constantValue(const Expr &e)
+    static bool isNegativeConstant(const Expr &e)
     {
-        return e.kind == ExprKind::IntegerLiteral ? e.integer : -e.left->integer;
+        const bool negated = e.kind == ExprKind::Unary;
+        const Expr &literal = negated ? *e.left : e;
+        const bool negative =
+            literal.kind == ExprKind::DoubleLiteral ? literal.real < 0 : literal.integer < 0;
+        return negated != negative && (literal.real != 0 || literal.integer != 0);
     }
 
     // -- Assignments and calls ---------------------------------------------
@@ -776,7 +802,7 @@ private:
 
     static void countCalls(const Expr &e, StatementScope &scope)
     {
-        if (e.kind == ExprKind::Call)
+        if (e.kind == ExprKind::Call && e.procedure != nullptr)
         {
             ++scope.pendingCalls;
             for (std::size_t i = 0; i < e.args.size(); ++i)
@@ -823,6 +849,8 @@ private:
         {
             case ExprKind::IntegerLiteral:
                 return {std::to_string(e.integer), false};
+            case ExprKind::DoubleLiteral:
+                return {doubleLiteral(e.real), false};
             case ExprKind::StringLiteral:
                 return {literal(e.text), false};
             case ExprKind::BooleanLiteral:
@@ -844,13 +872,16 @@ private:
                 }
                 return member(e);
             case ExprKind::Call:
-                return call(e, scope);
+                return e.builtin != Builtin::None ? builtin(e, scope) : call(e, scope);
             case ExprKind::Unary:
             {
                 const std::string operand = expr(*e.left, scope).code;
                 if (e.text == "-")
                 {
-                    return {"tf_i32_neg(" + operand + ")", false};
+                    // Negating a Double cannot overflow; the integer types can.
+                    return {e.type == Type::Double ? "(-" + operand + ")"
+                                                   : opPrefix(e.type) + "neg(" + operand + ")",
+                            false};
                 }
                 return {"(!" + operand + ")", false};
             }
@@ -907,23 +938,20 @@ private:
                     false};
         }
 
+        // Arithmetic runs in the result's type; narrower operands widen through
+        // the runtime function's prototype.
         const std::string l = expr(*e.left, scope).code;
         const std::string r = expr(*e.right, scope).code;
-        if (op == "+")
+        if (op == "/" || op == "^")
         {
-            return {"tf_i32_add(" + l + ", " + r + ")", false};
+            return {std::string(op == "/" ? "tf_f64_div(" : "tf_f64_pow(") + l + ", " + r + ")",
+                    false};
         }
-        if (op == "-")
+        static const std::map<std::string, std::string> kArithmetic = {
+            {"+", "add"}, {"-", "sub"}, {"*", "mul"}, {"\\", "div"}, {"Mod", "mod"}};
+        if (auto it = kArithmetic.find(op); it != kArithmetic.end())
         {
-            return {"tf_i32_sub(" + l + ", " + r + ")", false};
-        }
-        if (op == "*")
-        {
-            return {"tf_i32_mul(" + l + ", " + r + ")", false};
-        }
-        if (op == "\\")
-        {
-            return {"tf_i32_div(" + l + ", " + r + ")", false};
+            return {opPrefix(e.type) + it->second + "(" + l + ", " + r + ")", false};
         }
         // And/Or evaluate both sides (VB semantics); Booleans are 0 or 1.
         return {"(" + l + " " + cOperator(op) + " " + r + ")", false};
@@ -936,6 +964,18 @@ private:
         {
             return {"tf_str_from_i32(" + expr(e, scope).code + ")", true};
         }
+        if (e.type == Type::Long)
+        {
+            return {"tf_str_from_i64(" + expr(e, scope).code + ")", true};
+        }
+        if (e.type == Type::Double)
+        {
+            return {"tf_str_from_f64(" + expr(e, scope).code + ")", true};
+        }
+        if (e.kind == ExprKind::BooleanLiteral)
+        {
+            return {literal(e.integer != 0 ? "True" : "False"), false};
+        }
         if (e.type == Type::Boolean)
         {
             // Separate statements: the order of operands of + is unspecified
@@ -946,6 +986,61 @@ private:
             return {"(" + condition + " ? " + whenTrue + " : " + whenFalse + ")", false};
         }
         return expr(e, scope);
+    }
+
+    // Conversions and number functions (see tf_runtime.h for their rules).
+    Value builtin(const Expr &e, StatementScope &scope)
+    {
+        const Expr &arg = *e.args[0];
+        const Type t = arg.type;
+        if (e.builtin == Builtin::CStr)
+        {
+            return asString(arg, scope);
+        }
+        if (t == Type::String)
+        {
+            const std::string text = borrowed(expr(arg, scope), scope).code;
+            switch (e.builtin)
+            {
+                case Builtin::CInt:
+                    return {"tf_i32_from_str(" + text + ")", false};
+                case Builtin::CLng:
+                    return {"tf_i64_from_str(" + text + ")", false};
+                case Builtin::CDbl:
+                    return {"tf_f64_from_str(" + text + ")", false};
+                default:
+                    return {"tf_val(" + text + ")", false}; // Val
+            }
+        }
+        const std::string x = expr(arg, scope).code;
+        switch (e.builtin)
+        {
+            case Builtin::CInt:
+                return {t == Type::Integer ? x
+                        : t == Type::Long  ? "tf_i32_from_i64(" + x + ")"
+                                           : "tf_i32_from_f64(" + x + ")",
+                        false};
+            case Builtin::CLng:
+                return {t == Type::Integer ? "((int64_t)" + x + ")"
+                        : t == Type::Long  ? x
+                                           : "tf_i64_from_f64(" + x + ")",
+                        false};
+            case Builtin::CDbl:
+                return {t == Type::Double ? x : "((double)" + x + ")", false};
+            case Builtin::Str:
+                return {(t == Type::Double ? "tf_str_str_f64(" : "tf_str_str_i64(") + x + ")",
+                        true};
+            case Builtin::Fix:
+            case Builtin::Int:
+                if (t != Type::Double)
+                {
+                    return {x, false}; // whole numbers already
+                }
+                return {(e.builtin == Builtin::Fix ? "tf_f64_fix(" : "tf_f64_int(") + x + ")",
+                        false};
+            default:
+                return {x, false};
+        }
     }
 
     // Parks an owned value in a temporary so it can be read and released.
@@ -1009,6 +1104,33 @@ private:
         return v.byRef ? variableName(v) : "&" + variableName(v);
     }
 
+    // The runtime's prefix for arithmetic in a numeric type: "tf_i64_" ...
+    static std::string opPrefix(Type t)
+    {
+        return t == Type::Double ? "tf_f64_" : t == Type::Long ? "tf_i64_" : "tf_i32_";
+    }
+
+    // A C double literal: the shortest digits that read back exactly, with
+    // a '.' or exponent so C does not take it for an integer.
+    static std::string doubleLiteral(double value)
+    {
+        char buffer[40];
+        for (int precision = 1; precision <= 17; ++precision)
+        {
+            std::snprintf(buffer, sizeof buffer, "%.*g", precision, value);
+            if (std::strtod(buffer, nullptr) == value)
+            {
+                break;
+            }
+        }
+        std::string text = buffer;
+        if (text.find_first_of(".e") == std::string::npos)
+        {
+            text += ".0";
+        }
+        return text;
+    }
+
     static std::string cType(Type t)
     {
         switch (t)
@@ -1017,6 +1139,10 @@ private:
                 return "tf_string *";
             case Type::Boolean:
                 return "int";
+            case Type::Long:
+                return "int64_t";
+            case Type::Double:
+                return "double";
             default:
                 return "int32_t";
         }

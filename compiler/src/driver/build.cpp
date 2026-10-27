@@ -216,6 +216,10 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
         {
             command += " " + quote(s);
         }
+        // The runtime's Double arithmetic needs pow and fmod, which glibc
+        // keeps in libm; elsewhere (macOS, musl, MinGW via zig) -lm is
+        // accepted and costs nothing. Libraries go after the sources.
+        command += " -lm";
         command += " -o " + quote(output);
     }
     return command;

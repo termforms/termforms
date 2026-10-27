@@ -24,7 +24,7 @@
 //   while      := WHILE expr EOS block (WEND | END WHILE)
 //   args       := expr { ',' expr }
 //   expr       := or-expression, with VB precedence from lowest to highest:
-//                 Or, And, Not, comparisons, &, + -, \, * /, unary -
+//                 Or, And, Not, comparisons, &, + -, Mod, \, * /, unary -, ^
 //   primary    := literal | name ['(' [args] ')'] | name '.' property | '(' expr ')'
 //
 // A block ends at a keyword that closes a construct (Next, Loop, Wend,
@@ -303,6 +303,11 @@ private:
             value->kind = ExprKind::IntegerLiteral;
             value->integer = negative ? -next().integer : next().integer;
         }
+        else if (at(TokenKind::DoubleLiteral))
+        {
+            value->kind = ExprKind::DoubleLiteral;
+            value->real = negative ? -next().real : next().real;
+        }
         else if (!negative && at(TokenKind::StringLiteral))
         {
             value->kind = ExprKind::StringLiteral;
@@ -443,8 +448,7 @@ private:
         }
         if (v.type == Type::Error)
         {
-            error(v.location, what + " needs a type: add 'As Integer', 'As String' or "
-                                     "'As Boolean'");
+            error(v.location, what + " needs a type, such as 'As Integer' or 'As String'");
         }
     }
 
@@ -903,9 +907,8 @@ private:
         {
             if (p->type == Type::Error)
             {
-                error(p->location, "'" + p->name +
-                                       "' needs a type: add 'As Integer', 'As String' "
-                                       "or 'As Boolean'");
+                error(p->location,
+                      "'" + p->name + "' needs a type, such as 'As Integer' or 'As String'");
             }
         }
         flush(pending, *s, module, procedure);
@@ -918,6 +921,10 @@ private:
         {
             case '%':
                 return Type::Integer;
+            case '&':
+                return Type::Long;
+            case '#':
+                return Type::Double;
             case '$':
                 return Type::String;
             default:
@@ -939,11 +946,13 @@ private:
         {
             return Type::Boolean;
         }
-        if (peek().isKeyword("LONG") || peek().isKeyword("DOUBLE"))
+        if (acceptKeyword("LONG"))
         {
-            error(peek().location, "type '" + peek().spelling + "' is not supported yet");
-            next();
-            return Type::Error;
+            return Type::Long;
+        }
+        if (acceptKeyword("DOUBLE"))
+        {
+            return Type::Double;
         }
         error(peek().location, "expected a type but found " + describe(peek()));
         return Type::Error;
@@ -1096,11 +1105,22 @@ private:
 
     ExprPtr parseAdditive()
     {
-        ExprPtr left = parseIntegerDivision();
+        ExprPtr left = parseMod();
         while (peek().isSymbol("+") || peek().isSymbol("-"))
         {
             const Token &op = next();
-            left = makeBinary(op.text, op.location, std::move(left), parseIntegerDivision());
+            left = makeBinary(op.text, op.location, std::move(left), parseMod());
+        }
+        return left;
+    }
+
+    ExprPtr parseMod()
+    {
+        ExprPtr left = parseIntegerDivision();
+        while (peek().isKeyword("MOD"))
+        {
+            const Location where = next().location;
+            left = makeBinary("Mod", where, std::move(left), parseIntegerDivision());
         }
         return left;
     }
@@ -1138,7 +1158,33 @@ private:
             e->left = parseUnary();
             return e;
         }
-        return parsePrimary();
+        return parsePower();
+    }
+
+    // ^ binds tighter than unary minus (-2 ^ 2 is -4) and groups to the
+    // left (2 ^ 3 ^ 2 is 64), as in VB; its right operand may be negated.
+    ExprPtr parsePower()
+    {
+        ExprPtr left = parsePrimary();
+        while (peek().isSymbol("^"))
+        {
+            const Location where = next().location;
+            ExprPtr right;
+            if (peek().isSymbol("-"))
+            {
+                right = std::make_unique<Expr>();
+                right->kind = ExprKind::Unary;
+                right->location = next().location;
+                right->text = "-";
+                right->left = parsePrimary();
+            }
+            else
+            {
+                right = parsePrimary();
+            }
+            left = makeBinary("^", where, std::move(left), std::move(right));
+        }
+        return left;
     }
 
     ExprPtr parsePrimary()
@@ -1151,7 +1197,12 @@ private:
         {
             case TokenKind::IntegerLiteral:
                 e->kind = ExprKind::IntegerLiteral;
+                e->suffix = t.suffix;
                 e->integer = next().integer;
+                return e;
+            case TokenKind::DoubleLiteral:
+                e->kind = ExprKind::DoubleLiteral;
+                e->real = next().real;
                 return e;
             case TokenKind::StringLiteral:
                 e->kind = ExprKind::StringLiteral;
@@ -1219,6 +1270,10 @@ const char *ast::typeName(Type type)
     {
         case Type::Integer:
             return "Integer";
+        case Type::Long:
+            return "Long";
+        case Type::Double:
+            return "Double";
         case Type::String:
             return "String";
         case Type::Boolean:

@@ -61,6 +61,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_OUT_OF_MEMORY 7
 #define TF_ERR_DIVISION_BY_ZERO 11
 #define TF_ERR_INVALID_ARGUMENT 5
+#define TF_ERR_TYPE_MISMATCH 13
 #define TF_ERR_TERMINAL 1001
 
 /*
@@ -120,14 +121,80 @@ int32_t tf_str_lenb(const tf_string *s);
 const char *tf_str_cstr(const tf_string *s);
 
 /* ------------------------------------------------------------------------ */
-/* Integer (32-bit) arithmetic with overflow checking                       */
+/* Integer (32-bit) and Long (64-bit) arithmetic with overflow checking     */
 /* ------------------------------------------------------------------------ */
 
 int32_t tf_i32_add(int32_t a, int32_t b);
 int32_t tf_i32_sub(int32_t a, int32_t b);
 int32_t tf_i32_mul(int32_t a, int32_t b);
 int32_t tf_i32_div(int32_t a, int32_t b); /* integer division (\), truncates */
+int32_t tf_i32_mod(int32_t a, int32_t b); /* Mod: the sign follows a, as in VB */
 int32_t tf_i32_neg(int32_t a);
+
+int64_t tf_i64_add(int64_t a, int64_t b);
+int64_t tf_i64_sub(int64_t a, int64_t b);
+int64_t tf_i64_mul(int64_t a, int64_t b);
+int64_t tf_i64_div(int64_t a, int64_t b);
+int64_t tf_i64_mod(int64_t a, int64_t b);
+int64_t tf_i64_neg(int64_t a);
+
+/* ------------------------------------------------------------------------ */
+/* Double arithmetic                                                        */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Doubles never hold Infinity or NaN: a result too large to represent is
+ * error 6 (Overflow), division by zero is error 11, and an undefined power
+ * such as (-8) ^ 0.5 is error 5. Negation cannot fail and is plain C.
+ */
+double tf_f64_add(double a, double b);
+double tf_f64_sub(double a, double b);
+double tf_f64_mul(double a, double b);
+double tf_f64_div(double a, double b); /* /, for every numeric type */
+double tf_f64_mod(double a, double b);
+double tf_f64_pow(double a, double b); /* ^, for every numeric type */
+
+/* ------------------------------------------------------------------------ */
+/* Conversions                                                              */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * CInt and CLng. Fractions round half to even, as in VB (2.5 -> 2,
+ * 3.5 -> 4); a value out of range is error 6 (Overflow). From a String the
+ * whole text must be a number, else error 13 (Type mismatch).
+ */
+int32_t tf_i32_from_i64(int64_t value);
+int32_t tf_i32_from_f64(double value);
+int32_t tf_i32_from_str(const tf_string *text);
+int64_t tf_i64_from_f64(double value);
+int64_t tf_i64_from_str(const tf_string *text);
+
+/* CDbl from a String: as CInt, without rounding. */
+double tf_f64_from_str(const tf_string *text);
+
+/* Fix (towards zero) and Int (towards minus infinity) of a Double. */
+double tf_f64_fix(double value);
+double tf_f64_int(double value);
+
+/*
+ * Val: reads a number from the start of the text, ignoring spaces, and
+ * stops at the first character that cannot continue it; &H and &O prefixes
+ * read hexadecimal and octal. Text with no number gives 0. Never an error,
+ * except Overflow for a number too large for a Double.
+ */
+double tf_val(const tf_string *text);
+
+/*
+ * Text of numbers, as & and CStr produce it (+1). A Double prints as the
+ * shortest text that reads back as the same value: "0.1", "3", "1E+20",
+ * "1.5E-07" (exponent form from 1E15 up and below 0.0001, as VB.NET).
+ */
+tf_string *tf_str_from_i64(int64_t value);
+tf_string *tf_str_from_f64(double value);
+
+/* Str$: the same text with a leading space when value >= 0, as in VB. +1 */
+tf_string *tf_str_str_i64(int64_t value);
+tf_string *tf_str_str_f64(double value);
 
 /* ------------------------------------------------------------------------ */
 /* Forms and controls                                                       */

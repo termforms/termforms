@@ -1,4 +1,4 @@
-blocks.bas:3:17: error: parameter 'x' needs a type: add 'As Integer', 'As String' or 'As Boolean'
+blocks.bas:3:17: error: parameter 'x' needs a type, such as 'As Integer' or 'As String'
 blocks.bas:6:13: error: a Sub returns no value; use a Function to return one
 blocks.bas:14:5: error: expected 'End If' but found 'Next'
 blocks.bas:17:10: error: a Do loop tests its condition at the top or at the bottom, not both

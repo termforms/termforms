@@ -18,6 +18,8 @@ set(TF_RUNTIME_SOURCES
     src/core/tf_error.c
     src/core/tf_string.c
     src/core/tf_integer.c
+    src/core/tf_double.c
+    src/core/tf_convert.c
     src/tui/tf_keys.c
     src/tui/tf_screen.c
     src/tui/tf_input.c
@@ -29,5 +31,10 @@ add_library(tfrt STATIC ${TF_RUNTIME_SOURCES})
 
 target_include_directories(tfrt PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+
+# Double arithmetic uses pow and fmod; glibc keeps them in libm.
+if(UNIX)
+    target_link_libraries(tfrt PUBLIC m)
+endif()
 
 tf_set_warnings(tfrt)

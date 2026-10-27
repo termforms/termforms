@@ -10,3 +10,10 @@ tf_set_warnings(test_runtime_version)
 
 add_test(NAME runtime.version COMMAND test_runtime_version)
 set_tests_properties(runtime.version PROPERTIES LABELS runtime)
+
+add_executable(test_numbers test_numbers.c)
+target_link_libraries(test_numbers PRIVATE tfrt)
+tf_set_warnings(test_numbers)
+
+add_test(NAME runtime.numbers COMMAND test_numbers)
+set_tests_properties(runtime.numbers PROPERTIES LABELS runtime)

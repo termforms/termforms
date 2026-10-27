@@ -1,15 +1,15 @@
 procedures.bas:21:1: error: event handler 'b_Click' takes no parameters
 procedures.bas:26:9: error: 'Area' takes 2 arguments, not 1
-procedures.bas:27:17: error: argument 2 of 'Area' must be an Integer, not a String (Option Strict)
+procedures.bas:27:17: error: argument 2 of 'Area' must be an Integer, not a String (Option Strict); use CInt(value) to convert
 procedures.bas:28:10: error: argument 1 of 'Show' is ByRef, so it must be a variable
-procedures.bas:29:13: error: argument 2 of 'Show' must be a String, not an Integer (Option Strict)
+procedures.bas:29:13: error: argument 2 of 'Show' must be a String, not an Integer (Option Strict); use CStr(value) to convert
 procedures.bas:31:10: error: argument 1 of 'Show' is ByRef Integer, so it must be an Integer variable, not a String
 procedures.bas:32:9: error: Sub 'Show' does not return a value; call it as a statement, or make it a Function
 procedures.bas:33:5: error: cannot assign to Function 'NoArgs'; only its own body sets its result
 procedures.bas:34:9: error: no Sub or Function named 'area' (did you mean 'Area'? names are case-sensitive)
 procedures.bas:35:5: error: 'k' is a variable and cannot be called
-procedures.bas:36:9: error: the For loop variable must be an Integer variable
-procedures.bas:38:18: error: the end of a For loop must be an Integer, not a String
+procedures.bas:36:9: error: the For loop variable must be a numeric variable (Integer, Long or Double)
+procedures.bas:38:18: error: the end of a For loop over an Integer must be an Integer, not a String; use CInt(value) to convert
 procedures.bas:39:5: error: 'Next j' does not match 'For k'
 procedures.bas:40:14: error: a While condition must be Boolean, not Integer
 procedures.bas:42:5: error: 'Exit For' is not inside a For loop
@@ -20,4 +20,4 @@ procedures.bas:49:9: error: 'k' is already declared in this Sub
 procedures.bas:53:5: error: 'Return' in a Function needs a value
 procedures.bas:54:5: error: 'Exit Sub' cannot be used in a Function; use 'Exit Function'
 procedures.bas:55:9: error: 'NoReturn' is the name of this Function; assign to it to set the result
-procedures.bas:56:16: error: cannot assign a String to an Integer (Option Strict)
+procedures.bas:56:16: error: cannot assign a String to an Integer (Option Strict); use CInt(value) to convert

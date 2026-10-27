@@ -5,8 +5,10 @@
 // Rules enforced here (from the design decisions of 23 Oct 2026):
 //   * Option Explicit is always on: every variable is declared with Dim
 //     before use, with a type (no Variants).
-//   * Option Strict: no implicit narrowing or String/number conversion.
-//     The & operator is the one place an Integer becomes text implicitly.
+//   * Option Strict: widening is implicit (Integer -> Long -> Double);
+//     narrowing needs CInt/CLng and String/number conversion is always
+//     explicit (CStr, Val, CInt...). The & operator is the one place a
+//     number becomes text implicitly.
 //   * Identifiers are case-sensitive. A Sub that matches a control's event
 //     handler except for case gets a warning, because it would silently
 //     never be called.

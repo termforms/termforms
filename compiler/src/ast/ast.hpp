@@ -24,10 +24,42 @@ enum class Type
 {
     Error, // set after a reported error, to avoid cascades
     Void,
-    Integer,
+    Integer, // 32-bit
+    Long,    // 64-bit
+    Double,
     String,
     Boolean,
     Control // a form or control used as an object
+};
+
+// Integer, Long and Double, in widening order.
+inline bool isNumeric(Type t)
+{
+    return t == Type::Integer || t == Type::Long || t == Type::Double;
+}
+
+// The wider of two numeric types: Integer < Long < Double.
+inline Type widerNumeric(Type a, Type b)
+{
+    if (a == Type::Double || b == Type::Double)
+    {
+        return Type::Double;
+    }
+    return a == Type::Long || b == Type::Long ? Type::Long : Type::Integer;
+}
+
+// Built-in functions: conversions and number functions.
+enum class Builtin
+{
+    None,
+    CInt,
+    CLng,
+    CDbl,
+    CStr,
+    Str, // Str or Str$
+    Val,
+    Fix,
+    Int
 };
 
 const char *typeName(Type type);
@@ -38,7 +70,8 @@ const char *typeName(Type type);
 
 enum class ExprKind
 {
-    IntegerLiteral,
+    IntegerLiteral, // Integer or Long, by value and suffix
+    DoubleLiteral,
     StringLiteral,
     BooleanLiteral,
     Name,   // a variable, control or form
@@ -58,8 +91,9 @@ struct Expr
     Location location;
     Type type = Type::Error; // set by the semantic pass
 
-    // IntegerLiteral / BooleanLiteral
+    // IntegerLiteral / BooleanLiteral; DoubleLiteral
     std::int64_t integer = 0;
+    double real = 0;
     // StringLiteral value, Name identifier, Member property name, operator text
     std::string text;
     char suffix = 0; // type suffix written on a Name, or 0
@@ -69,9 +103,10 @@ struct Expr
     std::vector<std::unique_ptr<Expr>> args; // Call arguments (text is the callee)
 
     // Resolved by the semantic pass.
-    Variable *variable = nullptr;   // Name
-    ControlDef *control = nullptr;  // Name
-    Procedure *procedure = nullptr; // Call
+    Variable *variable = nullptr;    // Name
+    ControlDef *control = nullptr;   // Name
+    Procedure *procedure = nullptr;  // Call of a Sub or Function
+    Builtin builtin = Builtin::None; // Call of a built-in function
 };
 
 using ExprPtr = std::unique_ptr<Expr>;

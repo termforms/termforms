@@ -109,7 +109,7 @@ TEST_CASE("Option Explicit: undeclared variables are errors")
 TEST_CASE("Dim needs a type")
 {
     CHECK(check(kForm + "Dim x\n") ==
-          "7:5: 'x' needs a type: add 'As Integer', 'As String' or 'As Boolean'\n");
+          "7:5: 'x' needs a type, such as 'As Integer' or 'As String'\n");
 }
 
 TEST_CASE("Dim a, b As String gives both the type")
@@ -126,7 +126,7 @@ TEST_CASE("identifiers are case-sensitive, with a hint")
 TEST_CASE("Option Strict: no implicit Integer to String")
 {
     CHECK(check(kForm + "Sub b_Click()\n    t.Text = 5\nEnd Sub\n") ==
-          "8:14: cannot assign an Integer to a String (Option Strict); use \"\" & value to "
+          "8:14: cannot assign an Integer to a String (Option Strict); use CStr(value) to "
           "convert\n");
 }
 
@@ -180,11 +180,11 @@ TEST_CASE("form property values are checked")
           "2:5: property 'Caption' needs a String, not an Integer\n");
 }
 
-TEST_CASE("Double is reported as not supported yet")
+TEST_CASE("/ always gives a Double, so storing it in an Integer needs CInt")
 {
     CHECK(check(kForm + "Sub b_Click()\n    Dim n As Integer\n    n = 6 / 2\nEnd Sub\n") ==
-          "9:11: '/' produces a Double, which is not supported yet; use '\\' for integer "
-          "division\n");
+          "9:11: cannot assign a Double to an Integer (Option Strict); use CInt(value) to "
+          "convert\n");
 }
 
 // -- Procedures, calls and loops (Phase 3 step 1) --------------------------
@@ -236,7 +236,7 @@ TEST_CASE("a Function returns by assigning its name or with Return")
 TEST_CASE("a Function needs a type, a Sub cannot have one")
 {
     CHECK(check(kForm + "Function F()\nEnd Function\n") ==
-          "7:10: Function 'F' needs a type: add 'As Integer', 'As String' or 'As Boolean'\n");
+          "7:10: Function 'F' needs a type, such as 'As Integer' or 'As String'\n");
     CHECK(check(kForm + "Sub S() As Integer\nEnd Sub\n") ==
           "7:9: a Sub returns no value; use a Function to return one\n");
 }
@@ -282,4 +282,65 @@ TEST_CASE("lexer: ByRef, Step, Until and Wend are reserved")
     {
         CHECK(tf::isReservedKeyword(word));
     }
+}
+
+// -- Long and Double (Phase 3 step 2) ---------------------------------------
+
+TEST_CASE("lexer: Double, hexadecimal, octal and suffixed number literals")
+{
+    tf::Diagnostics d("x.bas");
+    const auto tokens = tf::tokenize("1.5 2E10 2.5e-3 &HFF &o17 5& 7# 3% 2E", d);
+    REQUIRE(tokens.size() >= 10);
+    CHECK(tokens[0].kind == tf::TokenKind::DoubleLiteral);
+    CHECK(tokens[0].real == 1.5);
+    CHECK(tokens[1].real == 2e10);
+    CHECK(tokens[2].real == 2.5e-3);
+    CHECK(tokens[3].integer == 255);
+    CHECK(tokens[4].integer == 15);
+    CHECK(tokens[5].kind == tf::TokenKind::IntegerLiteral);
+    CHECK(tokens[5].suffix == '&');
+    CHECK(tokens[6].kind == tf::TokenKind::DoubleLiteral); // 7# is a Double
+    CHECK(tokens[7].suffix == '%');
+    // "2E" with no exponent digits is the number 2 followed by the name E.
+    CHECK(tokens[8].integer == 2);
+    CHECK(tokens[9].kind == tf::TokenKind::Identifier);
+    CHECK_FALSE(d.hasErrors());
+}
+
+TEST_CASE("lexer: a fraction cannot carry an Integer or Long suffix")
+{
+    tf::Diagnostics d("x.bas");
+    tf::tokenize("1.5&", d);
+    REQUIRE(d.all().size() == 1);
+    CHECK(d.all()[0].message == "a number with a fraction cannot have the suffix '&'");
+}
+
+TEST_CASE("widening is implicit, narrowing needs a conversion")
+{
+    const std::string decl = "Sub TakesDouble(x As Double)\nEnd Sub\n";
+    const std::string widen = "    Dim i As Integer, n As Long, d As Double\n"
+                              "    n = i\n    d = n\n    d = i\n    TakesDouble i\n"
+                              "    i = CInt(d)\n    n = CLng(d)\n";
+    CHECK(check(inClick(decl, widen)) == "");
+    CHECK(check(inClick("", "    Dim i As Integer\n    i = 3000000000\n")) ==
+          "9:9: cannot assign a Long to an Integer (Option Strict); use CInt(value) to "
+          "convert\n");
+}
+
+TEST_CASE("arithmetic types: the wider operand wins; / and ^ give a Double")
+{
+    const std::string body = "    Dim i As Integer, n As Long, d As Double\n"
+                             "    n = i + n\n    d = i / i\n    d = i ^ 2\n    n = n Mod i\n"
+                             "    i = i \\ 2\n";
+    CHECK(check(inClick("", body)) == "");
+    CHECK(check(inClick("", "    Dim i As Integer\n    i = i / 2\n")) ==
+          "9:11: cannot assign a Double to an Integer (Option Strict); use CInt(value) to "
+          "convert\n");
+}
+
+TEST_CASE("Str and Str$ are the same built-in; others take no $")
+{
+    CHECK(check(inClick("", "    Dim s As String\n    s = Str(1) & Str$(2)\n")) == "");
+    CHECK(check(inClick("", "    Dim d As Double\n    d = Val$(\"1\")\n")) ==
+          "9:9: 'Val' is written without a '$' suffix\n");
 }
