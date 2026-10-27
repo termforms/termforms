@@ -24,3 +24,9 @@ End Sub
 
 Function Wrong() As Integer
 End Sub
+
+Sub Withs()
+    End With
+    If True Then With x
+    With y
+End Sub

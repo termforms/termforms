@@ -433,7 +433,7 @@ copy = o                     ' a deep copy: copy.Lines is a separate array
 - **Values and Refs convert by copying** (when Ref arrives): `r = c` makes r
   refer to a new copy of c; `c = r` copies the record r refers to (error 91
   if r is Nothing).
-- **`With ... End With` is in v1**, for Types (coming with Ref).
+- **`With ... End With` is in v1**, for Types and Refs (details below).
 
 ### Refs: details (Proposed)
 
@@ -466,6 +466,44 @@ If head IsNot Nothing Then total = total + head.Value
   Type block, nothing else could stand there, so it is not ambiguous.
 - Freeing a record frees the records only it refers to, recursively: a
   very long chain (a linked list of millions) uses as much stack.
+
+### With (Proposed, 27 Oct 2026)
+
+```vb
+With orders(i)
+    .Customer = "Ann"
+    With .Lines(0)                 ' nested: .Qty is orders(i).Lines(0).Qty
+        .Qty = 2
+    End With
+    Bump .Total                    ' a .Member may be passed ByRef
+End With
+```
+
+- **Targets:** a Type variable, element or member; any Ref (a variable,
+  member, element, `New T` or a Function's result); a Function's Type
+  result; a control or the form. Not a number, a String, a whole array
+  or Nothing (compile errors).
+- **Evaluated once, at the With** (as VB): a Ref, a Function call or
+  `New` in the target is evaluated and kept, and so are the indexes of
+  the elements after it, left to right. Changing `i`, or making `r` refer
+  to another record, inside `With a(i)` / `With r` changes nothing; the
+  record a Ref referred to stays alive until the With is done with it.
+- **An element is looked up again at each use**, with the kept indexes
+  (*Settled*, Jim, 27 Oct 2026).
+  `ReDim Preserve` that keeps it is harmless; a ReDim that removes it
+  makes the next use error 9. *VB6 differs*: it locks the array for the
+  whole With (ReDim inside is error 10). Looking up again is as safe and
+  needs nothing undone when the With is left by Exit, Return or an error.
+- **A Function's Type result** is copied, and the copy cannot be changed
+  (`.Name = ...`, ByRef, ReDim are compile errors), as for `F().Name`.
+  Through a Ref result the record is shared and can be changed.
+- **`.Member`** means the innermost With's target; outside any With it
+  is a compile error. Inside, `.Member` works wherever `x.Member` would.
+- **Spacing:** after a name, `Bump .Age` (a space before the dot) passes
+  the With member `.Age` to `Bump`; `Bump.Age` is a member of `Bump`. VB
+  reads them the same way.
+- `With` cannot follow `Then` on a one-line If. Nothing needs undoing
+  when the With is left early.
 
 ### Types: details (Proposed)
 

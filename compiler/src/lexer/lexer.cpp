@@ -18,14 +18,14 @@ namespace
 
 // Reserved words, upper case. Some are not used by the parser yet but are
 // reserved now so programs written today keep compiling as the language grows.
-constexpr std::array<std::string_view, 56> kKeywords = {
-    "AND",   "AS",      "BEGIN",   "BOOLEAN", "BYREF",  "BYVAL",    "CALL",  "CASE",
-    "CATCH", "CONST",   "CTYPE",   "DIM",     "DO",     "DOUBLE",   "ELSE",  "ELSEIF",
-    "END",   "ENUM",    "ERASE",   "EXIT",    "FALSE",  "FINALLY",  "FOR",   "FUNCTION",
-    "IF",    "INTEGER", "IS",      "ISNOT",   "LONG",   "LOOP",     "MOD",   "NEW",
-    "NEXT",  "NOT",     "NOTHING", "OPTION",  "OR",     "PRESERVE", "REDIM", "REF",
-    "REM",   "RETURN",  "SELECT",  "STEP",    "STRING", "SUB",      "THEN",  "THROW",
-    "TO",    "TRUE",    "TRY",     "TYPE",    "UNTIL",  "WEND",     "WHEN",  "WHILE"};
+constexpr std::array<std::string_view, 57> kKeywords = {
+    "AND",   "AS",       "BEGIN", "BOOLEAN", "BYREF",  "BYVAL",    "CALL",   "CASE",    "CATCH",
+    "CONST", "CTYPE",    "DIM",   "DO",      "DOUBLE", "ELSE",     "ELSEIF", "END",     "ENUM",
+    "ERASE", "EXIT",     "FALSE", "FINALLY", "FOR",    "FUNCTION", "IF",     "INTEGER", "IS",
+    "ISNOT", "LONG",     "LOOP",  "MOD",     "NEW",    "NEXT",     "NOT",    "NOTHING", "OPTION",
+    "OR",    "PRESERVE", "REDIM", "REF",     "REM",    "RETURN",   "SELECT", "STEP",    "STRING",
+    "SUB",   "THEN",     "THROW", "TO",      "TRUE",   "TRY",      "TYPE",   "UNTIL",   "WEND",
+    "WHEN",  "WHILE",    "WITH"};
 
 std::string toUpper(std::string_view text)
 {
@@ -60,9 +60,17 @@ public:
 
     std::vector<Token> run()
     {
+        std::size_t lastEnd = 0; // where the last token ended
         while (!atEnd())
         {
+            const std::size_t count = tokens_.size();
+            const std::size_t from = pos_;
             scanToken();
+            if (tokens_.size() > count)
+            {
+                tokens_.back().spaced = from != lastEnd;
+                lastEnd = pos_;
+            }
         }
         endStatement(here());
         Token eof;

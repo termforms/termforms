@@ -120,7 +120,7 @@ enum class ExprKind
     StringLiteral,
     BooleanLiteral,
     Name,   // a variable, control or form
-    Member, // object.Property
+    Member, // object.Property; inside a With, ".Property" has no object (left) until checked
     Call,   // Function(args); a bare parameterless Function name becomes one too
     Unary,
     Binary
@@ -186,6 +186,7 @@ enum class StmtKind
     Const,    // Const name [As type] = value, ...: declared holds the names
     ReDim,    // ReDim [Preserve] a(bounds), ...: args are a(bounds) as Call shapes
     Erase,    // Erase a, ...: args are the array names
+    With,     // With target ... End With: see Stmt::body
     End       // the End statement: terminate the program
 };
 
@@ -248,7 +249,10 @@ struct Stmt
     bool isWhile = false;
     Location loopLocation; // the Loop / Wend / End While line
 
-    // For and Do bodies; the Try block of a Try.
+    // For and Do bodies; the Try block of a Try. For a With, the semantic
+    // pass puts first the assignments that evaluate its target once (into
+    // hidden locals), then the body; target becomes the path each .Member
+    // inside starts from.
     Block body;
 
     // Try: its Catch clauses in order, and Finally.
@@ -301,6 +305,10 @@ struct Variable
     bool isParameter = false;
     bool byRef = false;    // parameters only
     bool isResult = false; // the value a Function returns, named after it
+    // Hidden locals a With keeps its target in. withCopy: a copy of a
+    // Function's Type result, which (as the result itself) cannot be changed.
+    bool isWithAnchor = false;
+    bool withCopy = false;
 };
 
 // A property setting inside a Begin ... End block.

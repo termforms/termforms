@@ -47,6 +47,9 @@ struct Token
     double real = 0;          // value of a DoubleLiteral
     Location location;
     std::string spelling; // keyword as written, for messages
+    // Whitespace comes before it on its line. "Bump .Age" passes a With
+    // member where "Bump.Age" is a member of Bump, as in VB.
+    bool spaced = false;
 
     bool isKeyword(std::string_view upper) const
     {

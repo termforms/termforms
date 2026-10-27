@@ -338,6 +338,8 @@ private:
         loops_.clear();
         catchDepth_ = 0;
         finallyFloors_.clear();
+        withs_.clear();
+        withCount_ = 0;
         for (auto &p : proc.parameters)
         {
             declareLocal(*p);
@@ -424,6 +426,9 @@ private:
                 break;
             case StmtKind::Erase:
                 checkErase(s);
+                break;
+            case StmtKind::With:
+                checkWith(s);
                 break;
             case StmtKind::ErrClear:
             case StmtKind::End:
@@ -1662,7 +1667,9 @@ private:
         {
             return isLvalue(*e.left);
         }
-        return rootVariable(e) != nullptr && !(e.kind == ExprKind::Name && e.variable->isConst);
+        const Variable *root = rootVariable(e);
+        return root != nullptr && !root->withCopy &&
+               !(e.kind == ExprKind::Name && e.variable->isConst);
     }
 
     // A ByVal array parameter is read-only, and so is everything inside it.
@@ -1680,7 +1687,187 @@ private:
                     : nullptr;
         }
         const Variable *root = rootVariable(e);
+        if (root != nullptr && root->withCopy)
+        {
+            diagnostics_.error(where, "this is part of a Function's result, which cannot be "
+                                      "changed; store the result in a variable first");
+            return true;
+        }
         return root != nullptr && root->rank > 0 && readOnlyArray(*root, where);
+    }
+
+    // -- With ----------------------------------------------------------------
+
+    // With target ... End With. As VB, the target is evaluated once, at the
+    // With: the record a Ref refers to, a Function's result, and the indexes
+    // of array elements are kept in hidden locals, which the assignments
+    // put at the front of the body set. What is left of the target is a path
+    // from those (and from variables, which are not copied) to the record;
+    // each .Member inside is that path plus the member, so it is checked and
+    // compiled like any other. Re-walking the path rather than holding the
+    // element's address keeps a ReDim inside the With safe: the element is
+    // looked up again (error 9 if it has gone).
+    void checkWith(Stmt &s)
+    {
+        Expr &target = *s.target;
+        const Type t = checkExpr(target);
+        const bool record = t == Type::Record || (t == Type::Ref && target.typeDef != nullptr);
+        const bool usable =
+            (record && target.rank == 0) || (t == Type::Control && target.kind == ExprKind::Name);
+        if (t == Type::Ref && target.typeDef == nullptr)
+        {
+            diagnostics_.error(target.location, "Nothing has no members");
+        }
+        else if (t != Type::Error && !usable)
+        {
+            diagnostics_.error(target.location, "With needs a Type, a Ref or a control, not " +
+                                                    (target.rank > 0 ? std::string("an array")
+                                                                     : article(infoOf(target))));
+        }
+
+        scopes_.emplace_back();
+        Block setup;
+        if (usable)
+        {
+            anchorWith(s.target, setup, s.location);
+        }
+        withs_.push_back(usable ? s.target.get() : nullptr);
+        checkBlock(s.body, false);
+        withs_.pop_back();
+        scopes_.pop_back();
+
+        for (auto &stmt : s.body)
+        {
+            setup.push_back(std::move(stmt));
+        }
+        s.body = std::move(setup);
+    }
+
+    // Splits a checked With target: the part evaluated once moves into an
+    // assignment to a hidden local, and the local takes its place.
+    void anchorWith(ExprPtr &target, Block &setup, Location where)
+    {
+        // The path from the target's tip down to where it starts.
+        std::vector<ExprPtr *> spine{&target};
+        for (;;)
+        {
+            Expr &e = **spine.back();
+            if ((e.kind == ExprKind::Member && e.field != nullptr) ||
+                (e.kind == ExprKind::Index && e.left != nullptr))
+            {
+                spine.push_back(&e.left);
+                continue;
+            }
+            break;
+        }
+        // Everything up to the last Ref, Function call or New on the path
+        // is evaluated once: after it, the path is inside one record.
+        std::size_t start = spine.size();
+        for (std::size_t i = 0; i < spine.size(); ++i)
+        {
+            const Expr &e = **spine[i];
+            const bool anchor = e.kind == ExprKind::Name && e.variable != nullptr &&
+                                e.variable->isWithAnchor; // an enclosing With's
+            if (!anchor && ((e.type == Type::Ref && e.rank == 0) || e.kind == ExprKind::Call ||
+                            e.kind == ExprKind::New))
+            {
+                start = i;
+                break;
+            }
+        }
+        if (start < spine.size())
+        {
+            ExprPtr &slot = *spine[start];
+            Variable &held = hiddenLocal(*slot);
+            held.withCopy = slot->type == Type::Record; // a Function's Type result
+            hide(slot, held, setup, where);
+        }
+        // Then the indexes after it (from an a(i) that starts the path),
+        // left to right; constants need no copy.
+        for (std::size_t i = start; i-- > 0;)
+        {
+            Expr &e = **spine[i];
+            if (e.kind != ExprKind::Index)
+            {
+                continue;
+            }
+            for (auto &index : e.args)
+            {
+                if (index->kind != ExprKind::IntegerLiteral && index->kind != ExprKind::Constant)
+                {
+                    hide(index, hiddenLocal(*index), setup, where);
+                }
+            }
+        }
+    }
+
+    Variable &hiddenLocal(const Expr &like)
+    {
+        auto v = std::make_unique<Variable>();
+        v->name = "_with" + std::to_string(++withCount_); // no BASIC name starts with _
+        v->type = like.type;
+        v->typeDef = like.typeDef;
+        v->enumDef = like.enumDef;
+        v->location = like.location;
+        v->isWithAnchor = true;
+        Variable &held = *v;
+        scopes_.back()[held.name] = &held;
+        current_->locals.push_back(std::move(v));
+        return held;
+    }
+
+    // slot = held, after "held = <what slot was>" joins the setup.
+    static void hide(ExprPtr &slot, Variable &held, Block &setup, Location where)
+    {
+        auto store = std::make_unique<Stmt>();
+        store->kind = StmtKind::Assign;
+        store->location = where;
+        store->target = nameOf(held, slot->location);
+        store->value = std::move(slot);
+        slot = nameOf(held, store->value->location);
+        setup.push_back(std::move(store));
+    }
+
+    static ExprPtr nameOf(Variable &v, Location where)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::Name;
+        e->location = where;
+        e->text = v.name;
+        e->type = v.type;
+        e->typeDef = v.typeDef;
+        e->enumDef = v.enumDef;
+        e->variable = &v;
+        return e;
+    }
+
+    // A copy of a With's path (Names, Members, Indexes and constant
+    // indexes, all checked) for one .Member.
+    static ExprPtr clonePath(const Expr &e, Location where)
+    {
+        auto c = std::make_unique<Expr>();
+        c->kind = e.kind;
+        c->location = where;
+        c->type = e.type;
+        c->integer = e.integer;
+        c->real = e.real;
+        c->text = e.text;
+        c->suffix = e.suffix;
+        c->enumDef = e.enumDef;
+        c->typeDef = e.typeDef;
+        c->field = e.field;
+        c->rank = e.rank;
+        c->variable = e.variable;
+        c->control = e.control;
+        if (e.left != nullptr)
+        {
+            c->left = clonePath(*e.left, where);
+        }
+        for (const auto &arg : e.args)
+        {
+            c->args.push_back(clonePath(*arg, where));
+        }
+        return c;
     }
 
     static std::string describeObject(const Expr &e)
@@ -2429,6 +2616,22 @@ private:
 
     Type resolveMember(Expr &e)
     {
+        if (e.left == nullptr) // .Name: a member of the innermost With's target
+        {
+            if (withs_.empty() || withs_.back() == nullptr)
+            {
+                if (withs_.empty())
+                {
+                    diagnostics_.error(e.location,
+                                       "'." + e.text + "' needs a With block around it");
+                }
+                e.left = std::make_unique<Expr>(); // an error, already reported
+                e.left->kind = ExprKind::Name;
+                e.left->location = e.location;
+                return Type::Error;
+            }
+            e.left = clonePath(*withs_.back(), e.location);
+        }
         Expr &object = *e.left;
         if (object.kind == ExprKind::Name && object.text == "Err")
         {
@@ -2707,6 +2910,10 @@ private:
     // For each Finally around the statement, how many loops were already
     // open when it began: those cannot be left from inside it.
     std::vector<std::size_t> finallyFloors_;
+    // The paths of the Withs around the statement, innermost last (null for
+    // one whose target was in error); hidden locals made so far.
+    std::vector<const Expr *> withs_;
+    int withCount_ = 0;
 };
 
 } // namespace

@@ -1,0 +1,8 @@
+with.bas:24:6: error: '.Name' needs a With block around it
+with.bas:25:10: error: With needs a Type, a Ref or a control, not an Integer
+with.bas:28:10: error: 'items' is an array; use an element, as in items(0)
+with.bas:30:10: error: Nothing has no members
+with.bas:34:10: error: Type Item has no member 'Nmae'
+with.bas:39:10: error: cannot assign to a member of a Function's result; store the result in a variable first
+with.bas:40:15: error: argument 1 of 'Bump' is ByRef, so it must be a variable
+with.bas:41:16: error: this is part of a Function's result, which cannot be changed; store the result in a variable first

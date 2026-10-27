@@ -733,6 +733,9 @@ private:
             case StmtKind::Try:
                 emitTry(out, s, depth);
                 return;
+            case StmtKind::With:
+                emitBlock(out, s.body, depth); // its target's setup, then its body
+                return;
             case StmtKind::Const:
                 return; // worked out by the compiler; uses are replaced by the value
             default:

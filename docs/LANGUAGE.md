@@ -63,6 +63,7 @@ End Sub
 | Arrays | fixed `Dim a(9)`, `Dim g(24, 79)`; dynamic `Dim a()`, `Dim t(,)` with `ReDim [Preserve]`; `Erase`, `UBound`, `LBound`; array parameters |
 | Types | `Type ... End Type` records with scalar, array and Type members; arrays of Types; Type parameters and Function results |
 | Refs | `Ref T`, `New T`, `Dim r As New T`, `Nothing`, `Is` / `IsNot`; Ref members, arrays of Refs |
+| With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -165,7 +166,7 @@ copy = s                                ' copies everything: they share nothing
 - A Type is a value: assignment copies the record, arrays and nested Types
   included. A ByVal Type parameter is the callee's own copy; ByRef shares.
 - Types cannot be compared with `=`; compare their members.
-- `With ... End With` comes next.
+- `With ... End With` works on Types (see Refs below).
 
 ## Refs
 
@@ -192,6 +193,31 @@ Wend
   `IsNot`, not `=`.
 - Records are freed when nothing refers to them any more, but records that
   refer to each other in a circle are never freed.
+
+## With
+
+```vb
+With customers(i)
+    .Name = "Ann"
+    With .Home
+        .City = "Oslo"
+    End With
+    Bump .Age                       ' a space before the dot: a With member
+End With
+With txtName
+    .Text = ""
+End With
+```
+
+- The target is worked out once, at `With`: changing `i`, or making a
+  Ref variable refer to another record, inside the With does not change
+  what `.Name` means.
+- An array element is looked up again at each use, so a `ReDim` that
+  removes it makes the next `.Name` error 9.
+- `With F()` on a Function returning a Type works on a copy, which cannot
+  be changed; on a Function returning a Ref, the record is shared.
+- `Name .X` (with a space) passes `.X` to the Sub `Name`; `Name.X` is a
+  member of `Name`.
 
 ## Errors
 

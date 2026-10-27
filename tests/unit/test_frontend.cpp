@@ -507,3 +507,33 @@ TEST_CASE("lexer: Ref, New, Nothing, Is and IsNot are reserved")
         CHECK(tf::isReservedKeyword(word));
     }
 }
+
+// -- With (Phase 3 step 5b) ----------------------------------------------------
+
+TEST_CASE("With works on a Type, a Ref, an element, a Function's result and a control")
+{
+    const std::string decl = "Type P\n    X As Integer\n    Q As Ref P\nEnd Type\n"
+                             "Function F() As P\n    F.X = 1\nEnd Function\n";
+    const std::string body = "    Dim v As P, r As New P, a(2) As P, n As Integer\n"
+                             "    With v\n        .X = 1\n        With .Q\n            .X = 2\n"
+                             "        End With\n    End With\n"
+                             "    With r\n        .X = .X + 1\n    End With\n"
+                             "    With a(n)\n        .X = 3\n    End With\n"
+                             "    With F()\n        n = .X\n    End With\n"
+                             "    With b\n        .Caption = \"go\"\n    End With\n";
+    CHECK(check(inClick(decl, body)) == "");
+}
+
+TEST_CASE("a name then a spaced dot passes a With member; unspaced, it is a member")
+{
+    const std::string decl = "Type P\n    X As Integer\nEnd Type\n"
+                             "Sub Bump(ByRef n As Integer)\n    n = n + 1\nEnd Sub\n";
+    CHECK(check(inClick(decl, "    Dim v As P\n    With v\n        Bump .X\n    End With\n")) ==
+          "");
+    CHECK(check(inClick(decl, "    Dim v As P\n    v.X = 1\n    v .X\n")) != "");
+}
+
+TEST_CASE("lexer: With is reserved")
+{
+    CHECK(tf::isReservedKeyword("with"));
+}

@@ -13,7 +13,7 @@
 //   function   := FUNCTION name [params] [AS type] EOS block END FUNCTION EOS
 //   params     := '(' [param { ',' param }] ')'
 //   param      := [BYVAL | BYREF] name ['(' { ',' } ')'] [AS type]
-//   statement  := dim | if | for | do | while | try | EXIT what | RETURN [expr]
+//   statement  := dim | if | for | do | while | try | with | EXIT what | RETURN [expr]
 //               | THROW [expr [',' expr]] | Err.Raise args | Err.Clear
 //               | CALL name ['(' [args] ')'] | END
 //               | target '=' expr | name [args] | name '(' [args] ')'
@@ -33,6 +33,7 @@
 //   while      := WHILE expr EOS block (WEND | END WHILE)
 //   try        := TRY EOS block { CATCH [WHEN expr] EOS block }
 //                 [FINALLY EOS block] END TRY
+//   with       := WITH expr EOS block END WITH   (inside: .name is a member of expr)
 //   args       := expr { ',' expr }
 //   expr       := or-expression, with VB precedence from lowest to highest:
 //                 Or, And, Not, comparisons, &, + -, Mod, \, * /, unary -, ^
@@ -178,6 +179,23 @@ private:
         }
         error(peek().location,
               "expected '" + std::string(display) + "' but found " + describe(peek()));
+        return false;
+    }
+
+    // "End <keyword>". Another End (End Sub where End With was due) is left
+    // for whatever it closes, so a missing closer is reported once.
+    bool expectEndOf(std::string_view keyword, std::string_view display)
+    {
+        if (isEndOf(keyword))
+        {
+            next();
+            next();
+            return true;
+        }
+        error(peek().location, "expected '" + std::string(display) + "' but found " +
+                                   (peek().isKeyword("END") && peek(1).kind == TokenKind::Keyword
+                                        ? "'" + closerText() + "'"
+                                        : describe(peek())));
         return false;
     }
 
@@ -547,7 +565,7 @@ private:
                t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || t.isKeyword("SUB") ||
                t.isKeyword("FUNCTION") || t.isKeyword("CATCH") || t.isKeyword("FINALLY") ||
                isEndOf("IF") || isEndOf("SUB") || isEndOf("FUNCTION") || isEndOf("WHILE") ||
-               isEndOf("TRY");
+               isEndOf("TRY") || isEndOf("WITH");
     }
 
     // The body of a construct opened with `opener` ("FOR", "DO", "WHILE",
@@ -606,6 +624,10 @@ private:
         if (t.isKeyword("CATCH") || t.isKeyword("FINALLY") || isEndOf("TRY"))
         {
             return "TRY";
+        }
+        if (isEndOf("WITH"))
+        {
+            return "WITH";
         }
         return nullptr;
     }
@@ -669,6 +691,10 @@ private:
         if (t.isKeyword("TRY"))
         {
             return parseTry();
+        }
+        if (t.isKeyword("WITH"))
+        {
+            return parseWith();
         }
         if (t.isKeyword("CONST"))
         {
@@ -752,7 +778,7 @@ private:
             do
             {
                 // a(n) or o.Lines(n): an array and its new bounds.
-                if (!at(TokenKind::Identifier))
+                if (!at(TokenKind::Identifier) && !peek().isSymbol("."))
                 {
                     error(peek().location, "expected an array name but found " + describe(peek()));
                     return nullptr;
@@ -768,12 +794,12 @@ private:
             s->location = next().location;
             do
             {
-                if (!at(TokenKind::Identifier))
+                if (!at(TokenKind::Identifier) && !peek().isSymbol("."))
                 {
                     error(peek().location, "expected an array name but found " + describe(peek()));
                     return nullptr;
                 }
-                s->args.push_back(parsePrimary()); // a or o.Lines
+                s->args.push_back(parsePrimary()); // a, o.Lines or .Lines
             } while (acceptSymbol(","));
             return s;
         }
@@ -812,8 +838,8 @@ private:
         if (t.kind == TokenKind::Identifier)
         {
             // "name = ..." or "name.Prop = ..." is an assignment; anything
-            // else starting with a name is a call.
-            if (peek(1).isSymbol("=") || peek(1).isSymbol(".") ||
+            // else starting with a name is a call ("Bump .Age" in a With).
+            if (peek(1).isSymbol("=") || (peek(1).isSymbol(".") && !peek(1).spaced) ||
                 (peek(1).isSymbol("(") && (parenthesisedThen(1, "=") || parenthesisedThen(1, "."))))
             {
                 auto s = std::make_unique<Stmt>();
@@ -826,8 +852,18 @@ private:
             }
             return parseCallStatement();
         }
+        if (t.isSymbol(".")) // .Name = ... inside a With
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::Assign;
+            s->location = t.location;
+            s->target = parsePrimary();
+            expectSymbol("=");
+            s->value = parseExpression();
+            return s;
+        }
         if (t.isKeyword("DIM") || t.isKeyword("IF") || t.isKeyword("FOR") || t.isKeyword("DO") ||
-            t.isKeyword("WHILE") || t.isKeyword("TRY"))
+            t.isKeyword("WHILE") || t.isKeyword("TRY") || t.isKeyword("WITH"))
         {
             error(t.location, "'" + t.spelling + "' cannot follow 'Then' or 'Else' on one line");
             return nullptr;
@@ -1097,7 +1133,24 @@ private:
         }
 
         s->endLocation = peek().location;
-        if (expectKeyword("END", "End Try") && expectKeyword("TRY", "Try"))
+        if (expectEndOf("TRY", "End Try"))
+        {
+            expectEndOfStatement();
+        }
+        return s;
+    }
+
+    // With target EOS block End With
+    StmtPtr parseWith()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::With;
+        s->location = next().location;
+        s->target = parseExpression();
+        expectEndOfStatement();
+        s->body = parseBlock("WITH");
+        s->endLocation = peek().location;
+        if (expectEndOf("WITH", "End With"))
         {
             expectEndOfStatement();
         }
@@ -1184,7 +1237,7 @@ private:
             expectEndOfStatement();
             skipStatementEnds();
         }
-        if (expectKeyword("END", "End Type") && expectKeyword("TYPE", "Type"))
+        if (expectEndOf("TYPE", "End Type"))
         {
             expectEndOfStatement();
         }
@@ -1231,7 +1284,7 @@ private:
             expectEndOfStatement();
             skipStatementEnds();
         }
-        if (expectKeyword("END", "End Enum") && expectKeyword("ENUM", "Enum"))
+        if (expectEndOf("ENUM", "End Enum"))
         {
             expectEndOfStatement();
         }
@@ -1433,7 +1486,7 @@ private:
             expectEndOfStatement();
             s->elseBody = parseBlock("IF");
         }
-        if (expectKeyword("END", "End If") && expectKeyword("IF", "If"))
+        if (expectEndOf("IF", "End If"))
         {
             expectEndOfStatement();
         }
@@ -1681,6 +1734,10 @@ private:
             ExprPtr inner = parseExpression();
             expectSymbol(")");
             return inner;
+        }
+        if (t.isSymbol("."))
+        {
+            return parsePostfix(nullptr); // .Name inside a With: sema supplies the object
         }
 
         error(t.location, "expected an expression but found " + describe(t));

@@ -7,3 +7,6 @@ blocks.bas:21:10: error: expected 'For', 'Do', 'While', 'Sub' or 'Function' afte
 blocks.bas:22:19: error: 'For' cannot follow 'Then' or 'Else' on one line
 blocks.bas:23:1: error: expected 'Wend' or 'End While' but found 'End'
 blocks.bas:26:1: error: a Function ends with 'End Function'
+blocks.bas:29:5: error: 'End With' without 'With'
+blocks.bas:30:18: error: 'With' cannot follow 'Then' or 'Else' on one line
+blocks.bas:32:1: error: expected 'End With' but found 'End Sub'

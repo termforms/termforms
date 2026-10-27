@@ -89,8 +89,13 @@ authoritative for design rationale.
   value<->Ref copying, Ref members and arrays of Refs, error 91; keywords
   allowed as member names. Also fixed `Return` of a Type (was a shallow
   copy). Smaller Ref/Type rules are Proposed in REFERENCE.md.
-- **Next:** 5b-3 With ... End With, then 5c Dictionary (settle its design
-  with Jim first).
+  Step 5b-3 done (27 Oct 2026): With ... End With (Types, elements, Refs,
+  Function results, controls; nested); `With` reserved; a token's
+  `spaced` flag tells `Bump .Age` from `Bump.Age`. Its rules are Proposed
+  in REFERENCE.md, except one Jim settled: an element is looked up again
+  at each use rather than its array locked as VB6 does (the difference
+  only shows when a ReDim inside the With removes the element).
+- **Next:** 5c Dictionary (settle its design with Jim first).
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -276,6 +281,13 @@ Key mechanisms:
   Reads of a reachable Ref before a later call are held (retained);
   a ByRef path through a Ref holds the record for the statement.
   `opsOf()` records which Types' ops are emitted (arrays, New, get).
+- **With:** no codegen of its own. Sema (`checkWith`/`anchorWith`) moves
+  the parts of the target evaluated once (the last Ref, Function call or
+  New on the path, then later indexes) into assignments to hidden locals
+  `_with<n>` (no BASIC name starts with `_`) at the front of the With's
+  body; each `.Member` becomes a clone of the remaining path
+  (`clonePath`) plus the member, checked as usual. `withCopy` marks a
+  copy of a Function's Type result as read-only.
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in
