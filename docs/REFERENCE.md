@@ -881,6 +881,40 @@ Module=lib/stock.bas
   `.vbp`'s line.
 - A `.vbp` is given on its own (not with `.bas` files).
 
+## Phase 4: controls, forms and keys (Settled, Jim, 28 Oct 2026)
+
+- **Order of work**: Label, CheckBox, OptionButton, Frame; ListBox;
+  Timer; MsgBox/InputBox and the modal stack; several forms; menus; the
+  TextBox edit buffer; mouse; Unicode widths.
+- **Frames contain controls**, nested in the form block (`Begin Frame` ...
+  `Begin OptionButton` ... `End` ... `End`): their Left and Top are inside
+  the Frame, they move with it, and OptionButtons in one Frame are a group
+  of their own (as VB).
+- **VB's named constants are built in** (`vbYesNo`, `vbQuestion`, `vbYes`,
+  `vbKeyReturn`, ...), reserved as built-in names.
+- **Keys**: a `Default` button is pressed by Enter and a `Cancel` button
+  by Esc anywhere on the form; arrows move within an OptionButton group
+  and a ListBox, Tab between controls; `&` in a Caption makes an access
+  key (Alt+letter); Space toggles a CheckBox, selects an OptionButton and
+  presses a button.
+- **Several forms are a stack**: `frmX.Show vbModal` waits until frmX
+  closes; `frmX.Show` puts it on top and returns; only the top form takes
+  keys, the ones below stay visible; Hide/Unload takes it off.
+- **Events in v1**: Click, DblClick, Change; GotFocus, LostFocus;
+  KeyPress (KeyAscii, which may be changed or set to 0), KeyDown;
+  Form_Unload (Cancel), Form_Activate.
+- **ListBox selects one or several items** (VB's MultiSelect and
+  Selected(i) too).
+- **The mouse is on by default**: clicks and the wheel go to the form;
+  Shift+drag still selects text in most terminals; an environment variable
+  turns it off.
+- **Ctrl+F4 closes the top form** (Alt+F4 too where the terminal passes it
+  on), raising Form_Unload; closing the last ends the program. Ctrl+Q no
+  longer closes anything.
+- **Unicode width tables** are generated from Python's unicodedata by a
+  script in tools/ (no download); the Unicode notice ships in
+  runtime/THIRD_PARTY_NOTICES.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

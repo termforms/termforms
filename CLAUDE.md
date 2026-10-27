@@ -167,7 +167,21 @@ authoritative for design rationale.
   build.cpp resolves its files, then checks Form=/Module=/Startup=
   against the program). A `.vbp` in tests/run or tests/errors is a test.
   **Phase 3 (language core) is complete.**
-- **Next:** Phase 4 (TUI runtime); ask Jim where to start.
+- **Phase 4 (TUI runtime), decisions settled with Jim 28 Oct 2026**
+  (REFERENCE.md "Phase 4: controls, forms and keys"): order Label,
+  CheckBox, OptionButton, Frame; ListBox (multi-select too); Timer;
+  MsgBox/InputBox + modal stack + vb constants; several forms (a stack);
+  menus; edit buffer; mouse (on by default); Unicode widths (from Python's
+  unicodedata). Frames contain controls (relative positions, own option
+  group). Keys: Default/Cancel buttons, arrows in groups, Alt access
+  keys, Space toggles; Ctrl+F4 (Alt+F4) closes the top form; Ctrl+Q
+  retires. Events: Click, DblClick, Change, Got/LostFocus, KeyPress,
+  KeyDown, Form_Unload(Cancel), Form_Activate.
+  **Working mode (Jim, 28 Oct 2026, overnight):** proceed through Phase 4
+  unattended, pushing each step once local checks pass and CI goes green;
+  stop and wait at anything that needs Jim's decision.
+- **Next:** Phase 4 step 1: Label, CheckBox, OptionButton, Frame and the
+  keys above.
 
 ## Settled design decisions (do not relitigate without Jim)
 
