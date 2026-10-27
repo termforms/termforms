@@ -32,6 +32,13 @@ struct tf_string
 
 #define TF_STR_IMMORTAL (-1)
 
+/* Largest length representable in the header; longer results are error 14. */
+#define TF_STR_MAX_LENGTH (INT32_MAX - 1)
+
+/* A new string of length bytes (1..TF_STR_MAX_LENGTH), refcount 1, its
+   bytes for the caller to fill (the terminating NUL is in place). */
+tf_string *tf_str_alloc(int32_t length);
+
 /* ------------------------------------------------------------------------ */
 /* Shutdown hook                                                            */
 /* ------------------------------------------------------------------------ */

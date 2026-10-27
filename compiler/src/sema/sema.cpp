@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <functional>
 #include <map>
 #include <optional>
@@ -34,12 +35,36 @@ struct BuiltinInfo
     bool dollarForm; // may also be written with $ (Str$)
 };
 
-constexpr BuiltinInfo kBuiltins[] = {
-    {"CInt", Builtin::CInt, false},     {"CLng", Builtin::CLng, false},
-    {"CDbl", Builtin::CDbl, false},     {"CStr", Builtin::CStr, false},
-    {"Str", Builtin::Str, true},        {"Val", Builtin::Val, false},
-    {"Fix", Builtin::Fix, false},       {"Int", Builtin::Int, false},
-    {"LBound", Builtin::LBound, false}, {"UBound", Builtin::UBound, false}};
+constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
+                                     {"CLng", Builtin::CLng, false},
+                                     {"CDbl", Builtin::CDbl, false},
+                                     {"CStr", Builtin::CStr, false},
+                                     {"Str", Builtin::Str, true},
+                                     {"Val", Builtin::Val, false},
+                                     {"Fix", Builtin::Fix, false},
+                                     {"Int", Builtin::Int, false},
+                                     {"LBound", Builtin::LBound, false},
+                                     {"UBound", Builtin::UBound, false},
+                                     {"Len", Builtin::Len, false},
+                                     {"LenB", Builtin::LenB, false},
+                                     {"Mid", Builtin::Mid, true},
+                                     {"Left", Builtin::Left, true},
+                                     {"Right", Builtin::Right, true},
+                                     {"InStr", Builtin::InStr, false},
+                                     {"InStrRev", Builtin::InStrRev, false},
+                                     {"LCase", Builtin::LCase, true},
+                                     {"UCase", Builtin::UCase, true},
+                                     {"LTrim", Builtin::LTrim, true},
+                                     {"RTrim", Builtin::RTrim, true},
+                                     {"Trim", Builtin::Trim, true},
+                                     {"Space", Builtin::Space, true},
+                                     {"String", Builtin::StringOf, true},
+                                     {"Chr", Builtin::Chr, true},
+                                     {"Asc", Builtin::Asc, false},
+                                     {"Replace", Builtin::Replace, false},
+                                     {"StrReverse", Builtin::StrReverse, false},
+                                     {"Split", Builtin::Split, false},
+                                     {"Join", Builtin::Join, false}};
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -853,6 +878,10 @@ private:
         {
             return checkBounds(e, b);
         }
+        if (const StringFunction *f = findStringFunction(b.id))
+        {
+            return checkStringFunction(e, b, *f);
+        }
         e.builtin = b.id;
         const std::string name = e.text + (e.suffix != 0 ? std::string(1, e.suffix) : ""); // Str$
         for (auto &arg : e.args)
@@ -902,6 +931,7 @@ private:
                 return isNumeric(t) ? t : wrongArgument("a number");
             case Builtin::LBound: // handled by checkBounds
             case Builtin::UBound:
+            default:             // the string functions: checkStringFunction
             case Builtin::Count: // made by For Each and Dictionary members, never by name
             case Builtin::DictCount:
             case Builtin::DictExists:
@@ -1749,11 +1779,14 @@ private:
         return object.field != nullptr && object.field->isDictionary ? object.field : nullptr;
     }
 
-    // d.Keys or d.Items, not yet checked: an array value.
+    // d.Keys, d.Items or Split(...), checked or not: an array value.
     bool isDictionaryList(Expr &e)
     {
         if (e.kind == ExprKind::Call &&
-            (e.builtin == Builtin::DictKeys || e.builtin == Builtin::DictItems))
+            (e.builtin == Builtin::DictKeys || e.builtin == Builtin::DictItems ||
+             e.builtin == Builtin::Split ||
+             (e.builtin == Builtin::None && e.text == "Split" && e.suffix == 0 &&
+              lookupVariable("Split") == nullptr)))
         {
             return true;
         }
@@ -2658,6 +2691,102 @@ private:
         }
     }
 
+    // Len, Mid$, InStr, Split, ...: arguments by the signature; missing
+    // optional ones become their defaults, so codegen sees every argument.
+    Type checkStringFunction(Expr &e, const BuiltinInfo &b, const StringFunction &f)
+    {
+        const bool whole = wholeNow_; // Split gives an array: where is it used?
+        e.builtin = b.id;
+        const std::string name =
+            std::string(b.name) + (e.suffix != 0 ? std::string(1, e.suffix) : "");
+        const int most = static_cast<int>(std::strlen(f.params));
+        const int given = static_cast<int>(e.args.size());
+        if (given < f.required || given > most)
+        {
+            for (auto &arg : e.args)
+            {
+                checkExpr(*arg);
+            }
+            diagnostics_.error(
+                e.location,
+                "'" + name + "' takes " +
+                    (f.required == most
+                         ? std::to_string(most)
+                         : std::to_string(f.required) + (most == f.required + 1 ? " or " : " to ") +
+                               std::to_string(most)) +
+                    (most == 1 ? " argument" : " arguments") + ", not " + std::to_string(given));
+            return Type::Error;
+        }
+        // InStr(s, find) is InStr(1, s, find).
+        const int skip = b.id == Builtin::InStr && given < most ? most - given : 0;
+        bool ok = true;
+        for (int i = 0; i < given; ++i)
+        {
+            Expr &arg = *e.args[static_cast<std::size_t>(i)];
+            const char want = f.params[i + skip];
+            if (want == 'A')
+            {
+                const Variable *a = wholeArray(arg, ("'" + name + "'").c_str());
+                if (a != nullptr && (a->isDictionary || a->type != Type::String || a->rank != 1))
+                {
+                    diagnostics_.error(arg.location, "'" + name +
+                                                         "' needs an array of Strings with 1 "
+                                                         "dimension");
+                    ok = false;
+                }
+                ok = ok && a != nullptr;
+                continue;
+            }
+            checkExpr(arg);
+            const TypeInfo got = infoOf(arg);
+            const TypeInfo needed(want == 'S' ? Type::String : Type::Integer);
+            if (got.type != Type::Error && !assignable(needed, got))
+            {
+                diagnostics_.error(arg.location, "argument " + std::to_string(i + 1) + " of '" +
+                                                     name + "' must be " + article(needed) +
+                                                     ", not " + article(got) +
+                                                     conversionHint(needed, got));
+                ok = false;
+            }
+            ok = ok && got.type != Type::Error;
+        }
+        // The defaults of the arguments left out.
+        for (int i = 0; i < most - given; ++i)
+        {
+            const int at = skip > 0 ? i : given + i;
+            auto value = std::make_unique<Expr>();
+            value->location = e.location;
+            if (f.params[at] == 'S')
+            {
+                value->kind = ExprKind::StringLiteral;
+                value->type = Type::String;
+                value->text = f.defaults[at];
+            }
+            else
+            {
+                value->kind = ExprKind::IntegerLiteral;
+                value->type = Type::Integer;
+                value->integer = std::strtoll(f.defaults[at], nullptr, 10);
+            }
+            e.args.insert(e.args.begin() + at, std::move(value));
+        }
+        if (!ok)
+        {
+            return Type::Error;
+        }
+        if (b.id == Builtin::Split)
+        {
+            if (!whole)
+            {
+                diagnostics_.error(e.location, "'Split' gives an array: assign it to a dynamic "
+                                               "array of Strings, or go through it with For Each");
+                return Type::Error;
+            }
+            e.rank = 1;
+        }
+        return f.result;
+    }
+
     // UBound(a [, dimension]) and LBound: an Integer.
     Type checkBounds(Expr &e, const BuiltinInfo &b)
     {
@@ -2956,6 +3085,7 @@ private:
 
     Type checkExpr(Expr &e)
     {
+        wholeNow_ = std::exchange(wantWhole_, false); // see checkWhole
         e.type = computeType(e);
         return e.type;
     }
@@ -3174,7 +3304,7 @@ private:
 
     Type resolveMember(Expr &e)
     {
-        const bool whole = std::exchange(wantWhole_, false);
+        const bool whole = wholeNow_;
         if (e.left == nullptr) // .Name: a member of the innermost With's target
         {
             if (withs_.empty() || withs_.back() == nullptr)
@@ -3479,6 +3609,7 @@ private:
     std::vector<const Expr *> withs_;
     int withCount_ = 0;
     bool wantWhole_ = false; // see checkWhole
+    bool wholeNow_ = false;  // the expression being checked may be a whole array
 };
 
 } // namespace

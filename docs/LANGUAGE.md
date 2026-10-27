@@ -65,6 +65,7 @@ End Sub
 | Refs | `Ref T`, `New T`, `Dim r As New T`, `Nothing`, `Is` / `IsNot`; Ref members, arrays of Refs |
 | With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
+| Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
@@ -195,6 +196,21 @@ Wend
   `IsNot`, not `=`.
 - Records are freed when nothing refers to them any more, but records that
   refer to each other in a circle are never freed.
+
+## Strings
+
+```vb
+s = "Hello, World"
+Mid$(s, 8)            ' "World": positions start at 1, as in VB
+InStr(s, "o")         ' 5; 0 when not found
+parts = Split("a,b,c", ",")   ' parts() As String: UBound(parts) = 2
+Join(parts, "+")      ' "a+b+c"
+```
+
+- Lengths and positions count characters, not bytes (`LenB` counts bytes).
+- A bad argument (a start before 1, a negative length) is error 5.
+- `LCase$` and `UCase$` change only A-Z and a-z for now.
+- The `$` is optional (`Mid` = `Mid$`), except in `String$`.
 
 ## Dictionaries
 

@@ -65,6 +65,28 @@ enum class Builtin
     Int,
     LBound,
     UBound,
+    // String functions (Phase 3 step 6a); their signatures are in sema's
+    // kStringFunctions.
+    Len,
+    LenB,
+    Mid,
+    Left,
+    Right,
+    InStr,
+    InStrRev,
+    LCase,
+    UCase,
+    LTrim,
+    RTrim,
+    Trim,
+    Space,
+    StringOf, // String$(n, s): String alone is the type keyword
+    Chr,
+    Asc,
+    Replace,
+    StrReverse,
+    Split, // an array value, as d.Keys
+    Join,
     Count, // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
@@ -75,6 +97,57 @@ enum class Builtin
     DictRemove,
     DictClear
 };
+
+// The string functions' signatures, for checking and for C: each parameter
+// S (a String), I (an Integer) or A (a whole String array); the first
+// `required` must be given and the rest default to `defaults` (S: text, I:
+// a number), except that InStr's optional parameter comes first
+// (InStr([start,] s, find)). fails: a bad argument can raise an error.
+struct StringFunction
+{
+    Builtin id;
+    const char *params;
+    int required;
+    const char *defaults[3];
+    Type result; // Split: an array of Strings
+    const char *cName;
+    bool fails;
+};
+
+inline constexpr StringFunction kStringFunctions[] = {
+    {Builtin::Len, "S", 1, {}, Type::Integer, "tf_str_len", false},
+    {Builtin::LenB, "S", 1, {}, Type::Integer, "tf_str_lenb", false},
+    {Builtin::Mid, "SII", 2, {nullptr, nullptr, "2147483647"}, Type::String, "tf_str_mid", true},
+    {Builtin::Left, "SI", 2, {}, Type::String, "tf_str_left", true},
+    {Builtin::Right, "SI", 2, {}, Type::String, "tf_str_right", true},
+    {Builtin::InStr, "ISS", 2, {"1"}, Type::Integer, "tf_str_instr", true},
+    {Builtin::InStrRev, "SSI", 2, {nullptr, nullptr, "-1"}, Type::Integer, "tf_str_instrrev", true},
+    {Builtin::LCase, "S", 1, {}, Type::String, "tf_str_lcase", false},
+    {Builtin::UCase, "S", 1, {}, Type::String, "tf_str_ucase", false},
+    {Builtin::LTrim, "S", 1, {}, Type::String, "tf_str_ltrim", false},
+    {Builtin::RTrim, "S", 1, {}, Type::String, "tf_str_rtrim", false},
+    {Builtin::Trim, "S", 1, {}, Type::String, "tf_str_trim", false},
+    {Builtin::Space, "I", 1, {}, Type::String, "tf_str_space", true},
+    {Builtin::StringOf, "IS", 2, {}, Type::String, "tf_str_repeat", true},
+    {Builtin::Chr, "I", 1, {}, Type::String, "tf_str_chr", true},
+    {Builtin::Asc, "S", 1, {}, Type::Integer, "tf_str_asc", true},
+    {Builtin::Replace, "SSS", 3, {}, Type::String, "tf_str_replace", true}, // too long: 14
+    {Builtin::StrReverse, "S", 1, {}, Type::String, "tf_str_reverse", false},
+    {Builtin::Split, "SS", 1, {nullptr, " "}, Type::String, "tf_str_split", true},
+    {Builtin::Join, "AS", 1, {nullptr, " "}, Type::String, "tf_str_join", true},
+};
+
+inline const StringFunction *findStringFunction(Builtin id)
+{
+    for (const StringFunction &f : kStringFunctions)
+    {
+        if (f.id == id)
+        {
+            return &f;
+        }
+    }
+    return nullptr;
+}
 
 // The most dimensions an array may have (TF_ARRAY_MAX_RANK in tf_runtime.h).
 constexpr int kMaxArrayRank = 8;

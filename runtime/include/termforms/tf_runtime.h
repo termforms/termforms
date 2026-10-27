@@ -278,6 +278,36 @@ tf_string *tf_str_str_i64(int64_t value);
 tf_string *tf_str_str_f64(double value);
 
 /* ------------------------------------------------------------------------ */
+/* String functions                                                         */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * As VB's: positions and lengths count code points and start at 1. The
+ * strings passed are borrowed; a String returned is owned. A bad argument
+ * (a start before 1, a negative length, ...) is error 5 and returns "" or
+ * 0; a result longer than a string can hold is error 14.
+ */
+#define TF_STR_REST INT32_MAX /* Mid$ with no length: the rest */
+tf_string *tf_str_mid(const tf_string *s, int32_t start, int32_t length);
+tf_string *tf_str_left(const tf_string *s, int32_t n);
+tf_string *tf_str_right(const tf_string *s, int32_t n);
+int32_t tf_str_instr(int32_t start, const tf_string *s, const tf_string *find);    /* 0: none */
+int32_t tf_str_instrrev(const tf_string *s, const tf_string *find, int32_t start); /* -1: end */
+tf_string *tf_str_lcase(const tf_string *s); /* ASCII letters only, for now */
+tf_string *tf_str_ucase(const tf_string *s);
+tf_string *tf_str_ltrim(const tf_string *s); /* spaces, as VB: not tabs */
+tf_string *tf_str_rtrim(const tf_string *s);
+tf_string *tf_str_trim(const tf_string *s);
+tf_string *tf_str_space(int32_t n);
+tf_string *tf_str_repeat(int32_t n, const tf_string *s); /* String$: s's first character */
+tf_string *tf_str_chr(int32_t code);                     /* a Unicode code point */
+int32_t tf_str_asc(const tf_string *s);                  /* the first code point */
+tf_string *tf_str_replace(const tf_string *s, const tf_string *find, const tf_string *with);
+tf_string *tf_str_reverse(const tf_string *s);
+
+/* Split and Join, which use arrays, are declared with them below. */
+
+/* ------------------------------------------------------------------------ */
 /* Arrays                                                                   */
 /* ------------------------------------------------------------------------ */
 
@@ -378,6 +408,12 @@ int32_t tf_array_ubound(const tf_array *a, int32_t dimension);
    array are error 10 meanwhile, so the element's address stays valid. */
 void tf_array_lock(tf_array *a);
 void tf_array_unlock(tf_array *a);
+
+/* String functions on arrays. Split into to (a dynamic String array; error
+   10 if fixed or locked): "" gives no elements (UBound -1), a delimiter ""
+   the whole string. Join: a String array's elements, the delimiter between. */
+void tf_str_split(tf_array *to, const tf_string *s, const tf_string *delimiter);
+tf_string *tf_str_join(const tf_array *strings, const tf_string *delimiter);
 
 /* ------------------------------------------------------------------------ */
 /* Dictionaries: String keys, values of one type                            */

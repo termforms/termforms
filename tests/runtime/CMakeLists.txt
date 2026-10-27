@@ -38,3 +38,10 @@ tf_set_warnings(test_dict)
 
 add_test(NAME runtime.dict COMMAND test_dict)
 set_tests_properties(runtime.dict PROPERTIES LABELS runtime)
+
+add_executable(test_text test_text.c)
+target_link_libraries(test_text PRIVATE tfrt)
+tf_set_warnings(test_text)
+
+add_test(NAME runtime.text COMMAND test_text)
+set_tests_properties(runtime.text PROPERTIES LABELS runtime)

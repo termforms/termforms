@@ -597,6 +597,62 @@ Next
   (the order is kept); looking up and adding take about the same time
   however many entries there are.
 
+## Strings and files (Settled, Jim, 27 Oct 2026)
+
+- **String positions start at 1**, as VB (unlike arrays): `Mid$(s, 1, 3)`
+  is the first three characters; `InStr` gives 1 for a match at the
+  start and 0 for none.
+- v1 has VB-DOS's string functions plus VB6's `Replace`, `Split`,
+  `Join`, `InStrRev` and `StrReverse`.
+- **`Print #` is simple**: `Print #1, a; b` writes a and b as text (as &
+  would), nothing added; a trailing `;` leaves out the newline; a comma
+  is an error (no 14-column zones, no space before positive numbers).
+- **Files are written with LF line ends on every platform**; reading
+  accepts LF and CRLF.
+- **Binary files are wanted soon** (Jim): read a buffer of x bytes at
+  offset y, the position advancing by x on each read, with the size or
+  position settable in the read or by a separate statement. The byte
+  type is to be decided.
+
+### String functions (Proposed)
+
+| Function | Gives |
+|---|---|
+| `Len(s)`, `LenB(s)` | characters (code points); bytes of UTF-8 |
+| `Mid$(s, start [, length])` | the characters from start (all the rest without length) |
+| `Left$(s, n)`, `Right$(s, n)` | the first / last n characters |
+| `InStr([start,] s, find)` | where find first starts at or after start (default 1), or 0 |
+| `InStrRev(s, find [, start])` | where the last find starts that ends at or before start (default: the end), or 0 |
+| `LCase$(s)`, `UCase$(s)` | ASCII letters changed; other characters as they are, for now |
+| `LTrim$`, `RTrim$`, `Trim$` | spaces (not tabs) removed from the left, right, both |
+| `Space$(n)`, `String$(n, s)` | n spaces; n copies of s's first character |
+| `Chr$(code)`, `Asc(s)` | the character with that Unicode code point; the first character's |
+| `Replace(s, find, with)` | every find replaced, left to right |
+| `StrReverse(s)` | the characters in reverse order |
+| `Split(s [, delimiter])` | the pieces between delimiters (default " "), as an array |
+| `Join(a [, delimiter])` | a String array's elements with the delimiter (default " ") between |
+
+- Each may be written with or without `$` (`Mid` = `Mid$`), except
+  `String$`, since `String` alone is the type.
+- *Settled (Jim, 27 Oct 2026): the four rules below on errors,
+  comparison, case and the Mid$ statement; the rest of this section is
+  Proposed.*
+- **Bad arguments are error 5**: a start before 1, a negative length or
+  count, `Asc("")`, `String$(n, "")`, `Chr$` of a number that is not a
+  character. A start past the end gives "" (Mid$) or 0 (InStr). A result
+  longer than a string can hold is error 14.
+- `InStr(s, "")` gives start (VB); `Replace(s, "", x)` gives s;
+  `Split("")` gives no elements (UBound -1); `Split(s, "")` gives s.
+- **Split gives an array**, used as d.Keys is: assigned to a dynamic
+  String array, or in For Each. `Join` takes a String array variable.
+- Comparison is exact (case-sensitive, byte for byte): VB's optional
+  compare argument (vbTextCompare) is not provided.
+- **Full Unicode case** (é to É) comes with the Unicode tables in Phase 4;
+  until then LCase$/UCase$ change only A-Z and a-z.
+- **The `Mid$` statement** (`Mid$(s, 2, 1) = "x"`) is wanted (Jim), but
+  not urgent: deferred to a later iteration. Until then, use
+  `Left$(s, 1) & "x" & Mid$(s, 3)`.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

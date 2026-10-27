@@ -13,9 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Largest length representable in the header; longer results are errors. */
-#define TF_STR_MAX_LENGTH (INT32_MAX - 1)
-
 static tf_string *allocate(int32_t length)
 {
     tf_string *s = tf_xmalloc(sizeof(tf_string) + (size_t)length + 1);
@@ -23,6 +20,11 @@ static tf_string *allocate(int32_t length)
     s->length = length;
     s->data[length] = '\0';
     return s;
+}
+
+tf_string *tf_str_alloc(int32_t length)
+{
+    return allocate(length);
 }
 
 tf_string *tf_str_from_utf8(const char *bytes, int32_t length)

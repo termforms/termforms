@@ -585,3 +585,18 @@ TEST_CASE("lexer: Of is reserved")
 {
     CHECK(tf::isReservedKeyword("of"));
 }
+
+// -- String functions (Phase 3 step 6a) -----------------------------------------
+
+TEST_CASE("string functions take their documented arguments, with or without $")
+{
+    const std::string body =
+        "    Dim s As String, n As Integer, a() As String\n"
+        "    s = Mid$(s, 1) & Mid(s, 1, 2) & Left$(s, 1) & Right(s, 1)\n"
+        "    n = InStr(s, \"a\") + InStr(2, s, \"a\") + InStrRev(s, \"a\") + Len(s)\n"
+        "    s = UCase(LCase$(Trim(s))) & Space$(2) & String$(2, \"x\") & Chr(65)\n"
+        "    n = Asc(s) + LenB(s)\n    s = Replace(StrReverse(s), \"a\", \"b\")\n"
+        "    a = Split(s, \",\")\n    s = Join(a)\n";
+    CHECK(check(inClick("", body)) == "");
+    CHECK(check(inClick("", "    Dim s As String\n    s = Mid$(s)\n")) != "");
+}

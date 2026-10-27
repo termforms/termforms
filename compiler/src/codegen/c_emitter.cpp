@@ -1412,6 +1412,27 @@ private:
                     case Builtin::DictKeys: // into a locked array (10)
                     case Builtin::DictItems:
                         return true;
+                    case Builtin::Len:
+                    case Builtin::LenB:
+                    case Builtin::LCase:
+                    case Builtin::UCase:
+                    case Builtin::LTrim:
+                    case Builtin::RTrim:
+                    case Builtin::Trim:
+                    case Builtin::StrReverse:
+                    case Builtin::Mid:
+                    case Builtin::Left:
+                    case Builtin::Right:
+                    case Builtin::InStr:
+                    case Builtin::InStrRev:
+                    case Builtin::Space:
+                    case Builtin::StringOf:
+                    case Builtin::Chr:
+                    case Builtin::Asc:
+                    case Builtin::Replace:
+                    case Builtin::Split:
+                    case Builtin::Join:
+                        return findStringFunction(e.builtin)->fails;
                     default:
                         return false;
                 }
@@ -1506,6 +1527,14 @@ private:
         {
             const std::string to = wholeArrayRef(target, scope);
             const Expr &from = *s.value;
+            if (from.kind == ExprKind::Call && from.builtin == Builtin::Split)
+            {
+                const Value text =
+                    borrowed(settle(*from.args[0], expr(*from.args[0], scope), scope), scope);
+                const Value delimiter =
+                    borrowed(settle(*from.args[1], expr(*from.args[1], scope), scope), scope);
+                return "tf_str_split(" + to + ", " + text.code + ", " + delimiter.code + ");";
+            }
             if (from.kind == ExprKind::Call && from.builtin == Builtin::DictKeys)
             {
                 return "tf_dict_keys(" + to + ", " + wholeArrayRef(*from.args[0], scope) + ");";
@@ -2277,6 +2306,21 @@ private:
         if (e.builtin == Builtin::Count)
         {
             return {"tf_array_count(" + wholeArrayRef(*e.args[0], scope) + ")", false};
+        }
+        if (const StringFunction *f = findStringFunction(e.builtin))
+        {
+            // Every argument is there (sema supplied the defaults), in order.
+            std::string args;
+            for (std::size_t i = 0; i < e.args.size(); ++i)
+            {
+                const Expr &arg = *e.args[i];
+                const char kind = f->params[i];
+                args += (i == 0 ? "" : ", ") +
+                        (kind == 'A'   ? wholeArrayRef(arg, scope)
+                         : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
+                                       : settle(arg, expr(arg, scope), scope).code);
+            }
+            return {std::string(f->cName) + "(" + args + ")", f->result == Type::String};
         }
         if (e.builtin == Builtin::DictCount || e.builtin == Builtin::DictClear)
         {

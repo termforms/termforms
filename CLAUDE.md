@@ -111,8 +111,22 @@ authoritative for design rationale.
   is not found (`canRun`, checked before running: cmd.exe's not-found
   status is not dependable); any other C failure is reported as a tfc
   internal error, keeping `.tf.c` and `.tf-log`.
-- **Next:** Phase 3 step 6 (string library, file I/O, Command$,
-  Environ$); confirm with Jim. Step 5 (arrays, Types, Ref, With, For
+- **Step 6 (27 Oct 2026), Jim settled:** string positions 1-based (VB);
+  v1 adds Replace, Split/Join, InStrRev, StrReverse; `Print #` simple
+  (`;` joins with no spaces, trailing `;` = no newline, no comma zones);
+  files written with LF everywhere. Built as 6a (strings), 6b (files,
+  Dir$ and the rest).
+  6a done: the string functions (table `kStringFunctions` in ast.hpp,
+  shared by sema and codegen; sema fills in defaulted arguments; runtime
+  tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case
+  for now; the other small rules are Proposed in REFERENCE.md "String
+  functions". **Deferred, wanted later:** the Mid$ statement
+  (`Mid$(s, 2, 1) = "x"`); not urgent.
+  **Binary files soon (Jim, 27 Oct 2026):** read a buffer of x bytes at
+  offset y, the position advancing by x on each read, the size or position
+  settable in the read or by a separate statement. Design 6b's file
+  numbers and Open so Binary mode fits; settle the byte type (no Byte
+  type yet; Strings are UTF-8 text) with Jim. Step 5 (arrays, Types, Ref, With, For
   Each, Dictionary) is complete.
 
 ## Settled design decisions (do not relitigate without Jim)

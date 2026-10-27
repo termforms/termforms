@@ -1,0 +1,10 @@
+strings.bas:11:69: error: 'Left' is the name of a built-in function
+strings.bas:12:9: error: 'Mid$' takes 2 or 3 arguments, not 1
+strings.bas:13:9: error: 'Replace' takes 3 arguments, not 2
+strings.bas:14:9: error: 'InStr' takes 2 or 3 arguments, not 4
+strings.bas:15:16: error: argument 1 of 'UCase$' must be a String, not an Integer; use CStr(value) to convert
+strings.bas:16:13: error: argument 1 of 'Len' must be a String, not an Integer; use CStr(value) to convert
+strings.bas:17:18: error: argument 2 of 'Left$' must be an Integer, not a Long; use CInt(value) to convert
+strings.bas:18:15: error: argument 1 of 'Space' must be an Integer, not a String; use CInt(value) to convert
+strings.bas:19:9: error: 'Split' gives an array: assign it to a dynamic array of Strings, or go through it with For Each
+strings.bas:20:14: error: 'Join' needs an array of Strings with 1 dimension
