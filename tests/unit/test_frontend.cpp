@@ -600,3 +600,18 @@ TEST_CASE("string functions take their documented arguments, with or without $")
     CHECK(check(inClick("", body)) == "");
     CHECK(check(inClick("", "    Dim s As String\n    s = Mid$(s)\n")) != "");
 }
+
+// -- Byte (Phase 3 step 6b) -----------------------------------------------------
+
+TEST_CASE("a Byte takes constants 0 to 255; Byte arithmetic is Integer")
+{
+    CHECK(check(inClick("", "    Dim x As Byte, n As Integer\n    x = 255\n    n = x + 1\n"
+                            "    x = CByte(n)\n")) == "");
+    CHECK(check(inClick("", "    Dim x As Byte\n    x = 256\n")) != "");
+    CHECK(check(inClick("", "    Dim x As Byte\n    x = x + 1\n")) != "");
+}
+
+TEST_CASE("lexer: Byte is reserved")
+{
+    CHECK(tf::isReservedKeyword("byte"));
+}

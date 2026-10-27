@@ -1392,7 +1392,10 @@ private:
                 switch (e.builtin)
                 {
                     case Builtin::CInt:
-                        return storage(*e.args[0]) != Type::Integer;
+                        return storage(*e.args[0]) != Type::Integer &&
+                               storage(*e.args[0]) != Type::Byte;
+                    case Builtin::CByte:
+                        return storage(*e.args[0]) != Type::Byte;
                     case Builtin::CLng:
                         return storage(*e.args[0]) == Type::Double ||
                                storage(*e.args[0]) == Type::String;
@@ -2271,7 +2274,7 @@ private:
     Value asString(const Expr &e, StatementScope &scope)
     {
         const Type t = storage(e); // an Enum is text as its number
-        if (t == Type::Integer)
+        if (t == Type::Integer || t == Type::Byte)
         {
             return {"tf_str_from_i32(" + expr(e, scope).code + ")", true};
         }
@@ -2347,7 +2350,10 @@ private:
                     false};
         }
         const Expr &arg = *e.args[0];
-        const Type t = storage(arg); // CType to an Enum and CInt of one convert numbers
+        // CType to an Enum and CInt of one convert numbers; a Byte converts
+        // as the Integer it widens to.
+        const Type t = storage(arg) == Type::Byte && e.builtin != Builtin::CByte ? Type::Integer
+                                                                                 : storage(arg);
         if (e.builtin == Builtin::CStr)
         {
             return asString(arg, scope);
@@ -2359,6 +2365,8 @@ private:
             {
                 case Builtin::CInt:
                     return {"tf_i32_from_str(" + text + ")", false};
+                case Builtin::CByte:
+                    return {"tf_u8_from_str(" + text + ")", false};
                 case Builtin::CLng:
                     return {"tf_i64_from_str(" + text + ")", false};
                 case Builtin::CDbl:
@@ -2374,6 +2382,12 @@ private:
                 return {t == Type::Integer ? x
                         : t == Type::Long  ? "tf_i32_from_i64(" + x + ")"
                                            : "tf_i32_from_f64(" + x + ")",
+                        false};
+            case Builtin::CByte:
+                return {t == Type::Byte      ? x
+                        : t == Type::Integer ? "tf_u8_from_i32(" + x + ")"
+                        : t == Type::Long    ? "tf_u8_from_i64(" + x + ")"
+                                             : "tf_u8_from_f64(" + x + ")",
                         false};
             case Builtin::CLng:
                 return {t == Type::Integer ? "((int64_t)" + x + ")"
@@ -2462,7 +2476,11 @@ private:
     // The runtime's prefix for arithmetic in a numeric type: "tf_i64_" ...
     static std::string opPrefix(Type t)
     {
-        return t == Type::Double ? "tf_f64_" : t == Type::Long ? "tf_i64_" : "tf_i32_";
+        // Byte arithmetic is done as Integer; only a For loop's step is tf_u8_add.
+        return t == Type::Double ? "tf_f64_"
+               : t == Type::Long ? "tf_i64_"
+               : t == Type::Byte ? "tf_u8_"
+                                 : "tf_i32_";
     }
 
     // A whole number in C. Outside the Integer range it is INT64_C(...):
@@ -2507,6 +2525,8 @@ private:
     {
         switch (storage(v))
         {
+            case Type::Byte:
+                return "TF_ELEM_U8";
             case Type::Long:
                 return "TF_ELEM_I64";
             case Type::Double:
@@ -2714,6 +2734,8 @@ private:
                 return "int64_t";
             case Type::Double:
                 return "double";
+            case Type::Byte:
+                return "uint8_t";
             default:
                 return "int32_t";
         }

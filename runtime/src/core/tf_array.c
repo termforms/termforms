@@ -38,6 +38,8 @@ static size_t elem_size(int32_t elem, const tf_record_ops *ops)
             return sizeof(int);
         case TF_ELEM_REF:
             return sizeof(void *);
+        case TF_ELEM_U8:
+            return sizeof(uint8_t);
         default:
             return sizeof(tf_string *);
     }

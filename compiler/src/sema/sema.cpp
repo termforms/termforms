@@ -36,6 +36,7 @@ struct BuiltinInfo
 };
 
 constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
+                                     {"CByte", Builtin::CByte, false},
                                      {"CLng", Builtin::CLng, false},
                                      {"CDbl", Builtin::CDbl, false},
                                      {"CStr", Builtin::CStr, false},
@@ -91,6 +92,8 @@ struct TypeInfo
     {
     }
 
+    bool byteConstant = false; // a constant 0 to 255 (see infoOf)
+
     bool operator==(const TypeInfo &other) const
     {
         return type == other.type && def == other.def && record == other.record;
@@ -99,7 +102,13 @@ struct TypeInfo
 
 TypeInfo infoOf(const Expr &e)
 {
-    return {e.type, e.enumDef, e.typeDef};
+    TypeInfo info(e.type, e.enumDef, e.typeDef);
+    // A whole-number constant that fits may be stored in a Byte without
+    // CByte (b = 65), as VB.NET's Option Strict allows.
+    info.byteConstant = e.type == Type::Integer &&
+                        (e.kind == ExprKind::IntegerLiteral || e.kind == ExprKind::Constant) &&
+                        e.integer >= 0 && e.integer <= 255;
+    return info;
 }
 
 TypeInfo infoOf(const Variable &v)
@@ -651,7 +660,7 @@ private:
             return false;
         }
         const Type v = lowered(value);
-        if (target.type == v)
+        if (target.type == v || (target.type == Type::Byte && value.byteConstant))
         {
             return true;
         }
@@ -680,11 +689,12 @@ private:
         }
         const Type target = targetInfo.type;
         const Type value = lowered(valueInfo);
-        const char *convert = target == Type::Integer  ? "CInt"
-                              : target == Type::Long   ? "CLng"
-                              : target == Type::Double ? "CDbl"
-                              : target == Type::String ? "CStr"
-                                                       : nullptr;
+        const char *convert = target == Type::Byte      ? "CByte"
+                              : target == Type::Integer ? "CInt"
+                              : target == Type::Long    ? "CLng"
+                              : target == Type::Double  ? "CDbl"
+                              : target == Type::String  ? "CStr"
+                                                        : nullptr;
         const bool convertible =
             (isNumeric(target) && (isNumeric(value) || value == Type::String)) ||
             (target == Type::String && (isNumeric(value) || value == Type::Boolean));
@@ -907,13 +917,15 @@ private:
         switch (b.id)
         {
             case Builtin::CInt:
+            case Builtin::CByte:
             case Builtin::CLng:
             case Builtin::CDbl:
                 if (!isNumeric(t) && t != Type::String)
                 {
                     return wrongArgument("a number or a String");
                 }
-                return b.id == Builtin::CInt   ? Type::Integer
+                return b.id == Builtin::CByte  ? Type::Byte
+                       : b.id == Builtin::CInt ? Type::Integer
                        : b.id == Builtin::CLng ? Type::Long
                                                : Type::Double;
             case Builtin::CStr:
@@ -3000,7 +3012,11 @@ private:
         requireFits(*s.limit, "end", var);
         if (s.step != nullptr)
         {
-            requireFits(*s.step, "Step", varType == Type::Enum ? TypeInfo(lowered(var)) : var);
+            // Over an Enum or a Byte the Step is a plain number (it may be negative).
+            requireFits(*s.step, "Step",
+                        varType == Type::Enum   ? TypeInfo(lowered(var))
+                        : varType == Type::Byte ? TypeInfo(Type::Integer)
+                                                : var);
         }
         if (!s.nextName.empty() && s.nextName != s.target->text)
         {
@@ -3392,7 +3408,7 @@ private:
                 diagnostics_.error(e.location, std::string("cannot negate ") + article(t));
                 return Type::Error;
             }
-            return n;
+            return arithmeticType(n, n); // -b is an Integer
         }
         // Not
         if (t != Type::Boolean)
@@ -3469,7 +3485,7 @@ private:
         }
         if (op == "+" || op == "-" || op == "*" || op == "Mod")
         {
-            return numeric ? widerNumeric(l, r) : operandError(e, l, r);
+            return numeric ? arithmeticType(l, r) : operandError(e, l, r);
         }
         if (op == "/" || op == "^")
         {
@@ -3483,7 +3499,7 @@ private:
                                                "Double, or convert with CLng first");
                 return Type::Error;
             }
-            return numeric ? widerNumeric(l, r) : operandError(e, l, r);
+            return numeric ? arithmeticType(l, r) : operandError(e, l, r);
         }
         if (op == "And" || op == "Or")
         {
@@ -3568,6 +3584,8 @@ private:
         }
         switch (info.type)
         {
+            case Type::Byte:
+                return "a Byte";
             case Type::Integer:
                 return "an Integer";
             case Type::Long:

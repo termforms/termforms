@@ -24,6 +24,7 @@ enum class Type
 {
     Error, // set after a reported error, to avoid cascades
     Void,
+    Byte,    // 8-bit, 0 to 255
     Integer, // 32-bit
     Long,    // 64-bit
     Double,
@@ -35,20 +36,32 @@ enum class Type
     Control // a form or control used as an object
 };
 
-// Integer, Long and Double, in widening order.
+// Byte, Integer, Long and Double, in widening order.
 inline bool isNumeric(Type t)
 {
-    return t == Type::Integer || t == Type::Long || t == Type::Double;
+    return t == Type::Byte || t == Type::Integer || t == Type::Long || t == Type::Double;
 }
 
-// The wider of two numeric types: Integer < Long < Double.
+// The wider of two numeric types: Byte < Integer < Long < Double.
 inline Type widerNumeric(Type a, Type b)
 {
     if (a == Type::Double || b == Type::Double)
     {
         return Type::Double;
     }
-    return a == Type::Long || b == Type::Long ? Type::Long : Type::Integer;
+    if (a == Type::Long || b == Type::Long)
+    {
+        return Type::Long;
+    }
+    return a == Type::Integer || b == Type::Integer ? Type::Integer : Type::Byte;
+}
+
+// The type arithmetic is done in: Bytes are worked on as Integers (as in
+// VB.NET), so b + 1 is an Integer and storing it back needs CByte.
+inline Type arithmeticType(Type a, Type b)
+{
+    const Type t = widerNumeric(a, b);
+    return t == Type::Byte ? Type::Integer : t;
 }
 
 // Built-in functions: conversions and number functions.
@@ -56,6 +69,7 @@ enum class Builtin
 {
     None,
     CInt,
+    CByte,
     CLng,
     CDbl,
     CStr,

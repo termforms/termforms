@@ -1465,6 +1465,10 @@ private:
         {
             return Type::Integer;
         }
+        if (acceptKeyword("BYTE"))
+        {
+            return Type::Byte;
+        }
         if (acceptKeyword("STRING"))
         {
             return Type::String;
@@ -1881,6 +1885,8 @@ const char *ast::typeName(Type type)
             return "Long";
         case Type::Double:
             return "Double";
+        case Type::Byte:
+            return "Byte";
         case Type::Enum:
             return "Enum";
         case Type::Record:

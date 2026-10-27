@@ -86,6 +86,10 @@ d = 10 / 4                      ' / always gives a Double: 2.5
 i = CInt(d)                     ' 2: halves round to even, as in VB
 i = 7 \ 2 + 7 Mod 2             ' 3 + 1
 d = 2 ^ 10 + &HFF + 1.5E-3      ' 1024 + 255 + 0.0015
+Dim b As Byte                   ' 0 to 255
+b = 200                         ' a constant that fits needs no CByte
+i = b * 2                       ' Byte arithmetic is done as Integer: 400
+b = CByte(i \ 4)                ' and needs CByte to store back
 ```
 
 - A Double prints as the shortest text that reads back exactly: `0.1`,

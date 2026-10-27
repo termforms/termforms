@@ -1,0 +1,5 @@
+bytes.bas:11:9: error: cannot assign an Integer to a Byte (Option Strict); use CByte(value) to convert
+bytes.bas:12:9: error: cannot assign an Integer to a Byte (Option Strict); use CByte(value) to convert
+bytes.bas:13:11: error: cannot assign an Integer to a Byte (Option Strict); use CByte(value) to convert
+bytes.bas:14:9: error: cannot assign an Integer to a Byte (Option Strict); use CByte(value) to convert
+bytes.bas:15:15: error: 'CByte' needs a number or a String, not a Boolean

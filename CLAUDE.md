@@ -116,6 +116,12 @@ authoritative for design rationale.
   (`;` joins with no spaces, trailing `;` = no newline, no comma zones);
   files written with LF everywhere. Built as 6a (strings), 6b (files,
   Dir$ and the rest).
+  6b decisions (Jim, 28 Oct 2026): a Byte type and Byte arrays for binary
+  data; binary offsets from 0; Get reads the buffer's size, or an
+  optional count; v1 adds Name/FileCopy/FileLen/FileDateTime/Exists, not
+  Input #/Write #. 6b-1 done: Byte (`uint8_t`, TF_ELEM_U8; arithmetic is
+  Integer via `arithmeticType`; constants 0-255 assign directly through
+  `TypeInfo::byteConstant`; CByte; `tf_u8_add` for For steps).
   6a done: the string functions (table `kStringFunctions` in ast.hpp,
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case

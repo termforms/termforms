@@ -257,7 +257,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | Number | Text | Raised by | Since |
 | --- | --- | --- | --- |
 | 5 | Invalid procedure call or argument | an undefined power such as `(-8) ^ 0.5`; `Throw 0`; a Dictionary key that is not there (read, Remove) | now |
-| 6 | Overflow | Integer and Long arithmetic, a Double too large, CInt/CLng out of range | now |
+| 6 | Overflow | Integer and Long arithmetic, a Double too large, CInt/CLng/CByte out of range | now |
 | 7 | Out of memory | running out of memory (always fatal, never caught) | now |
 | 11 | Division by zero | `/`, `\`, `Mod` by zero | now |
 | 13 | Type mismatch | CInt/CLng/CDbl of text that is not a number | now |
@@ -613,6 +613,40 @@ Next
   offset y, the position advancing by x on each read, with the size or
   position settable in the read or by a separate statement. The byte
   type is to be decided.
+
+### Files and bytes (Settled, Jim, 28 Oct 2026)
+
+- **A `Byte` type** (0 to 255) holds binary data, one byte per element in
+  Byte arrays.
+- **Binary file offsets count from 0**: offset 0 is the first byte (VB
+  counts Get/Seek positions from 1).
+- **A read's size is the buffer's**: `Get` reads as many bytes as the
+  Byte array holds, so a ReDim sets it for later reads; an optional count
+  in the Get sets it for that read (the array resized to fit).
+- v1 also has `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime` and
+  `Exists(path)` (not VB's; True if a file or folder is there). Not VB's
+  `Input #` / `Write #`.
+
+### Byte (Proposed)
+
+```vb
+Dim b As Byte, buf(511) As Byte
+b = 65                       ' a constant 0 to 255 needs no conversion
+n = b * 2                    ' Byte arithmetic is done as Integer: 130
+b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outside 0-255)
+```
+
+- A Byte widens to Integer, Long and Double. An Integer, Long or Double
+  needs `CByte`, except a whole-number constant 0 to 255 (VB.NET's
+  Option Strict rule). CByte rounds as CInt (half to even) and accepts a
+  String, as CInt does.
+- Arithmetic and negation on Bytes give Integers (as VB.NET); only
+  storing into a Byte can overflow.
+- **A For loop over a Byte steps past its end like any For loop**, so
+  `For b = 0 To 255` and `For b = 3 To 0 Step -1` end in error 6 (the
+  value after the last, 256 or -1, is not a Byte). Use an Integer loop
+  variable for such ranges.
+- As text (with &, CStr, Str$) a Byte is its number.
 
 ### String functions (Proposed)
 

@@ -156,3 +156,38 @@ int64_t tf_i64_neg(int64_t a)
     }
     return -a;
 }
+
+/* Bytes: 0 to 255. Arithmetic on them is done as Integers (the compiler
+   widens them), so only narrowing back can overflow. */
+uint8_t tf_u8_from_i64(int64_t value)
+{
+    if (value < 0 || value > 255)
+    {
+        tf_raise(TF_ERR_OVERFLOW, NULL);
+        return 0;
+    }
+    return (uint8_t)value;
+}
+
+uint8_t tf_u8_from_i32(int32_t value)
+{
+    return tf_u8_from_i64(value);
+}
+
+uint8_t tf_u8_from_f64(double value)
+{
+    /* CInt's rounding first (half to even); out of its range is error 6 too. */
+    const int32_t whole = tf_i32_from_f64(value);
+    return tf_error_pending ? 0 : tf_u8_from_i64(whole);
+}
+
+uint8_t tf_u8_from_str(const tf_string *text)
+{
+    const int32_t whole = tf_i32_from_str(text);
+    return tf_error_pending ? 0 : tf_u8_from_i64(whole);
+}
+
+uint8_t tf_u8_add(int32_t a, int32_t b)
+{
+    return tf_u8_from_i64((int64_t)a + b);
+}

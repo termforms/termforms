@@ -250,6 +250,14 @@ int32_t tf_i32_from_str(const tf_string *text);
 int64_t tf_i64_from_f64(double value);
 int64_t tf_i64_from_str(const tf_string *text);
 
+/* CByte: as CInt, then 0 to 255, else error 6. tf_u8_add is a For loop's
+   step over a Byte variable (Step may be negative). */
+uint8_t tf_u8_from_i32(int32_t value);
+uint8_t tf_u8_from_i64(int64_t value);
+uint8_t tf_u8_from_f64(double value);
+uint8_t tf_u8_from_str(const tf_string *text);
+uint8_t tf_u8_add(int32_t a, int32_t b);
+
 /* CDbl from a String: as CInt, without rounding. */
 double tf_f64_from_str(const tf_string *text);
 
@@ -334,7 +342,8 @@ typedef enum tf_elem
     TF_ELEM_BOOL,   /* Boolean (int) */
     TF_ELEM_STRING, /* tf_string *, released when replaced or freed */
     TF_ELEM_RECORD, /* a user Type, handled through its tf_record_ops */
-    TF_ELEM_REF     /* a Ref to a user Type (see "Refs" below) */
+    TF_ELEM_REF,    /* a Ref to a user Type (see "Refs" below) */
+    TF_ELEM_U8      /* Byte (uint8_t) */
 } tf_elem;
 
 /*
