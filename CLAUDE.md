@@ -73,8 +73,8 @@ authoritative for design rationale.
   catchable (checked before allocating); out of memory stays 7, fatal.
   **Const (and Enum unless complex) added to v1 scope** (Jim, 27 Oct
   2026); their detailed rules are still to be settled with him.
-- **Next:** Phase 3 step 4 (Const and Enum: settle their rules with Jim
-  first), then arrays/Types/Dictionary, or Phase 4 work; ask Jim.
+- **Next:** Phase 3 step 4 (Const and Enum; rules settled), then
+  arrays/Types/Dictionary, or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -139,8 +139,12 @@ authoritative for design rationale.
   ChDir, CurDir$; Open/Line Input/Print #/Close; Command$, Environ$, Shell;
   Now, Timer, Date$, Time$. Proper Date type deferred.
 - **C interop:** `Declare Function … Lib` maps to C prototypes.
-- **Constants (27 Oct 2026):** `Const` is in v1; `Enum` too unless it
-  proves complex. Rules to settle with Jim first (see REFERENCE.md).
+- **Constants (27 Oct 2026):** `Const` and `Enum` are in v1. Const's type
+  comes from its value unless As/suffix says otherwise. Enum members are
+  always qualified (`Color.Red`); an Enum is a distinct type (widens to
+  Integer/Long implicitly, Integer to Enum needs `CType(n, Color)`); as
+  text an Enum value is its number. Details in REFERENCE.md (the smaller
+  ones Proposed).
 - **Debugging:** `#line` before every statement (one C line per BASIC
   statement); pretty-printers for gdb, lldb, .natvis. DAP debugger later.
 - **Toolchain:** v1 bundles nothing; driver uses `--cc`, `$TFC_CC`, else
@@ -321,8 +325,8 @@ Phase 3, language core:
 1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
 2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
 3. ~~Try/Catch/Finally, Err, Throw~~ (done 27 Oct 2026).
-4. Const, and Enum unless complex (settle the rules with Jim first);
-   before arrays, so array sizes can be named (`Dim a(MAX_ITEMS)`).
+4. Const and Enum (rules settled 27 Oct 2026, REFERENCE.md); before
+   arrays, so array sizes can be named (`Dim a(MAX_ITEMS)`).
 5. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
 6. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
 7. Multiple modules and the `.vbp` project file.

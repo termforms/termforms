@@ -274,14 +274,61 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
   order; the first whose When is True (or that has no When) handles the
   error, and if none does, the error goes on after the Finally.
 
-## Constants and enumerations (Settled, 27 Oct 2026: in v1)
+## Constants and enumerations (Settled, 27 Oct 2026)
 
-- `Const` is in v1, and `Enum` too unless it proves complex. Most
-  programmers expect at least Const, and they give error numbers and
-  other magic values names.
-- The detailed rules (Const types and expressions, scope, whether an Enum
-  is a distinct type under Option Strict, qualified `Color.Red` or bare
-  `Red`) are to be settled with Jim before they are built.
+`Const` and `Enum` are in v1 (Enum unless it proves complex). Most
+programmers expect them, and they give error numbers and other magic
+values names.
+
+```vb
+Const MAX_ITEMS = 100                 ' Integer, from the value
+Const RATE = 0.075                    ' Double
+Const TITLE = "Orders"                ' String
+Const BIG As Long = 100               ' As (or a suffix) picks another type
+Const LIMIT = MAX_ITEMS * 2           ' other Consts and operators
+
+Enum Color                            ' Integer underneath
+    Red                               ' 0
+    Green                             ' 1
+    Blue = 10
+    Violet                            ' 11: counts on from the last value
+End Enum
+
+Dim c As Color
+c = Color.Blue                        ' always qualified
+n = c + 1                             ' a Color widens to Integer
+c = CType(n, Color)                   ' Integer to Color needs CType
+```
+
+- **A Const's type comes from its value** by the literal rules (a whole
+  number is an Integer if it fits, else a Long; a fraction is a Double;
+  text is a String; True/False a Boolean), unless `As` or a suffix says
+  otherwise, in which case the value must fit that type.
+- **Enum members are always written qualified**: `Color.Red`, as VB.NET.
+  Members may share names across Enums and with variables.
+- **An Enum is its own type** under Option Strict: a `Color` variable takes
+  only Color values. A Color widens implicitly to Integer (or Long), so
+  arithmetic and comparisons with numbers work; Integer to Color needs
+  `CType(n, Color)`.
+- **As text an Enum value is its number**: `"" & Color.Red` is `"0"`, as
+  VB6 and VB.NET's CStr.
+
+### Constants and enumerations (Proposed)
+
+- A Const's value is a constant expression: literals, other Consts, Enum
+  members, and the operators (`+ - * / \ Mod ^ & = <> < > <= >= Not And
+  Or`). No function calls. It is worked out at compile time, and an
+  overflow or division by zero there is a compile error.
+- Const follows Dim's scope rules: module level, or inside a procedure
+  with block scope. A Const cannot be assigned to.
+- `Enum Name [As Integer | As Long]`; Integer by default. Members count
+  from 0, or from a `= value` (a constant expression), adding 1 each time;
+  two members may have the same value. Enums are declared at module level.
+- `CType(n, Color)` does not check that n is one of Color's values (as
+  VB.NET), so an Enum variable can hold any number of its underlying
+  type.
+- A For loop may run over an Enum variable (`For c = Color.Red To
+  Color.Blue`).
 
 ## References and Types (Settled, 23 Oct 2026)
 
