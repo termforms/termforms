@@ -86,6 +86,18 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_TYPE_MISMATCH 13       /* Type mismatch */
 #define TF_ERR_NOTHING 91             /* Object variable or With block variable not set */
 #define TF_ERR_KEY_EXISTS 457         /* This key is already associated with an element of ... */
+#define TF_ERR_BAD_FILE 52            /* Bad file name or number */
+#define TF_ERR_FILE_NOT_FOUND 53      /* File not found */
+#define TF_ERR_BAD_FILE_MODE 54       /* Bad file mode */
+#define TF_ERR_FILE_OPEN 55           /* File already open */
+#define TF_ERR_DEVICE_IO 57           /* Device I/O error */
+#define TF_ERR_FILE_EXISTS 58         /* File already exists */
+#define TF_ERR_DISK_FULL 61           /* Disk full */
+#define TF_ERR_PAST_END 62            /* Input past end of file */
+#define TF_ERR_TOO_MANY_FILES 67      /* Too many files */
+#define TF_ERR_PERMISSION 70          /* Permission denied */
+#define TF_ERR_PATH_ACCESS 75         /* Path/File access error */
+#define TF_ERR_PATH_NOT_FOUND 76      /* Path not found */
 #define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
 #define TF_ERR_TERMINAL 900           /* Terminal error (always fatal) */
 #define TF_ERR_FIRST_USER 1000        /* the first number left to programs */
@@ -314,6 +326,36 @@ tf_string *tf_str_replace(const tf_string *s, const tf_string *find, const tf_st
 tf_string *tf_str_reverse(const tf_string *s);
 
 /* Split and Join, which use arrays, are declared with them below. */
+
+/* ------------------------------------------------------------------------ */
+/* Files                                                                    */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * VB's numbered files: Open path For mode As #n, then statements on #n.
+ * Numbers run from 1 to TF_FILE_MAX. Text is UTF-8: a line is read up to
+ * LF (a CR before it dropped), bytes that are not UTF-8 become U+FFFD, and
+ * Print # writes LF on every platform. Errors are VB6's: 52 for a number
+ * out of range or not open, 54 for the wrong mode, 55 for a number in
+ * use, 62 for reading past the end, and 53, 70, 75, 76, 61, 67 from the
+ * operating system. Files still open when the program ends are closed
+ * (C's exit flushes them).
+ */
+#define TF_FILE_MAX 255
+#define TF_FILE_INPUT 1
+#define TF_FILE_OUTPUT 2
+#define TF_FILE_APPEND 3
+#define TF_FILE_BINARY 4
+void tf_file_open(const tf_string *path, int32_t mode, int32_t number);
+void tf_file_close(int32_t number); /* not open: nothing to do, as VB */
+void tf_file_close_all(void);
+int32_t tf_file_free(void); /* FreeFile: the lowest number not in use (67 if none) */
+void tf_file_print(int32_t number, const tf_string *text, int32_t newline);
+tf_string *tf_file_line_input(int32_t number);
+int tf_file_eof(int32_t number);
+int64_t tf_file_lof(int32_t number); /* the file's length in bytes */
+int64_t
+tf_file_seek_pos(int32_t number); /* Seek(n): the byte offset next read or written, from 0 */
 
 /* ------------------------------------------------------------------------ */
 /* Arrays                                                                   */

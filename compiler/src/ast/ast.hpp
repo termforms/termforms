@@ -101,7 +101,17 @@ enum class Builtin
     StrReverse,
     Split, // an array value, as d.Keys
     Join,
-    Count, // not a name programs use: For Each's element count of an array (a Long)
+    // Files (step 6b): statements made into calls, and functions.
+    FileOpen,
+    FileClose,
+    FileCloseAll,
+    FilePrint,
+    LineInput,
+    Eof,
+    Lof,
+    FreeFile,
+    SeekPos, // Seek(n)
+    Count,   // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
     DictCount,
@@ -112,7 +122,8 @@ enum class Builtin
     DictClear
 };
 
-// The string functions' signatures, for checking and for C: each parameter
+// The library functions' signatures (strings, files), for checking and for
+// C; statements such as Open are made into calls of these too. Each parameter
 // S (a String), I (an Integer) or A (a whole String array); the first
 // `required` must be given and the rest default to `defaults` (S: text, I:
 // a number), except that InStr's optional parameter comes first
@@ -149,6 +160,15 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::StrReverse, "S", 1, {}, Type::String, "tf_str_reverse", false},
     {Builtin::Split, "SS", 1, {nullptr, " "}, Type::String, "tf_str_split", true},
     {Builtin::Join, "AS", 1, {nullptr, " "}, Type::String, "tf_str_join", true},
+    {Builtin::FileOpen, "SII", 3, {}, Type::Void, "tf_file_open", true},
+    {Builtin::FileClose, "I", 1, {}, Type::Void, "tf_file_close", true},
+    {Builtin::FileCloseAll, "", 0, {}, Type::Void, "tf_file_close_all", true},
+    {Builtin::FilePrint, "ISI", 3, {}, Type::Void, "tf_file_print", true},
+    {Builtin::LineInput, "I", 1, {}, Type::String, "tf_file_line_input", true},
+    {Builtin::Eof, "I", 1, {}, Type::Boolean, "tf_file_eof", true},
+    {Builtin::Lof, "I", 1, {}, Type::Long, "tf_file_lof", true},
+    {Builtin::FreeFile, "", 0, {}, Type::Integer, "tf_file_free", true},
+    {Builtin::SeekPos, "I", 1, {}, Type::Long, "tf_file_seek_pos", true},
 };
 
 inline const StringFunction *findStringFunction(Builtin id)
@@ -289,6 +309,7 @@ enum class StmtKind
     Erase,    // Erase a, ...: args are the array names
     With,     // With target ... End With: see Stmt::body
     Method,   // x.Name args: a Dictionary's Add, Remove or Clear (see Stmt::target)
+    Library,  // Open, Close, Print #, ...: args are calls of built-ins, made in order
     End       // the End statement: terminate the program
 };
 

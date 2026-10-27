@@ -101,6 +101,30 @@ const char *tf_error_text(int32_t number)
             return "Out of string space";
         case TF_ERR_NOTHING:
             return "Object variable or With block variable not set";
+        case TF_ERR_BAD_FILE:
+            return "Bad file name or number";
+        case TF_ERR_FILE_NOT_FOUND:
+            return "File not found";
+        case TF_ERR_BAD_FILE_MODE:
+            return "Bad file mode";
+        case TF_ERR_FILE_OPEN:
+            return "File already open";
+        case TF_ERR_DEVICE_IO:
+            return "Device I/O error";
+        case TF_ERR_FILE_EXISTS:
+            return "File already exists";
+        case TF_ERR_DISK_FULL:
+            return "Disk full";
+        case TF_ERR_PAST_END:
+            return "Input past end of file";
+        case TF_ERR_TOO_MANY_FILES:
+            return "Too many files";
+        case TF_ERR_PERMISSION:
+            return "Permission denied";
+        case TF_ERR_PATH_ACCESS:
+            return "Path/File access error";
+        case TF_ERR_PATH_NOT_FOUND:
+            return "Path not found";
         case TF_ERR_KEY_EXISTS:
             return "This key is already associated with an element of this collection";
         case TF_ERR_TERMINAL:

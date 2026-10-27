@@ -122,6 +122,11 @@ authoritative for design rationale.
   Input #/Write #. 6b-1 done: Byte (`uint8_t`, TF_ELEM_U8; arithmetic is
   Integer via `arithmeticType`; constants 0-255 assign directly through
   `TypeInfo::byteConstant`; CByte; `tf_u8_add` for For steps).
+  6b-2 done: text files (tf_file.c; platform tf_fs_<os>.c for UTF-8 paths
+  and 64-bit offsets). File words are recognised by shape, not reserved
+  (`parseFileStatement`); statements become `StmtKind::Library` calls of
+  built-ins in `kStringFunctions`; Line Input is an assignment. Run tests
+  now run in `<work>/<name>.dir`, emptied first, so they may write files.
   6a done: the string functions (table `kStringFunctions` in ast.hpp,
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case

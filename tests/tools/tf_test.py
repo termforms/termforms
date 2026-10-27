@@ -21,6 +21,7 @@ The C compiler for run tests is tfc's default, or $TFC_CC when set.
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -84,7 +85,12 @@ def run(tfc: str, source: Path, work: Path) -> bool:
 
     keys = source.with_suffix(".keys").read_text(encoding="utf-8").rstrip("\r\n")
     env = dict(os.environ, TERMFORMS_HEADLESS=keys, TERMFORMS_HEADLESS_SIZE=HEADLESS_SIZE)
-    result = subprocess.run([str(exe)], cwd=source.parent, env=env, capture_output=True,
+    # Each program runs in a folder of its own, emptied first: files it
+    # writes stay out of the source tree, and tests run in parallel safely.
+    folder = work / (source.stem + ".dir")
+    shutil.rmtree(folder, ignore_errors=True)
+    folder.mkdir()
+    result = subprocess.run([str(exe)], cwd=folder, env=env, capture_output=True,
                             timeout=60)
     stdout = result.stdout.decode("utf-8", errors="replace")
     stderr = result.stderr.decode("utf-8", errors="replace")

@@ -267,7 +267,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef; adding to, removing from or clearing a Dictionary whose entry is being passed ByRef | now |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
 | 457 | This key is already associated with an element of this collection | `d.Add` of a key that is there | now |
-| 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
+| 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
 | 380 | Invalid property value | a control property set out of range | forms |
 
 - **Not provided: 28 Out of stack space.** Portable C cannot detect
@@ -626,6 +626,45 @@ Next
 - v1 also has `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime` and
   `Exists(path)` (not VB's; True if a file or folder is there). Not VB's
   `Input #` / `Write #`.
+
+### Text files (Proposed)
+
+```vb
+n = FreeFile
+Open "notes.txt" For Output As #n      ' or Append, Input (Binary: see below)
+Print #n, "total="; total               ' items joined as & joins them
+Print #n, "no newline yet";             ' a trailing ; leaves out the newline
+Close #n
+Open "notes.txt" For Input As #1
+Do While Not EOF(1)
+    Line Input #1, line
+Loop
+Close                                   ' every open file
+```
+
+- **File words are not reserved**: `Open`, `Close`, `Print`, `Line`,
+  `Input`, `Output`, `Append`, `Binary` stay free as names (a Sub may be
+  called Append). A statement is a file statement by its shape: `Print #`,
+  `Line Input #`, `Close` before `#`, a number or the end of the line,
+  and `Open` with `For`. `EOF`, `LOF`, `FreeFile` and `Seek` are built-in
+  function names.
+- File numbers run from 1 to 255; the `#` is optional (`As 1`, `Close 1`).
+  `FreeFile` gives the lowest free number.
+- Text is UTF-8. `Line Input` reads to LF, dropping a CR before it (so
+  Windows files read the same); a byte that is not UTF-8 is read as U+FFFD.
+  `Print #` writes LF.
+- `EOF(n)` is True at the end of a file being read (and always for one
+  being written). `LOF(n)` is its length in bytes; `Seek(n)` the offset of
+  the next byte to be read or written, from 0.
+- Errors: 52 a number outside 1-255 or not open; 54 the wrong mode
+  (`Print #` to a file opened For Input); 55 opening a number in use; 62
+  `Line Input` at the end; and from the system 53 (no such file, reading),
+  76 (no such folder, writing), 70 (permission), 61 (disk full), 67 (too
+  many files), 75 (other access errors). `Close` of a number not open does
+  nothing, as VB.
+- Files still open when the program ends are written out and closed.
+- The program's current folder is where it was started; relative names
+  are taken from there.
 
 ### Byte (Proposed)
 

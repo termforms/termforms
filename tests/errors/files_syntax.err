@@ -1,0 +1,2 @@
+files_syntax.bas:4:22: error: expected Input, Output, Append or Binary but found 'Random'
+files_syntax.bas:5:18: error: Print # separates items with ';', not ','

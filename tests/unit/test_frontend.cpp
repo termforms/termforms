@@ -615,3 +615,15 @@ TEST_CASE("lexer: Byte is reserved")
 {
     CHECK(tf::isReservedKeyword("byte"));
 }
+
+// -- Files (Phase 3 step 6b) ----------------------------------------------------
+
+TEST_CASE("file statements are known by their shape, so their words stay free as names")
+{
+    const std::string decl = "Sub Append(s As String)\nEnd Sub\n";
+    const std::string body = "    Dim Line As String, n As Integer\n"
+                             "    Open \"a\" For Append As #1\n    Print #1, Line; n\n"
+                             "    Close\n    Append Line\n    Open \"a\" For Input As 1\n"
+                             "    Line Input #1, Line\n    Close #1\n    n = FreeFile\n";
+    CHECK(check(inClick(decl, body)) == "");
+}

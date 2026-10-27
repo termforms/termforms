@@ -797,6 +797,17 @@ private:
             case StmtKind::ErrClear:
                 code = "tf_err_clear();";
                 break;
+            case StmtKind::Library: // Open, Close, Print #: each a built-in's call
+            {
+                std::string calls;
+                for (const auto &call : s.args)
+                {
+                    calls += (calls.empty() ? "" : " ") + builtin(*call, scope).code + ";";
+                }
+                code = wrap(scope, calls);
+                code += checks_ ? " if (tf_error_pending) " + failJump() : "";
+                break;
+            }
             case StmtKind::Method: // d.Remove k, d.Clear (d.Add became an assignment)
                 code = wrap(scope, builtin(*s.value, scope).code + ";");
                 code += checks_ ? " if (tf_error_pending) " + failJump() : "";
@@ -1415,29 +1426,11 @@ private:
                     case Builtin::DictKeys: // into a locked array (10)
                     case Builtin::DictItems:
                         return true;
-                    case Builtin::Len:
-                    case Builtin::LenB:
-                    case Builtin::LCase:
-                    case Builtin::UCase:
-                    case Builtin::LTrim:
-                    case Builtin::RTrim:
-                    case Builtin::Trim:
-                    case Builtin::StrReverse:
-                    case Builtin::Mid:
-                    case Builtin::Left:
-                    case Builtin::Right:
-                    case Builtin::InStr:
-                    case Builtin::InStrRev:
-                    case Builtin::Space:
-                    case Builtin::StringOf:
-                    case Builtin::Chr:
-                    case Builtin::Asc:
-                    case Builtin::Replace:
-                    case Builtin::Split:
-                    case Builtin::Join:
-                        return findStringFunction(e.builtin)->fails;
-                    default:
-                        return false;
+                    default: // the library functions say for themselves
+                    {
+                        const StringFunction *f = findStringFunction(e.builtin);
+                        return f != nullptr && f->fails;
+                    }
                 }
             default:
                 return false;

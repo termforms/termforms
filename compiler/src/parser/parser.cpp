@@ -51,6 +51,7 @@
 
 #include "parser/parser.hpp"
 
+#include <cctype>
 #include <utility>
 
 namespace tf
@@ -805,6 +806,11 @@ private:
             } while (acceptSymbol(","));
             return s;
         }
+        if (StmtPtr s = parseFileStatement(); s != nullptr || failed_)
+        {
+            failed_ = false;
+            return s;
+        }
         if (t.isKeyword("THROW"))
         {
             auto s = std::make_unique<Stmt>();
@@ -860,6 +866,227 @@ private:
         }
         error(t.location, "expected a statement but found " + describe(t));
         return nullptr;
+    }
+
+    // -- Files ---------------------------------------------------------------
+
+    // VB's file words are not reserved (programs use Append, Line, Input as
+    // names): a statement is a file statement by its shape. Print, Close
+    // before #; Close alone or before a number; Line Input #; Open when the
+    // statement has For. Null if this is not one (failed_ set on an error).
+    StmtPtr parseFileStatement()
+    {
+        const Token &t = peek();
+        if (isWord(t, "OPEN") && statementHas("FOR"))
+        {
+            return parseOpen();
+        }
+        if (isWord(t, "CLOSE") && (peek(1).isSymbol("#") || atStatementEnd(1) ||
+                                   peek(1).kind == TokenKind::IntegerLiteral))
+        {
+            return parseClose();
+        }
+        if (isWord(t, "PRINT") && peek(1).isSymbol("#"))
+        {
+            return parsePrint();
+        }
+        if (isWord(t, "LINE") && isWord(peek(1), "INPUT") && peek(2).isSymbol("#"))
+        {
+            return parseLineInput();
+        }
+        return nullptr;
+    }
+
+    static bool isWord(const Token &t, std::string_view upper)
+    {
+        if (t.kind != TokenKind::Identifier || t.suffix != 0 || t.text.size() != upper.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < upper.size(); ++i)
+        {
+            if (std::toupper(static_cast<unsigned char>(t.text[i])) != upper[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Does the statement from here hold the keyword?
+    bool statementHas(std::string_view keyword) const
+    {
+        for (std::size_t ahead = 0;; ++ahead)
+        {
+            const Token &t = peek(ahead);
+            if (t.kind == TokenKind::EndOfStatement || t.kind == TokenKind::EndOfFile)
+            {
+                return false;
+            }
+            if (t.isKeyword(keyword))
+            {
+                return true;
+            }
+        }
+    }
+
+    static ExprPtr libraryCall(Builtin id, const char *name, Location where)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::Call;
+        e->builtin = id;
+        e->text = name;
+        e->location = where;
+        return e;
+    }
+
+    static ExprPtr integer(std::int64_t value, Location where)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::IntegerLiteral;
+        e->integer = value;
+        e->location = where;
+        return e;
+    }
+
+    static StmtPtr libraryStatement(Location where)
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Library;
+        s->location = where;
+        return s;
+    }
+
+    // [#]number
+    ExprPtr parseFileNumber()
+    {
+        acceptSymbol("#");
+        return parseExpression();
+    }
+
+    // Open path For Input|Output|Append|Binary As [#]number
+    StmtPtr parseOpen()
+    {
+        StmtPtr s = libraryStatement(next().location);
+        ExprPtr call = libraryCall(Builtin::FileOpen, "Open", s->location);
+        call->args.push_back(parseExpression());
+        expectKeyword("FOR", "For");
+        int mode = 0;
+        const Token &m = peek();
+        if (isWord(m, "INPUT"))
+        {
+            mode = 1;
+        }
+        else if (isWord(m, "OUTPUT"))
+        {
+            mode = 2;
+        }
+        else if (isWord(m, "APPEND"))
+        {
+            mode = 3;
+        }
+        else if (isWord(m, "BINARY"))
+        {
+            mode = 4;
+        }
+        if (mode == 0)
+        {
+            error(m.location, "expected Input, Output, Append or Binary but found " + describe(m));
+            failed_ = true;
+            return nullptr;
+        }
+        call->args.push_back(integer(mode, next().location));
+        if (!expectKeyword("AS", "As"))
+        {
+            failed_ = true;
+            return nullptr;
+        }
+        call->args.push_back(parseFileNumber());
+        s->args.push_back(std::move(call));
+        return s;
+    }
+
+    // Close (every file), or Close [#]n, [#]m, ...
+    StmtPtr parseClose()
+    {
+        StmtPtr s = libraryStatement(next().location);
+        if (atStatementEnd())
+        {
+            s->args.push_back(libraryCall(Builtin::FileCloseAll, "Close", s->location));
+            return s;
+        }
+        do
+        {
+            ExprPtr call = libraryCall(Builtin::FileClose, "Close", peek().location);
+            call->args.push_back(parseFileNumber());
+            s->args.push_back(std::move(call));
+        } while (acceptSymbol(","));
+        return s;
+    }
+
+    // Print #n[, item {; item}[;]]: the items joined as & joins them; a
+    // trailing ";" leaves out the newline. No comma zones (settled).
+    StmtPtr parsePrint()
+    {
+        StmtPtr s = libraryStatement(next().location);
+        next(); // #
+        ExprPtr call = libraryCall(Builtin::FilePrint, "Print #", s->location);
+        call->args.push_back(parseExpression());
+        ExprPtr text; // item & item ... (sema makes a lone number text)
+        bool newline = true;
+        if (acceptSymbol(","))
+        {
+            while (!atStatementEnd())
+            {
+                ExprPtr item = parseExpression();
+                const Location at = item->location;
+                text = text == nullptr ? std::move(item)
+                                       : makeBinary("&", at, std::move(text), std::move(item));
+                newline = true;
+                if (acceptSymbol(";"))
+                {
+                    newline = false;
+                    continue;
+                }
+                if (peek().isSymbol(","))
+                {
+                    error(peek().location, "Print # separates items with ';', not ','");
+                    failed_ = true;
+                    return nullptr;
+                }
+                break;
+            }
+        }
+        if (text == nullptr) // Print #n: just the newline
+        {
+            text = std::make_unique<Expr>();
+            text->kind = ExprKind::StringLiteral;
+            text->location = s->location;
+        }
+        call->args.push_back(std::move(text));
+        call->args.push_back(integer(newline ? 1 : 0, s->location));
+        s->args.push_back(std::move(call));
+        return s;
+    }
+
+    // Line Input #n, target: target = the next line.
+    StmtPtr parseLineInput()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Assign;
+        s->location = next().location;
+        next(); // Input
+        next(); // #
+        ExprPtr call = libraryCall(Builtin::LineInput, "Line Input", s->location);
+        call->args.push_back(parseExpression());
+        if (!expectSymbol(","))
+        {
+            failed_ = true;
+            return nullptr;
+        }
+        s->target = parsePrimary();
+        s->value = std::move(call);
+        return s;
     }
 
     // "x.Name = value", "a(i) = value"; or, with no "=", a method such as
@@ -1870,6 +2097,7 @@ private:
     int lastErrorLine_ = 0;
     Procedure *currentProcedure_ = nullptr;
     bool dictionary_ = false;        // parseTypeName read Dictionary(Of T)
+    bool failed_ = false;            // parseFileStatement reported an error
     std::vector<const char *> open_; // constructs around the current block
 };
 

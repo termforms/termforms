@@ -65,6 +65,7 @@ End Sub
 | Refs | `Ref T`, `New T`, `Dim r As New T`, `Nothing`, `Is` / `IsNot`; Ref members, arrays of Refs |
 | With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
+| Files | `Open ... For Input/Output/Append As #n`, `Print #`, `Line Input #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
@@ -215,6 +216,23 @@ Join(parts, "+")      ' "a+b+c"
 - A bad argument (a start before 1, a negative length) is error 5.
 - `LCase$` and `UCase$` change only A-Z and a-z for now.
 - The `$` is optional (`Mid` = `Mid$`), except in `String$`.
+
+## Files
+
+```vb
+Open "notes.txt" For Output As #1
+Print #1, "n="; n                       ' "n=5": items joined with nothing between
+Close #1
+Open "notes.txt" For Input As #1
+Do While Not EOF(1)
+    Line Input #1, s
+Loop
+Close #1
+```
+
+- Files are UTF-8 text with LF line ends (CRLF is read too).
+- `Open`, `Print`, `Input` and the rest are not reserved words: they are
+  file statements only in these shapes, and free as names otherwise.
 
 ## Dictionaries
 

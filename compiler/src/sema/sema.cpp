@@ -65,7 +65,11 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Replace", Builtin::Replace, false},
                                      {"StrReverse", Builtin::StrReverse, false},
                                      {"Split", Builtin::Split, false},
-                                     {"Join", Builtin::Join, false}};
+                                     {"Join", Builtin::Join, false},
+                                     {"EOF", Builtin::Eof, false},
+                                     {"LOF", Builtin::Lof, false},
+                                     {"FreeFile", Builtin::FreeFile, false},
+                                     {"Seek", Builtin::SeekPos, false}};
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -480,6 +484,12 @@ private:
             case StmtKind::Method:
                 checkMethod(s);
                 break;
+            case StmtKind::Library:
+                for (auto &call : s.args)
+                {
+                    checkExpr(*call);
+                }
+                break;
             case StmtKind::ErrClear:
             case StmtKind::End:
                 break;
@@ -837,6 +847,12 @@ private:
 
     Type checkCallExpr(Expr &e)
     {
+        // A call the parser made for a statement (Open, Print #, ...), or one
+        // already checked once (a With path, a re-check).
+        if (const StringFunction *f = findStringFunction(e.builtin))
+        {
+            return checkStringFunction(e, e.text, *f);
+        }
         if (e.convertTo != Type::Error)
         {
             return checkCType(e);
@@ -890,7 +906,7 @@ private:
         }
         if (const StringFunction *f = findStringFunction(b.id))
         {
-            return checkStringFunction(e, b, *f);
+            return checkStringFunction(e, b.name, *f);
         }
         e.builtin = b.id;
         const std::string name = e.text + (e.suffix != 0 ? std::string(1, e.suffix) : ""); // Str$
@@ -2705,12 +2721,11 @@ private:
 
     // Len, Mid$, InStr, Split, ...: arguments by the signature; missing
     // optional ones become their defaults, so codegen sees every argument.
-    Type checkStringFunction(Expr &e, const BuiltinInfo &b, const StringFunction &f)
+    Type checkStringFunction(Expr &e, const std::string &baseName, const StringFunction &f)
     {
         const bool whole = wholeNow_; // Split gives an array: where is it used?
-        e.builtin = b.id;
-        const std::string name =
-            std::string(b.name) + (e.suffix != 0 ? std::string(1, e.suffix) : "");
+        e.builtin = f.id;
+        const std::string name = baseName + (e.suffix != 0 ? std::string(1, e.suffix) : "");
         const int most = static_cast<int>(std::strlen(f.params));
         const int given = static_cast<int>(e.args.size());
         if (given < f.required || given > most)
@@ -2729,8 +2744,28 @@ private:
                     (most == 1 ? " argument" : " arguments") + ", not " + std::to_string(given));
             return Type::Error;
         }
+        // Print #n, 5: a lone item that is not text becomes text, as & would
+        // make it ("" & 5).
+        if (f.id == Builtin::FilePrint && given == most)
+        {
+            ExprPtr &item = e.args[1];
+            const Type t = checkExpr(*item);
+            if (t != Type::String && t != Type::Error)
+            {
+                auto empty = std::make_unique<Expr>();
+                empty->kind = ExprKind::StringLiteral;
+                empty->location = item->location;
+                auto joined = std::make_unique<Expr>();
+                joined->kind = ExprKind::Binary;
+                joined->text = "&";
+                joined->location = item->location;
+                joined->left = std::move(empty);
+                joined->right = std::move(item);
+                item = std::move(joined);
+            }
+        }
         // InStr(s, find) is InStr(1, s, find).
-        const int skip = b.id == Builtin::InStr && given < most ? most - given : 0;
+        const int skip = f.id == Builtin::InStr && given < most ? most - given : 0;
         bool ok = true;
         for (int i = 0; i < given; ++i)
         {
@@ -2786,7 +2821,7 @@ private:
         {
             return Type::Error;
         }
-        if (b.id == Builtin::Split)
+        if (f.id == Builtin::Split)
         {
             if (!whole)
             {
@@ -3261,8 +3296,15 @@ private:
                                                                           def.members[0].name));
             return Type::Error;
         }
-        if (findBuiltin(e.text, e.suffix) != nullptr)
+        if (const BuiltinInfo *b = findBuiltin(e.text, e.suffix))
         {
+            // FreeFile: a function of no arguments is called by its name.
+            if (const StringFunction *f = findStringFunction(b->id);
+                f != nullptr && f->required == 0)
+            {
+                e.kind = ExprKind::Call;
+                return checkStringFunction(e, b->name, *f);
+            }
             diagnostics_.error(e.location, "'" + e.text +
                                                "' is a built-in function and needs an "
                                                "argument: " +

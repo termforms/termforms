@@ -51,6 +51,19 @@ tf_string *tf_str_alloc(int32_t length);
 void tf_set_shutdown_hook(void (*hook)(void));
 void tf_run_shutdown_hook(void);
 
+/* ------------------------------------------------------------------------ */
+/* Files: the platform's part (platform/<os>/tf_fs_<os>.c)                  */
+/* ------------------------------------------------------------------------ */
+
+#include <stdio.h>
+
+/* fopen with a UTF-8 path (Windows: converted to UTF-16 for _wfopen);
+   errno is set on failure. */
+FILE *tf_platform_fopen(const char *path, const char *mode);
+/* 64-bit positions (Windows' long is 32 bits). */
+int tf_platform_fseek(FILE *f, int64_t offset, int origin);
+int64_t tf_platform_ftell(FILE *f);
+
 /* A zeroed, ready element of the given kind, to hand out after an error
    instead of a real one (see tf_array.c). */
 void *tf_scratch_element(int32_t elem, const tf_record_ops *ops);
