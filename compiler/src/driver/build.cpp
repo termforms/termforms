@@ -5,6 +5,7 @@
 #include "driver/build.hpp"
 
 #include "codegen/c_emitter.hpp"
+#include "driver/project.hpp"
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
 #include "sema/sema.hpp"
@@ -259,6 +260,51 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
     return command;
 }
 
+// What a .vbp says about its files must hold: Form= files have a form,
+// Module= files none, and Startup= names the form or Sub Main.
+static bool checkProjectKinds(const driver::Project &project, const std::string &projectPath,
+                              const std::vector<ast::Module> &modules, std::ostream &err)
+{
+    bool ok = true;
+    const ast::Module *formModule = nullptr;
+    bool hasMain = false;
+    for (std::size_t i = 0; i < modules.size(); ++i)
+    {
+        const driver::ProjectFile &f = project.files[i];
+        const bool hasForm = modules[i].form != nullptr;
+        if (hasForm != f.isForm)
+        {
+            err << projectPath << ":" << f.line << ": error: " << f.path
+                << (f.isForm ? " is listed as a Form but has no Begin Form block"
+                             : " has a form: list it as Form=, not Module=")
+                << "\n";
+            ok = false;
+        }
+        formModule = hasForm ? &modules[i] : formModule;
+        for (const auto &proc : modules[i].procedures)
+        {
+            hasMain = hasMain || proc->name == "Main";
+        }
+    }
+    if (!project.startup.empty())
+    {
+        const std::string &s = project.startup;
+        const bool sayMain = s == "Sub Main" || s == "Main";
+        const bool matches = sayMain ? (hasMain && formModule == nullptr)
+                                     : formModule != nullptr && formModule->form->name == s;
+        if (!matches)
+        {
+            err << projectPath << ":" << project.startupLine << ": error: Startup=" << s
+                << " is not where the program starts: "
+                << (formModule != nullptr ? "it starts at its form, " + formModule->form->name
+                                          : std::string("it starts at Sub Main"))
+                << "\n";
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 // A module's name is its file's name without .bas; with several modules
 // it qualifies their names (Utils.Clean), so it must be a BASIC name.
 static bool isBasicName(const std::string &name)
@@ -279,7 +325,49 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
         err << "tfc: error: no input files\n";
         return kExitUsage;
     }
-    const std::string &input = cmd.inputs.front();
+    // A .vbp names the files (relative to its folder) and the program.
+    std::vector<std::string> inputs = cmd.inputs;
+    driver::Project project;
+    std::string projectPath;
+    const auto isProject = [](const std::string &f) {
+        return fs::path(f).extension().string() == ".vbp";
+    };
+    if (std::any_of(inputs.begin(), inputs.end(), isProject))
+    {
+        if (inputs.size() != 1)
+        {
+            err << "tfc: error: give a project file (.vbp) on its own, not with other files\n";
+            return kExitUsage;
+        }
+        projectPath = inputs.front();
+        std::string text;
+        if (!readFile(projectPath, text))
+        {
+            err << "tfc: error: cannot read '" << projectPath << "'\n";
+            return kExitUsage;
+        }
+        project = driver::parseProject(text);
+        for (const std::string &e : project.errors)
+        {
+            // "line N: x" -> "file:N: error: x", as every diagnostic reads
+            const std::size_t colon = e.find(':');
+            err << projectPath << ":" << e.substr(5, colon - 5) << ": error:" << e.substr(colon + 1)
+                << "\n";
+        }
+        if (!project.ok())
+        {
+            return kExitCompile;
+        }
+        inputs.clear();
+        const fs::path folder = fs::path(projectPath).parent_path();
+        for (const driver::ProjectFile &f : project.files)
+        {
+            const fs::path p(f.path);
+            // With / as written (Windows takes it too), so messages read alike.
+            inputs.push_back(p.is_absolute() ? f.path : (folder / p).generic_string());
+        }
+    }
+    const std::string &input = inputs.front();
 
     // -- Front end: every file, then the program checked as a whole ----------
     // The files are the program's modules, in order: module variables are
@@ -287,9 +375,9 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     Diagnostics diagnostics(input);
     std::vector<ast::Module> modules;
     std::set<std::string> names;
-    for (std::size_t i = 0; i < cmd.inputs.size(); ++i)
+    for (std::size_t i = 0; i < inputs.size(); ++i)
     {
-        const std::string &file = cmd.inputs[i];
+        const std::string &file = inputs[i];
         std::string source;
         if (!readFile(file, source))
         {
@@ -297,7 +385,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
             return kExitUsage;
         }
         const std::string name = fs::path(file).stem().string();
-        if (cmd.inputs.size() > 1 && !isBasicName(name))
+        if (inputs.size() > 1 && !isBasicName(name))
         {
             err << "tfc: error: '" << file << "': a module's file name must be a BASIC name "
                 << "(letters, digits and _, starting with a letter), as it names the module\n";
@@ -327,16 +415,27 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     {
         return kExitCompile;
     }
+    if (!projectPath.empty() && !checkProjectKinds(project, projectPath, modules, err))
+    {
+        return kExitCompile;
+    }
 
     EmitOptions options;
     options.sourcePath = input;
-    options.sourcePaths = cmd.inputs;
+    options.sourcePaths = inputs;
     options.version = kVersion;
     const std::string cSource =
         emitC(std::vector<const ast::Module *>(program.begin(), program.end()), options);
 
     // -- --emit-c: write the C and stop --------------------------------------
-    const fs::path inputPath(input);
+    // Outputs are named after the first file, or for a project after its
+    // Name= (or the .vbp), in the project's folder.
+    const fs::path inputPath =
+        projectPath.empty()
+            ? fs::path(input)
+            : fs::path(projectPath).parent_path() /
+                  (project.name.empty() ? fs::path(projectPath).stem().string() + ".bas"
+                                        : project.name + ".bas");
     if (cmd.emitC)
     {
         const std::string target = cmd.outputPath.empty()

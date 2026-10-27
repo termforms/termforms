@@ -267,6 +267,15 @@ stamp = Now                       ' "2026-10-28 14:05:09"
 
 ```sh
 tfc main.bas stock.bas reports.bas       # one program of three modules
+tfc inventory.vbp                        # the same, from a project file
+```
+
+A project file lists the files, one a line, with the program's name:
+
+```
+Name=Inventory
+Form=main.bas
+Module=stock.bas
 ```
 
 - A module is named after its file (`stock.bas` is `stock`). Its Subs,

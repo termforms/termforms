@@ -1,0 +1,6 @@
+' Run test: a program built from a project file. The files are found
+' relative to this file; the program is named by Name=.
+Name=Inventory
+Startup=frmMain
+Form=inventory/main.bas
+Module=inventory/stock.bas

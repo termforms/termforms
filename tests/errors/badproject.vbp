@@ -1,0 +1,6 @@
+' Errors test: what a project file says must hold: a Module= file with a
+' form in it, a Form= file without one, and a Startup= that is not where
+' the program starts.
+Startup=Sub Main
+Module=badproject/withform.bas
+Form=badproject/noform.bas

@@ -21,6 +21,9 @@ new to GitHub workflows. He wants:
 
 Workflow: commits go **straight to `main`** (Jim chose this over PRs). Run
 the full test suite and clang-format before every commit; CI must stay green.
+Run the format check over *all* files (the `--dry-run -Werror` line below)
+last, after the final edit: formatting only the files changed misses a
+file edited after that step.
 
 ## Reference documents (the fuller story)
 
@@ -160,7 +163,11 @@ authoritative for design rationale.
   modules share it (single-file C is unchanged); `TF_AT(f_i, n)` marks
   statements when there are several modules. Tests: a `.with` file lists
   a test's other modules (in a sub-folder the globs skip).
-- **Next:** 7b, the `.vbp` project file.
+  7b done: the `.vbp` (driver/project.cpp, pure and unit-tested;
+  build.cpp resolves its files, then checks Form=/Module=/Startup=
+  against the program). A `.vbp` in tests/run or tests/errors is a test.
+  **Phase 3 (language core) is complete.**
+- **Next:** Phase 4 (TUI runtime); ask Jim where to start.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -475,7 +482,7 @@ Phase 3, language core:
 5. ~~Arrays, Types and Ref, With, For Each, Dictionary~~ (done 27 Oct 2026).
 6. ~~Strings, Byte, text and binary files, the file system, Command$,
    Environ$, Shell, time~~ (done 28 Oct 2026).
-7. Multiple modules and the `.vbp` project file.
+7. ~~Multiple modules and the `.vbp` project file~~ (done 28 Oct 2026).
 
 Not planned (Jim, 27 Oct 2026): warnings for a local assigned but never
 read. Not worth the effort for TermForms' use; do not propose it again.

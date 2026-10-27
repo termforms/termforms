@@ -1,0 +1,3 @@
+badproject.vbp:5: error: badproject/withform.bas has a form: list it as Form=, not Module=
+badproject.vbp:6: error: badproject/noform.bas is listed as a Form but has no Begin Form block
+badproject.vbp:4: error: Startup=Sub Main is not where the program starts: it starts at its form, f

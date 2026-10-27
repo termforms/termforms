@@ -16,6 +16,7 @@ add_library(tfc_lib STATIC
     src/sema/sema.cpp
     src/codegen/c_emitter.cpp
     src/driver/command_line.cpp
+    src/driver/project.cpp
     src/driver/build.cpp)
 
 target_include_directories(tfc_lib PUBLIC

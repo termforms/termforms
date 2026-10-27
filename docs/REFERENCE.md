@@ -852,6 +852,29 @@ End Sub
 - Types and Enums are named bare (`Dim p As Item`); one Public in two
   modules is ambiguous and must be made Private in one, for now.
 
+### Project files (Proposed)
+
+```
+' inventory.vbp
+Name=Inventory
+Startup=frmMain
+Form=frmMain.bas
+Module=lib/stock.bas
+```
+
+- `tfc inventory.vbp` builds the program. `Form=` and `Module=` list its
+  files in order (the order module variables are set up in), relative to
+  the `.vbp`'s folder; the program is named by `Name=` (else after the
+  `.vbp`) and built in that folder.
+- Keys are Name, Startup, Form and Module, in any case; values are
+  trimmed; blank lines and lines starting with `'` are ignored.
+- What the file says must hold: a `Form=` file has a `Begin Form` block
+  and a `Module=` file has none, and `Startup=` (if given) names the form
+  or `Sub Main`, where the program does start. An unknown key, a repeated
+  Name or Startup, or no files at all is an error, reported with the
+  `.vbp`'s line.
+- A `.vbp` is given on its own (not with `.bas` files).
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

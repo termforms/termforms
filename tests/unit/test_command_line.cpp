@@ -105,3 +105,36 @@ TEST_CASE("only the first error is kept")
     const CommandLine cmd = parseCommandLine({"--bad1", "--bad2"});
     CHECK(cmd.error == "unknown option '--bad1'");
 }
+
+// -- The .vbp project file ---------------------------------------------------------
+
+#include "driver/project.hpp"
+
+using tf::driver::parseProject;
+
+TEST_CASE("a project lists its files in order, with a name and a startup")
+{
+    const auto p = parseProject("' Inventory\nName = Inventory\nstartup=frmMain\n\n"
+                                "Form=frmMain.bas\nModule = lib/stock.bas \n");
+    REQUIRE(p.ok());
+    CHECK(p.name == "Inventory");
+    CHECK(p.startup == "frmMain");
+    REQUIRE(p.files.size() == 2);
+    CHECK(p.files[0].path == "frmMain.bas");
+    CHECK(p.files[0].isForm);
+    CHECK(p.files[1].path == "lib/stock.bas");
+    CHECK_FALSE(p.files[1].isForm);
+    CHECK(p.files[1].line == 6);
+}
+
+TEST_CASE("a project's mistakes are reported with their lines")
+{
+    const auto p = parseProject("Name=A\nName=B\nColour=red\njunk\nModule=\n");
+    REQUIRE(p.errors.size() == 4);
+    CHECK(p.errors[0] == "line 2: Name is given twice");
+    CHECK(p.errors[1].rfind("line 3: unknown key 'Colour'", 0) == 0);
+    CHECK(p.errors[2].rfind("line 4: expected Key=Value", 0) == 0);
+    CHECK(p.errors[3] == "line 5: 'Module' needs a value");
+    CHECK(parseProject("Name=A\n").errors.at(0) ==
+          "line 1: the project lists no files (Form= or Module=)");
+}

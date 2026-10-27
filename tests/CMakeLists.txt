@@ -22,7 +22,9 @@ find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
 set(TF_TEST_TOOL ${CMAKE_CURRENT_SOURCE_DIR}/tools/tf_test.py)
 
 foreach(mode golden errors run)
-    file(GLOB sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${mode}/*.bas)
+    # A project file (.vbp) is a test too: it names the program's files.
+    file(GLOB sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${mode}/*.bas
+        ${CMAKE_CURRENT_SOURCE_DIR}/${mode}/*.vbp)
     foreach(source ${sources})
         get_filename_component(name ${source} NAME_WE)
         add_test(NAME ${mode}.${name}
