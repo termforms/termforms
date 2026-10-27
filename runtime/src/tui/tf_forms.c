@@ -24,6 +24,14 @@
  * Alt+letter opens a menu straight away, before any control's access key.
  * An item's Shortcut works whenever the form is on top. Opening a menu
  * fires its Click (so the program can update its items first), as VB.
+ *
+ * The mouse (xterm's SGR reports, on unless TERMFORMS_MOUSE=0): the left
+ * button and the wheel, on the top form only. A press focuses a control;
+ * buttons, CheckBoxes, OptionButtons and Labels act on release over the
+ * same control, as VB; a TextBox places the caret (drag selects, a
+ * double-click selects a word); a ListBox chooses the item (a double-click
+ * is DblClick) and the wheel scrolls it. Shift+drag is left to the
+ * terminal, for selecting text on the screen.
  */
 #include "tf_tui.h"
 
@@ -97,6 +105,11 @@ struct tf_control
     int menu_top;
     int menu_down;
     int menu_item;
+
+    /* Where the control was last drawn on the screen (drawn 0: it was
+       not), for the mouse. */
+    int drawn;
+    int at_x, at_y, at_w, at_h;
 };
 
 static int headless = 0;
@@ -1546,6 +1559,12 @@ static void draw_menu_bar(const tf_control *form, int x, int y, int w)
             break; /* the rest do not fit */
         }
         const int lit = form->menu_on && form->menu_top == i;
+        tf_control *placed = (tf_control *)c; /* drawing notes where, for the mouse */
+        placed->drawn = 1;
+        placed->at_x = at;
+        placed->at_y = y;
+        placed->at_w = cells;
+        placed->at_h = 1;
         const int fg = usable(c) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
         const int bg = lit ? TF_CYAN : TF_GREY;
         tf_screen_fill(at, y, cells, 1, ' ', fg, bg);
@@ -1612,6 +1631,12 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
         {
             continue;
         }
+        tf_control *placed = (tf_control *)c;
+        placed->drawn = 1;
+        placed->at_x = x + 1;
+        placed->at_y = row;
+        placed->at_w = inner;
+        placed->at_h = 1;
         if (is_separator(c))
         {
             tf_screen_put(x, row, box(0x251C, '+'), TF_BLACK, TF_GREY);
@@ -1685,6 +1710,10 @@ static void draw_one(tf_control *form)
     /* Controls, in tab order (a Frame before what it holds), each placed in
        its container and cut to what that shows. */
     form_area = (area){ox + 1, oy + 1, fw - 2, fh - 2};
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        form->children[i]->drawn = 0;
+    }
     const int bar = has_menu_bar(form);
     if (bar)
     {
@@ -1712,6 +1741,11 @@ static void draw_one(tf_control *form)
         const int focused = i == form->focus && on_top && !form->menu_on;
         const int h = (int)c->height < rows_left ? (int)c->height : rows_left;
         const int w = (int)c->width < room ? (int)c->width : room;
+        c->drawn = 1;
+        c->at_x = x;
+        c->at_y = y;
+        c->at_w = w;
+        c->at_h = h;
         switch (c->type)
         {
             case TF_CTL_TEXTBOX:
@@ -2195,9 +2229,245 @@ static int32_t key_ascii(tf_key key)
     }
 }
 
+/* ------------------------------------------------------------------------ */
+/* The mouse                                                                */
+/* ------------------------------------------------------------------------ */
+
+/* Two presses on one cell within this long are a double-click. */
+#define TF_DOUBLE_CLICK_MS 500
+
+static tf_control *pressed = NULL; /* the control the button went down on */
+static int64_t last_press_ms = -TF_DOUBLE_CLICK_MS - 1;
+static int last_press_x = -1;
+static int last_press_y = -1;
+
+/* The control drawn at (x, y): a menu first (an open drop-down lies over
+   the controls), else the innermost (a Frame's controls are drawn after
+   it, so the last found wins); -1 if none. */
+static int control_at(const tf_control *form, int x, int y)
+{
+    for (int menus = 1; menus >= 0; --menus)
+    {
+        for (int i = form->child_count - 1; i >= 0; --i)
+        {
+            const tf_control *c = form->children[i];
+            if ((c->type == TF_CTL_MENU) == menus && c->drawn && x >= c->at_x &&
+                x < c->at_x + c->at_w && y >= c->at_y && y < c->at_y + c->at_h)
+            {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+
+static int in_drop_down(const tf_control *form, int index)
+{
+    return form->menu_on && form->menu_down && index >= 0 &&
+           form->children[index]->parent == form->children[form->menu_top];
+}
+
+/* While the menus are in use, the mouse works them: a press on a bar menu
+   opens it (or, open, closes it), on an item highlights it, and a release
+   there chooses it; a press anywhere else closes the menus and does
+   nothing more (as Windows). */
+static void menu_mouse(tf_control *form, tf_key key, int hit)
+{
+    const int item =
+        in_drop_down(form, hit) && usable(form->children[hit]) && !is_separator(form->children[hit])
+            ? hit
+            : -1;
+    switch (key.ch)
+    {
+        case TF_MOUSE_PRESS:
+            if (hit >= 0 && on_bar(form, form->children[hit]))
+            {
+                if (form->menu_down && form->menu_top == hit)
+                {
+                    menu_close(form);
+                }
+                else if (usable(form->children[hit]))
+                {
+                    menu_open(form, hit);
+                }
+            }
+            else if (item >= 0)
+            {
+                form->menu_item = item;
+            }
+            else if (!in_drop_down(form, hit))
+            {
+                menu_close(form);
+            }
+            break;
+        case TF_MOUSE_DRAG:
+            if (item >= 0)
+            {
+                form->menu_item = item;
+            }
+            break;
+        case TF_MOUSE_RELEASE:
+            if (item >= 0 && item == form->menu_item)
+            {
+                menu_choose(form, item);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+/* A press in a ListBox: on an item, chosen as by the keys (a double-click
+   on the current one is DblClick); on the arrows in its border, a scroll. */
+static void list_press(tf_control *list, tf_key key, int double_click)
+{
+    const int32_t rows = list->height - 2 > 0 ? list->height - 2 : 1;
+    const int row = key.y - list->at_y - 1;
+    if (key.x == list->at_x + (int)list->width - 1)
+    {
+        if (row == 0 && list->top_index > 0)
+        {
+            list->top_index--;
+        }
+        else if (row == rows - 1 && list->top_index + rows < list->item_count)
+        {
+            list->top_index++;
+        }
+        return;
+    }
+    const int32_t item = list->top_index + row;
+    if (row < 0 || row >= rows || item >= list->item_count)
+    {
+        return;
+    }
+    if (double_click && item == list->list_index && list->handlers[TF_EVENT_DBLCLICK] != NULL)
+    {
+        fire(list, TF_EVENT_DBLCLICK);
+        return;
+    }
+    if (list->multi == 1 || (list->multi == 2 && (key.mods & TF_MOD_CTRL) != 0))
+    {
+        /* Toggling, as Space does (MultiSelect 2: Ctrl+click adds or removes). */
+        list->list_index = item;
+        tf_list_set_selected(list, item, !list->selected[item]);
+    }
+    else
+    {
+        list_choose(list, item, 1);
+    }
+}
+
+static void form_mouse(tf_control *form, tf_key key)
+{
+    const int hit = control_at(form, key.x, key.y);
+    if (form->menu_on)
+    {
+        menu_mouse(form, key, hit);
+        return;
+    }
+    tf_control *c = hit >= 0 ? form->children[hit] : NULL;
+    if (c != NULL && !usable(c))
+    {
+        c = NULL;
+    }
+    switch (key.ch)
+    {
+        case TF_MOUSE_PRESS:
+        {
+            const int64_t now = now_ms();
+            const int double_click = now - last_press_ms <= TF_DOUBLE_CLICK_MS &&
+                                     key.x == last_press_x && key.y == last_press_y;
+            last_press_ms = double_click ? -TF_DOUBLE_CLICK_MS - 1 : now; /* a third is single */
+            last_press_x = key.x;
+            last_press_y = key.y;
+            pressed = c;
+            if (c == NULL)
+            {
+                break;
+            }
+            if (on_bar(form, c))
+            {
+                pressed = NULL;
+                menu_open(form, hit);
+                break;
+            }
+            if (focusable(c))
+            {
+                set_focus(form, hit);
+            }
+            if (c->type == TF_CTL_TEXTBOX)
+            {
+                const int32_t cp = c->scroll + (key.x - c->at_x);
+                if (double_click)
+                {
+                    tf_edit_select_word(&c->edit, cp);
+                }
+                else
+                {
+                    tf_edit_place(&c->edit, cp, 0);
+                }
+            }
+            else if (c->type == TF_CTL_LISTBOX)
+            {
+                list_press(c, key, double_click);
+            }
+            break;
+        }
+        case TF_MOUSE_DRAG:
+            if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn)
+            {
+                const int dx = key.x - pressed->at_x;
+                tf_edit_place(&pressed->edit, pressed->scroll + (dx < 0 ? 0 : dx), 1);
+            }
+            break;
+        case TF_MOUSE_RELEASE:
+        {
+            /* A click is the press and the release on the same control. */
+            tf_control *was = pressed;
+            pressed = NULL;
+            if (was == NULL || was != c)
+            {
+                break;
+            }
+            switch (c->type)
+            {
+                case TF_CTL_COMMANDBUTTON:
+                case TF_CTL_LABEL:
+                    fire(c, TF_EVENT_CLICK);
+                    break;
+                case TF_CTL_CHECKBOX:
+                    toggle(c);
+                    break;
+                case TF_CTL_OPTIONBUTTON:
+                    select_option(c);
+                    break;
+                default:
+                    break;
+            }
+            break;
+        }
+        case TF_MOUSE_WHEEL_UP:
+        case TF_MOUSE_WHEEL_DOWN:
+            if (c != NULL && c->type == TF_CTL_LISTBOX)
+            {
+                /* Three rows a notch, as most systems; drawing keeps it in range. */
+                const int32_t step = key.ch == TF_MOUSE_WHEEL_UP ? -3 : 3;
+                c->top_index = c->top_index + step < 0 ? 0 : c->top_index + step;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 /* One key for the form. Returns 1 if the form is to close. */
 static int form_key(tf_control *form, tf_key key)
 {
+    if (key.kind == TF_KEY_MOUSE)
+    {
+        form_mouse(form, key);
+        return 0;
+    }
     if (menu_first(form, key))
     {
         return 0;
@@ -2289,6 +2559,19 @@ static void ui_suspend(void)
     tf_term_close();
 }
 
+/* SGR mouse reports (1006) of presses, releases and drags (1002), unless
+   TERMFORMS_MOUSE is 0 (for a terminal where the mouse is better left to
+   selecting text). The terminal layer turns them off when it closes. */
+static void mouse_on(void)
+{
+    const char *setting = tf_platform_getenv("TERMFORMS_MOUSE");
+    if (setting == NULL || strcmp(setting, "0") != 0)
+    {
+        static const char kOn[] = "\x1b[?1002h\x1b[?1006h";
+        tf_term_write(kOn, sizeof kOn - 1);
+    }
+}
+
 static void ui_resume(void)
 {
     const char *reason = "";
@@ -2296,6 +2579,7 @@ static void ui_resume(void)
     {
         tf_fatal_error(TF_ERR_TERMINAL, reason);
     }
+    mouse_on();
     int cols = 80;
     int rows = 25;
     tf_term_size(&cols, &rows);
@@ -2365,6 +2649,7 @@ static void ui_open(void)
             tf_fatal_error(TF_ERR_TERMINAL, reason);
         }
         use_utf8 = tf_term_utf8();
+        mouse_on();
         tf_term_size(&cols, &rows);
         tf_screen_init(cols, rows, 1);
         tf_input_start(NULL);

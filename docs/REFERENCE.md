@@ -1124,6 +1124,38 @@ and properties follow a Windows edit control, as VB's TextBox does.
 - A long paste is no longer cut at 64 bytes: the input reads only what
   its decoder has room for.
 
+### The mouse (Proposed)
+
+Settled: on by default, clicks and the wheel go to the form, Shift+drag
+still selects text in most terminals, an environment variable turns it
+off. The rest:
+
+- **`TERMFORMS_MOUSE=0` turns it off**; anything else, or unset, leaves
+  it on. It uses xterm's SGR reports (modes 1002 and 1006); the terminal
+  layer turns them off whenever it restores the terminal (exit, error,
+  SIGHUP, Shell).
+- **The left button and the wheel only**; the others are ignored. Only
+  the top form takes the mouse (as it alone takes keys).
+- **A press focuses** the control under it (if it can take the focus).
+  Buttons, CheckBoxes, OptionButtons and Labels **act on the release**,
+  if it is over the same control (as VB: pressing and moving away is no
+  click).
+- **TextBox**: a click places the caret, a drag selects, a double-click
+  selects the word.
+- **ListBox**: a click chooses the item as the keys do (MultiSelect 1
+  toggles it; MultiSelect 2 chooses just it, Ctrl+click toggles it); a
+  double-click on the current item is DblClick; the wheel scrolls three
+  rows a notch; a click on the ↑ or ↓ in its border scrolls one.
+- **Menus**: a click on a bar menu opens it (again: closes it); a press
+  on an item highlights it and the release there chooses it; a press
+  anywhere else closes the menus and does nothing more (as Windows).
+- **A double-click** is two presses on one cell within 500 ms (in a key
+  script, with no `{WAIT}` between them); a third press starts again.
+- Key scripts: `{CLICK x,y}`, `{DBLCLICK x,y}`, `{PRESS x,y}`,
+  `{DRAG x,y}`, `{RELEASE x,y}`, `{WHEELUP x,y}`, `{WHEELDOWN x,y}`,
+  with cells counted from 0,0 at the screen's top left.
+- No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

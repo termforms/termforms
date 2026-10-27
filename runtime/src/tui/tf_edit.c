@@ -381,6 +381,33 @@ void tf_edit_select(tf_edit *e, int32_t start, int32_t length)
     e->typing = 0;
 }
 
+void tf_edit_place(tf_edit *e, int32_t cp, int extend)
+{
+    move(e, offset_of(e, cp), extend);
+}
+
+void tf_edit_select_word(tf_edit *e, int32_t cp)
+{
+    const char *bytes = tf_str_cstr(e->text);
+    const int32_t length = length_of(e);
+    int32_t from = offset_of(e, cp);
+    int32_t to = from;
+    if (from < length && word_byte((unsigned char)bytes[from]))
+    {
+        while (from > 0 && word_byte((unsigned char)bytes[from - 1]))
+        {
+            --from;
+        }
+        while (to < length && word_byte((unsigned char)bytes[to]))
+        {
+            ++to;
+        }
+    }
+    e->anchor = from;
+    e->cursor = to;
+    e->typing = 0;
+}
+
 void tf_edit_replace_selection(tf_edit *e, const tf_string *text)
 {
     remember(e);

@@ -94,6 +94,64 @@ static tf_key_kind tilde_key(int n)
 }
 
 /*
+ * An SGR mouse report, "ESC [ < b ; x ; y M" (m on release): b's low bits
+ * are the button (0 left), +32 when it moved, 64/65 the wheel; 4, 8 and 16
+ * Shift, Alt and Ctrl; x and y count from 1. Returns the bytes used, or 0
+ * if incomplete. Buttons other than the left one are consumed and ignored.
+ */
+static int decode_mouse(const tf_keys *keys, tf_key *key)
+{
+    const unsigned char *p = keys->pending;
+    int values[3] = {0, 0, 0};
+    int field = 0;
+    for (int i = 3; i < keys->count; ++i)
+    {
+        const unsigned char c = p[i];
+        if (c >= '0' && c <= '9')
+        {
+            if (values[field] < 10000)
+            {
+                values[field] = values[field] * 10 + (c - '0');
+            }
+        }
+        else if (c == ';' && field < 2)
+        {
+            ++field;
+        }
+        else if ((c == 'M' || c == 'm') && field == 2)
+        {
+            const int b = values[0];
+            key->kind = TF_KEY_MOUSE;
+            key->x = values[1] - 1;
+            key->y = values[2] - 1;
+            key->mods = ((b & 4) ? TF_MOD_SHIFT : 0) | ((b & 8) ? TF_MOD_ALT : 0) |
+                        ((b & 16) ? TF_MOD_CTRL : 0);
+            if ((b & 64) != 0)
+            {
+                key->ch = (b & 1) ? TF_MOUSE_WHEEL_DOWN : TF_MOUSE_WHEEL_UP;
+            }
+            else if ((b & 3) != 0)
+            {
+                key->kind = TF_KEY_NONE; /* the middle or right button */
+            }
+            else
+            {
+                key->ch = c == 'm'        ? TF_MOUSE_RELEASE
+                          : (b & 32) != 0 ? TF_MOUSE_DRAG
+                                          : TF_MOUSE_PRESS;
+            }
+            return i + 1;
+        }
+        else
+        {
+            key->kind = TF_KEY_NONE; /* malformed: drop the "ESC [ <" */
+            return 3;
+        }
+    }
+    return 0;
+}
+
+/*
  * Decodes an escape sequence at the start of the buffer. Returns the number of
  * bytes it occupies, 0 if it is incomplete, and sets key (kind TF_KEY_NONE for
  * sequences that are recognised as complete but ignored).
@@ -134,6 +192,11 @@ static int decode_escape(const tf_keys *keys, tf_key *key)
         }
         *kind = TF_KEY_NONE;
         return 1;
+    }
+
+    if (n >= 3 && p[2] == '<')
+    {
+        return decode_mouse(keys, key);
     }
 
     /* CSI: parameter bytes 0x30-0x3F, intermediates 0x20-0x2F, final 0x40-0x7E.
@@ -192,7 +255,7 @@ int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape)
 
         if (c == 0x1B)
         {
-            tf_key decoded = {TF_KEY_NONE, 0, 0};
+            tf_key decoded = {TF_KEY_NONE, 0, 0, 0, 0};
             const int used = decode_escape(keys, &decoded);
             if (used == 0)
             {

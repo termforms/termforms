@@ -45,3 +45,10 @@ tf_set_warnings(test_text)
 
 add_test(NAME runtime.text COMMAND test_text)
 set_tests_properties(runtime.text PROPERTIES LABELS runtime)
+
+add_executable(test_keys test_keys.c)
+target_link_libraries(test_keys PRIVATE tfrt)
+tf_set_warnings(test_keys)
+
+add_test(NAME runtime.keys COMMAND test_keys)
+set_tests_properties(runtime.keys PROPERTIES LABELS runtime)

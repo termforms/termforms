@@ -8,7 +8,9 @@
  *   {ENTER} {TAB} {BACKTAB} {BKSP} {DEL} {LEFT} {RIGHT} {UP} {DOWN}
  *   {HOME} {END} {ESC} {F1}..{F12} {CTRL+<letter>} {ALT+<letter>}, CTRL+ /
  *   ALT+ / SHIFT+ before F<n> or a name ({CTRL+F4}, {SHIFT+LEFT}), {WAIT n}
- *   (n ms pass, so Timers run), and {{ (a literal brace)
+ *   (n ms pass, so Timers run), the mouse at cell x,y (from 0, 0 at the
+ *   top left): {CLICK x,y} {DBLCLICK x,y} {PRESS x,y} {DRAG x,y}
+ *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, and {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
@@ -26,9 +28,15 @@
 static const char *script = NULL;
 static tf_keys decoder;
 
+/* The rest of a script name that is several events ({CLICK}: press, then
+   release), handed out one per call. */
+static tf_key queued[4];
+static int queued_count = 0;
+
 void tf_input_start(const char *headless_script)
 {
     script = headless_script;
+    queued_count = 0;
     memset(&decoder, 0, sizeof decoder);
 }
 
@@ -46,9 +54,58 @@ static const named_key NAMED_KEYS[] = {
     {"PGUP", TF_KEY_PGUP},      {"PGDN", TF_KEY_PGDN},
 };
 
+typedef struct mouse_name
+{
+    const char *name;
+    int actions[4]; /* TF_MOUSE_ actions in order, 0 ending them */
+} mouse_name;
+
+static const mouse_name MOUSE_NAMES[] = {
+    {"CLICK", {TF_MOUSE_PRESS, TF_MOUSE_RELEASE, 0, 0}},
+    {"DBLCLICK", {TF_MOUSE_PRESS, TF_MOUSE_RELEASE, TF_MOUSE_PRESS, TF_MOUSE_RELEASE}},
+    {"PRESS", {TF_MOUSE_PRESS, 0, 0, 0}},
+    {"DRAG", {TF_MOUSE_DRAG, 0, 0, 0}},
+    {"RELEASE", {TF_MOUSE_RELEASE, 0, 0, 0}},
+    {"WHEELUP", {TF_MOUSE_WHEEL_UP, 0, 0, 0}},
+    {"WHEELDOWN", {TF_MOUSE_WHEEL_DOWN, 0, 0, 0}},
+};
+
+/* "{CLICK 10,3}": queues its events and returns the first; 0 if the name
+   is not a mouse one. */
+static int scripted_mouse(const char *name, size_t length, int mods, tf_key *key)
+{
+    for (size_t i = 0; i < sizeof MOUSE_NAMES / sizeof MOUSE_NAMES[0]; ++i)
+    {
+        const size_t n = strlen(MOUSE_NAMES[i].name);
+        int x = 0;
+        int y = 0;
+        if (length <= n || strncmp(name, MOUSE_NAMES[i].name, n) != 0 || name[n] != ' ' ||
+            sscanf(name + n + 1, "%d,%d", &x, &y) != 2)
+        {
+            continue;
+        }
+        queued_count = 0;
+        for (int k = 3; k >= 1; --k) /* queued in reverse: taken from the end */
+        {
+            if (MOUSE_NAMES[i].actions[k] != 0)
+            {
+                queued[queued_count++] =
+                    (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[k], mods, x, y};
+            }
+        }
+        *key = (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[0], mods, x, y};
+        return 1;
+    }
+    return 0;
+}
+
 static tf_key next_scripted(void)
 {
-    tf_key key = {TF_KEY_EOF, 0, 0};
+    tf_key key = {TF_KEY_EOF, 0, 0, 0, 0};
+    if (queued_count > 0)
+    {
+        return queued[--queued_count];
+    }
 
     if (*script == '\0')
     {
@@ -125,6 +182,10 @@ static tf_key next_scripted(void)
                 return key;
             }
         }
+        if (scripted_mouse(name, length, mods, &key))
+        {
+            return key;
+        }
         for (size_t i = 0; i < sizeof NAMED_KEYS / sizeof NAMED_KEYS[0]; ++i)
         {
             if (strlen(NAMED_KEYS[i].name) == length &&
@@ -157,7 +218,7 @@ tf_key tf_input_wait(int timeout_ms)
         return next_scripted();
     }
 
-    tf_key key = {TF_KEY_NONE, 0, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0};
     const int64_t deadline = timeout_ms >= 0 ? tf_platform_monotonic_ms() + timeout_ms : -1;
     for (;;)
     {

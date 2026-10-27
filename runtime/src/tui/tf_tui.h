@@ -73,9 +73,10 @@ typedef enum tf_key_kind
     TF_KEY_PGUP,
     TF_KEY_PGDN,
     TF_KEY_ESC,
-    TF_KEY_ALT,  /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
-    TF_KEY_F,    /* function key; .ch is its number, 1-12; .mods as pressed */
-    TF_KEY_WAIT, /* key scripts only: {WAIT n}, n ms in .ch, for Timers */
+    TF_KEY_ALT,   /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
+    TF_KEY_F,     /* function key; .ch is its number, 1-12; .mods as pressed */
+    TF_KEY_WAIT,  /* key scripts only: {WAIT n}, n ms in .ch, for Timers */
+    TF_KEY_MOUSE, /* the left button or the wheel: .ch a TF_MOUSE_ action, at .x, .y */
     TF_KEY_RESIZE,
     TF_KEY_EOF /* headless script exhausted */
 } tf_key_kind;
@@ -85,11 +86,19 @@ typedef enum tf_key_kind
 #define TF_MOD_ALT 2
 #define TF_MOD_CTRL 4
 
+/* What a TF_KEY_MOUSE did (the left button only; the others are ignored). */
+#define TF_MOUSE_PRESS 1
+#define TF_MOUSE_RELEASE 2
+#define TF_MOUSE_DRAG 3 /* moved with the button down */
+#define TF_MOUSE_WHEEL_UP 4
+#define TF_MOUSE_WHEEL_DOWN 5
+
 typedef struct tf_key
 {
     tf_key_kind kind;
     uint32_t ch;
     int mods;
+    int x, y; /* TF_KEY_MOUSE: the cell, from 0 at the top left */
 } tf_key;
 
 /* Byte-stream decoder state. */
@@ -183,6 +192,11 @@ int tf_edit_key(tf_edit *e, tf_key key);
 void tf_edit_set_text(tf_edit *e, const tf_string *text);
 void tf_edit_select(tf_edit *e, int32_t start, int32_t length);
 void tf_edit_replace_selection(tf_edit *e, const tf_string *text);
+
+/* The mouse: the caret to code point cp (extend: selecting from the
+   anchor); a double-click selects the word at cp. */
+void tf_edit_place(tf_edit *e, int32_t cp, int extend);
+void tf_edit_select_word(tf_edit *e, int32_t cp);
 int32_t tf_edit_sel_start(const tf_edit *e);
 int32_t tf_edit_sel_length(const tf_edit *e);
 tf_string *tf_edit_sel_text(const tf_edit *e); /* owned */

@@ -224,7 +224,14 @@ authoritative for design rationale.
   Text store is fallible), arrows and Home/End/Del decoded with
   modifiers ({SHIFT+LEFT} in key scripts), reads bounded by the
   decoder's room (a long paste was cut at 64 bytes).
-- **Next:** Phase 4 step 8: the mouse (SGR, on by default).
+  Step 4.8 done: the mouse (SGR 1002+1006, switched on in ui_open and
+  ui_resume unless TERMFORMS_MOUSE=0, off in each terminal layer's
+  LEAVE_SEQ; TF_KEY_MOUSE with x, y; drawing records each control's
+  place (`drawn`, `at_x`...) and `control_at` hit-tests, menus first;
+  act on release over the pressed control; key scripts {CLICK x,y} etc.;
+  tests/runtime/test_keys.c covers the decoder's terminal bytes).
+- **Next:** Phase 4 step 9: Unicode width tables (tools/ script from
+  Python's unicodedata; runtime/THIRD_PARTY_NOTICES).
 
 ## Settled design decisions (do not relitigate without Jim)
 
