@@ -239,8 +239,8 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 13 | Type mismatch | CInt/CLng/CDbl of text that is not a number | now |
 | 14 | Out of string space | joining strings into one longer than a string can hold (about 2 GB); catchable, the result is "" | now |
 | 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
-| 9 | Subscript out of range | array index outside its bounds | arrays |
-| 10 | This array is fixed or temporarily locked | ReDim of a fixed array | arrays |
+| 9 | Subscript out of range | an array index outside its bounds; UBound of an empty array; ReDim Preserve changing a dimension other than the last | now |
+| 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef | now |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing | Types and Ref |
 | 457 | This key is already associated with an element of this collection | adding a Dictionary key twice | Dictionary |
 | 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
@@ -346,6 +346,48 @@ c = CType(n, Color)                   ' Integer to Color needs CType
   type.
 - A For loop may run over an Enum variable (`For c = Color.Red To
   Color.Blue`); its Step, if any, is a plain number.
+
+## Arrays (Settled, 27 Oct 2026)
+
+```vb
+Dim scores(9) As Integer          ' fixed: 10 elements, scores(0) to scores(9)
+Dim grid(24, 79) As String        ' several dimensions: grid(row, column)
+Dim names() As String             ' dynamic: empty until ReDim
+Dim table(,) As Double            ' dynamic, two dimensions
+
+ReDim names(n)                    ' sized when running
+ReDim Preserve names(n + 10)      ' keeps the contents; only the last dimension may change
+copy = names                      ' copies the elements: copy and names are separate
+For i = 0 To UBound(names)        ' UBound(a [, dimension]); LBound is always 0
+Erase names                       ' a dynamic array becomes empty
+```
+
+- **Always 0-based**, as decided on 23 Oct: `Dim a(10)` has 11 elements.
+  There is no lower bound: `Dim a(1 To 10)` is a compile error.
+- **Several dimensions** are allowed (up to 8); `ReDim Preserve` may change
+  only the last one, as in VB. Elements are stored column-major, as VB.
+- **Only a dynamic array can be resized.** `Dim a(10)` is fixed: ReDim of it
+  is a compile error, and its size must be a constant (a Const will do).
+  `Dim a()` (or `a(,)`, which also fixes the number of dimensions) is
+  dynamic, sized by ReDim.
+- **`b = a` copies the elements** (b must be dynamic, with the same element
+  type and dimensions); changing one afterwards leaves the other alone.
+- Every index is checked: one outside the array is error 9 (Subscript out
+  of range), as is UBound of an empty array.
+- Array parameters are written `values() As Integer` (or `(,)`), and take
+  any array, fixed or dynamic, of that element type and dimensions. ByVal
+  (the default) makes it read-only in the callee; ByRef lets the callee
+  change or ReDim it (ReDim of a fixed array passed ByRef is error 10).
+- **An element passed ByRef locks its array** for the call: ReDim or Erase
+  of that array meanwhile is error 10 (This array is fixed or temporarily
+  locked), so the callee can never write into memory a ReDim freed.
+- `Erase` empties a dynamic array and resets a fixed one's elements. A Dim
+  of an array inside a loop does the same on each pass.
+- UBound and LBound return an Integer, so `For i = 0 To UBound(a)` works
+  with an Integer i. Bounds in ReDim are Integers; indexes may be Integer
+  or Long.
+- Not yet: a Function returning an array (planned with `Split` in the
+  string library step), and arrays of Types (with Types, next).
 
 ## References and Types (Settled, 23 Oct 2026)
 

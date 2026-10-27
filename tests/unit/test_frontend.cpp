@@ -417,3 +417,40 @@ TEST_CASE("lexer: Const, Enum and CType are reserved")
         CHECK(tf::isReservedKeyword(word));
     }
 }
+
+// -- Arrays (Phase 3 step 5a) --------------------------------------------------
+
+TEST_CASE("arrays start at 0: no lower bound with To")
+{
+    CHECK(check(inClick("", "    Dim a(1 To 10) As Integer\n")) ==
+          "8:13: arrays start at 0: write a(n) for elements 0 to n, not a range with 'To'\n");
+}
+
+TEST_CASE("several dimensions; a fixed array's size is a constant")
+{
+    CHECK(check(inClick("Const ROWS = 9\n",
+                        "    Dim g(ROWS, 79) As String\n    g(1, 2) = \"x\"\n")) == "");
+}
+
+TEST_CASE("only a dynamic array can be ReDim'd, and b = a copies into a dynamic one")
+{
+    const std::string body = "    Dim d() As Integer, e() As Integer, fx(3) As Integer\n"
+                             "    ReDim d(5)\n    ReDim Preserve d(9)\n    e = d\n    e = fx\n";
+    CHECK(check(inClick("", body)) == "");
+    CHECK(check(inClick("", "    Dim fx(3) As Integer\n    ReDim fx(5)\n")) ==
+          "9:11: 'fx' is a fixed array; only a dynamic array (Dim fx()) can be ReDim'd\n");
+}
+
+TEST_CASE("a dynamic array declares its dimensions: () or (,)")
+{
+    CHECK(check(inClick("", "    Dim g(,) As Integer\n    ReDim g(2, 3)\n    g(1, 1) = 4\n")) ==
+          "");
+}
+
+TEST_CASE("lexer: ReDim, Preserve and Erase are reserved")
+{
+    for (const char *word : {"redim", "PRESERVE", "Erase"})
+    {
+        CHECK(tf::isReservedKeyword(word));
+    }
+}

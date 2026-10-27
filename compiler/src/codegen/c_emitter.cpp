@@ -155,7 +155,10 @@ private:
             {
                 if (!v->isConst) // a Const's uses are its value: it needs no storage
                 {
-                    out << "static " << declaration(storage(*v), "g_" + v->name) << ";\n";
+                    out << "static "
+                        << (v->rank > 0 ? "tf_array g_" + v->name
+                                        : declaration(storage(*v), "g_" + v->name))
+                        << ";\n";
                 }
             }
             out << '\n';
@@ -200,7 +203,9 @@ private:
         {
             const Variable &p = *proc.parameters[i];
             out += (i == 0 ? "" : ", ") +
-                   declaration(storage(p), std::string(p.byRef ? "*" : "") + "v_" + p.name);
+                   (p.rank > 0
+                        ? "tf_array *v_" + p.name
+                        : declaration(storage(p), std::string(p.byRef ? "*" : "") + "v_" + p.name));
         }
         return out + ")";
     }
@@ -222,8 +227,18 @@ private:
         {
             if (v->type != Type::Error && !v->isConst)
             {
-                out << "    " << declaration(storage(*v), names_.at(v.get())) << " = "
-                    << zero(v->type) << ";\n";
+                out << "    "
+                    << (v->rank > 0
+                            ? "tf_array " + names_.at(v.get()) + " = {0}"
+                            : declaration(storage(*v), names_.at(v.get())) + " = " + zero(v->type))
+                    << ";\n";
+            }
+        }
+        for (const auto &v : proc.locals) // fixed arrays get their size at once
+        {
+            if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
+            {
+                out << "    " << arrayInit(*v, "&" + names_.at(v.get())) << '\n';
             }
         }
         if (proc.isFunction)
@@ -250,7 +265,11 @@ private:
         }
         for (const auto &v : proc.locals)
         {
-            if (v->type == Type::String && !v->isConst)
+            if (v->rank > 0 && v->type != Type::Error)
+            {
+                cleanup_ += " tf_array_free(&" + names_.at(v.get()) + ");";
+            }
+            else if (v->type == Type::String && !v->isConst)
             {
                 cleanup_ += " tf_str_release(" + names_.at(v.get()) + ");";
             }
@@ -292,6 +311,14 @@ private:
     {
         out << "int main(void)\n{\n";
         out << "    tf_runtime_init(" << cString(options_.sourcePath) << ");\n";
+        for (const auto &v : module_.globals)
+        {
+            if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
+            {
+                line(out, v->location);
+                out << "    " << arrayInit(*v, "&g_" + v->name) << '\n';
+            }
+        }
 
         const ControlDef *form = module_.form.get();
         if (form == nullptr)
@@ -393,10 +420,11 @@ private:
                     std::string code;
                     for (const Variable *v : s.declared)
                     {
-                        code +=
-                            (code.empty() ? "" : " ") +
-                            (v->type == Type::String ? "tf_str_assign(&" + names_.at(v) + ", NULL);"
-                                                     : names_.at(v) + " = 0;");
+                        code += (code.empty() ? "" : " ") +
+                                (v->rank > 0 ? "tf_array_erase(&" + names_.at(v) + ");"
+                                 : v->type == Type::String
+                                     ? "tf_str_assign(&" + names_.at(v) + ", NULL);"
+                                     : names_.at(v) + " = 0;");
                     }
                     emitLine(out, s.location, depth, code);
                 }
@@ -430,6 +458,23 @@ private:
         {
             case StmtKind::Assign:
                 code = wrap(scope, assignment(s, scope));
+                // An element or whole-array store fails in the store itself.
+                if (checks_ && (s.target->kind == ExprKind::Index || s.target->rank > 0))
+                {
+                    code += " if (tf_error_pending) " + failJump();
+                }
+                break;
+            case StmtKind::ReDim:
+                code = wrap(scope, reDim(s, scope));
+                code += checks_ ? " if (tf_error_pending) " + failJump() : "";
+                break;
+            case StmtKind::Erase:
+                for (const auto &name : s.args)
+                {
+                    code += (code.empty() ? "" : " ") + std::string("tf_array_erase(") +
+                            arrayRef(*name->variable) + ");";
+                }
+                code += checks_ ? " if (tf_error_pending) " + failJump() : "";
                 break;
             case StmtKind::Call:
                 code = wrap(scope, callStatement(s, scope));
@@ -1005,6 +1050,8 @@ private:
         }
         switch (e.kind)
         {
+            case ExprKind::Index:
+                return true; // an index out of range
             case ExprKind::Unary:
                 return e.text == "-" && (e.type == Type::Integer || e.type == Type::Long);
             case ExprKind::Binary:
@@ -1021,6 +1068,9 @@ private:
                         return e.args[0]->type == Type::String;
                     case Builtin::Val:
                         return true; // a number too large for a Double
+                    case Builtin::LBound:
+                    case Builtin::UBound:
+                        return true; // an empty array, a dimension it does not have
                     default:
                         return false;
                 }
@@ -1111,6 +1161,24 @@ private:
     {
         const Expr &target = *s.target;
 
+        if (target.rank > 0) // b = a: copy the whole array
+        {
+            return "tf_array_copy(" + arrayRef(*target.variable) + ", " +
+                   arrayRef(*s.value->variable) + ");";
+        }
+        if (target.kind == ExprKind::Index)
+        {
+            // Indexes first (left to right), then the value; the element's
+            // address is taken last, after any call that might ReDim.
+            const std::string at = elementAddress(target, scope);
+            const Value v = settle(*s.value, expr(*s.value, scope), scope);
+            if (target.type == Type::String)
+            {
+                return "tf_str_assign((tf_string **)" + at + ", " + ownedCode(v) + ");";
+            }
+            return "*" + pointerCast(storage(target)) + at + " = " + v.code + ";";
+        }
+
         if (target.kind == ExprKind::Member)
         {
             const ControlDef *control = target.left->control;
@@ -1145,30 +1213,44 @@ private:
     std::string callStatement(const Stmt &s, StatementScope &scope)
     {
         const Procedure &callee = *s.procedure;
-        const std::string call = "p_" + callee.name + "(" + arguments(callee, s.args, scope) + ")";
-        if (!callee.isFunction)
-        {
-            return call + ";";
-        }
-        if (callee.result->type == Type::String)
-        {
-            return "tf_str_release(" + call + ");";
-        }
-        return "(void)" + call + ";";
+        std::vector<std::string> locks;
+        const std::string call =
+            "p_" + callee.name + "(" + arguments(callee, s.args, scope, locks) + ")";
+        const std::string statement = !callee.isFunction ? call + ";"
+                                      : callee.result->type == Type::String
+                                          ? "tf_str_release(" + call + ");"
+                                          : "(void)" + call + ";";
+        return lockedAround(locks, statement);
     }
 
     // ByRef arguments pass the variable's address; ByVal Strings are
     // borrowed for the duration of the call (the callee takes its own
     // reference).
     std::string arguments(const Procedure &callee, const std::vector<ExprPtr> &args,
-                          StatementScope &scope)
+                          StatementScope &scope, std::vector<std::string> &locks)
     {
         std::string out;
         for (std::size_t i = 0; i < args.size(); ++i)
         {
             const Variable &param = *callee.parameters[i];
             std::string code;
-            if (param.byRef)
+            if (param.rank > 0)
+            {
+                code = arrayRef(*args[i]->variable); // arrays always go by pointer
+            }
+            else if (param.byRef && args[i]->kind == ExprKind::Index)
+            {
+                // An element ByRef: find it (index checked) before the call,
+                // and lock its array meanwhile so a ReDim cannot move it.
+                const std::string temp = scope.newTemp();
+                const std::string cast = pointerCast(storage(*args[i])); // "(int32_t *)"
+                scope.prelude.push_back(cast.substr(1, cast.size() - 2) + temp + " = " + cast +
+                                        elementAddress(*args[i], scope) + ";");
+                checkpoint(scope);
+                locks.push_back(arrayRef(*args[i]->variable));
+                code = temp;
+            }
+            else if (param.byRef)
             {
                 code = variableAddress(*args[i]->variable);
             }
@@ -1293,6 +1375,19 @@ private:
                 }
                 return {variableValue(v), false};
             }
+            case ExprKind::Index:
+            {
+                const Variable &v = *e.variable;
+                const std::string read =
+                    "(*" + pointerCast(storage(e)) + elementAddress(e, scope) + ")";
+                const bool reachable =
+                    v.isModuleLevel || v.byRef || v.isParameter || scope.passedByRef.count(&v);
+                if (scope.pendingCalls > 0 && reachable)
+                {
+                    return snapshot(storage(e), read, scope);
+                }
+                return {read, false};
+            }
             case ExprKind::Member:
                 if (scope.pendingCalls > 0)
                 {
@@ -1326,9 +1421,20 @@ private:
         // need no protection from it; only from calls after it.
         --scope.pendingCalls;
         const Procedure &callee = *e.procedure;
-        const std::string code = "p_" + callee.name + "(" + arguments(callee, e.args, scope) + ")";
+        std::vector<std::string> locks;
+        const std::string code =
+            "p_" + callee.name + "(" + arguments(callee, e.args, scope, locks) + ")";
         const std::string temp = scope.newTemp();
-        scope.prelude.push_back(declaration(storage(*callee.result), temp) + " = " + code + ";");
+        if (locks.empty())
+        {
+            scope.prelude.push_back(declaration(storage(*callee.result), temp) + " = " + code +
+                                    ";");
+        }
+        else
+        {
+            scope.prelude.push_back(declaration(storage(*callee.result), temp) + ";");
+            scope.prelude.push_back(lockedAround(locks, temp + " = " + code + ";"));
+        }
         if (callee.result->type == Type::String)
         {
             scope.releases.push_back(temp);
@@ -1426,6 +1532,15 @@ private:
     // Conversions and number functions (see tf_runtime.h for their rules).
     Value builtin(const Expr &e, StatementScope &scope)
     {
+        if (e.builtin == Builtin::LBound || e.builtin == Builtin::UBound)
+        {
+            const std::string dimension =
+                e.args.size() > 1 ? settle(*e.args[1], expr(*e.args[1], scope), scope).code : "1";
+            return {std::string(e.builtin == Builtin::LBound ? "tf_array_lbound("
+                                                             : "tf_array_ubound(") +
+                        arrayRef(*e.args[0]->variable) + ", " + dimension + ")",
+                    false};
+        }
         const Expr &arg = *e.args[0];
         const Type t = storage(arg); // CType to an Enum and CInt of one convert numbers
         if (e.builtin == Builtin::CStr)
@@ -1573,6 +1688,120 @@ private:
             text += ".0";
         }
         return text;
+    }
+
+    // -- Arrays --------------------------------------------------------------
+
+    // The array as a tf_array *: parameters already are pointers.
+    std::string arrayRef(const Variable &v) const
+    {
+        return (v.isParameter ? "" : "&") + variableName(v);
+    }
+
+    static const char *elemKind(const Variable &v)
+    {
+        switch (storage(v))
+        {
+            case Type::Long:
+                return "TF_ELEM_I64";
+            case Type::Double:
+                return "TF_ELEM_F64";
+            case Type::Boolean:
+                return "TF_ELEM_BOOL";
+            case Type::String:
+                return "TF_ELEM_STRING";
+            default:
+                return "TF_ELEM_I32";
+        }
+    }
+
+    // "(int32_t *)", "(tf_string **)": an element address as its type.
+    static std::string pointerCast(Type t)
+    {
+        const std::string type = cType(t);
+        return "(" + type + (type.back() == '*' ? "*" : " *") + ")";
+    }
+
+    // "(const int32_t[]){10, 20}": a shape for the runtime.
+    static std::string shapeList(const std::vector<std::string> &bounds)
+    {
+        std::string out = "(const int32_t[]){";
+        for (std::size_t i = 0; i < bounds.size(); ++i)
+        {
+            out += (i == 0 ? "" : ", ") + bounds[i];
+        }
+        return out + "}";
+    }
+
+    std::string arrayInit(const Variable &v, const std::string &ref) const
+    {
+        std::vector<std::string> bounds;
+        for (std::int32_t u : v.upper)
+        {
+            bounds.push_back(std::to_string(u));
+        }
+        return "tf_array_init(" + ref + ", " + elemKind(v) + ", " + std::to_string(v.rank) + ", " +
+               shapeList(bounds) + ");";
+    }
+
+    // The address of an element, its indexes checked: tf_array_at1(&v_a, i).
+    std::string elementAddress(const Expr &e, StatementScope &scope)
+    {
+        std::vector<std::string> indexes;
+        for (const auto &index : e.args)
+        {
+            indexes.push_back(settle(*index, expr(*index, scope), scope).code);
+        }
+        const std::string ref = arrayRef(*e.variable);
+        if (indexes.size() == 1)
+        {
+            return "tf_array_at1(" + ref + ", " + indexes[0] + ")";
+        }
+        if (indexes.size() == 2)
+        {
+            return "tf_array_at2(" + ref + ", " + indexes[0] + ", " + indexes[1] + ")";
+        }
+        std::string list = "(const int64_t[]){";
+        for (std::size_t i = 0; i < indexes.size(); ++i)
+        {
+            list += (i == 0 ? "" : ", ") + indexes[i];
+        }
+        return "tf_array_atn(" + ref + ", " + std::to_string(indexes.size()) + ", " + list + "})";
+    }
+
+    // ReDim [Preserve] a(n, m), ...
+    std::string reDim(const Stmt &s, StatementScope &scope)
+    {
+        std::string out;
+        for (const auto &target : s.args)
+        {
+            std::vector<std::string> bounds;
+            for (const auto &bound : target->args)
+            {
+                bounds.push_back(settle(*bound, expr(*bound, scope), scope).code);
+            }
+            const Variable &v = *target->variable;
+            out += (out.empty() ? "" : " ") + std::string("tf_array_redim(") + arrayRef(v) + ", " +
+                   elemKind(v) + ", " + (s.preserve ? "1" : "0") + ", " + std::to_string(v.rank) +
+                   ", " + shapeList(bounds) + ");";
+        }
+        return out;
+    }
+
+    // "lock(a); code unlock(a);" around a call that receives elements ByRef.
+    static std::string lockedAround(const std::vector<std::string> &locks, const std::string &code)
+    {
+        std::string out;
+        for (const std::string &ref : locks)
+        {
+            out += "tf_array_lock(" + ref + "); ";
+        }
+        out += code;
+        for (const std::string &ref : locks)
+        {
+            out += " tf_array_unlock(" + ref + ");";
+        }
+        return out;
     }
 
     // The type a value is stored as in C: an Enum as its underlying type.

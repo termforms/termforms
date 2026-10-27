@@ -78,8 +78,11 @@ authoritative for design rationale.
   2026), including **End inside a Try runs no Finally** (documented in
   REFERENCE.md and LANGUAGE.md), and the rest of the error rules. Nothing
   in REFERENCE.md is Proposed at present.
-- **Next:** Phase 3 step 5 (arrays, Types and Ref, Dictionary), or Phase 4
-  work; ask Jim.
+  Step 5a done (27 Oct 2026): arrays (multi-dimensional, 0-based, fixed vs
+  dynamic, ReDim [Preserve], Erase, UBound/LBound, copies on assignment,
+  array parameters, element ByRef locks its array).
+- **Next:** step 5b (Types and Ref: settle the open details with Jim
+  first), then 5c (Dictionary: settle its design first).
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -240,6 +243,14 @@ Key mechanisms:
   through `TypeInfo` (`assignable`, `article`), and `lowered()` / codegen's
   `storage()` turn an Enum into its underlying Integer/Long. `CType(x, E)`
   is checked as CInt/CLng (`checkCType`), so it needs no code of its own.
+- **Arrays in C:** a `tf_array` value per array (locals `= {0}`, globals
+  static), parameters `tf_array *`; fixed ones `tf_array_init` at
+  procedure entry (globals in `main`), all locals `tf_array_free` at End
+  Sub. Elements via `tf_array_at1/at2/atn` (checked; a bad index returns a
+  scratch element so the statement's check can run). An element passed
+  ByRef: its address is taken and checked first, then the array is
+  locked around the call (`lockedAround`). Sema turns `a(i)` Calls into
+  `ExprKind::Index`; a bare array name is accepted only via `wholeArray`.
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in

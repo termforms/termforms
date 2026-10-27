@@ -89,6 +89,10 @@ const char *tf_error_text(int32_t number)
             return "Overflow";
         case TF_ERR_OUT_OF_MEMORY:
             return "Out of memory";
+        case TF_ERR_SUBSCRIPT:
+            return "Subscript out of range";
+        case TF_ERR_ARRAY_LOCKED:
+            return "This array is fixed or temporarily locked";
         case TF_ERR_DIVISION_BY_ZERO:
             return "Division by zero";
         case TF_ERR_TYPE_MISMATCH:

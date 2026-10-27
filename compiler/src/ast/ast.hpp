@@ -60,8 +60,13 @@ enum class Builtin
     Str, // Str or Str$
     Val,
     Fix,
-    Int
+    Int,
+    LBound,
+    UBound
 };
+
+// The most dimensions an array may have (TF_ARRAY_MAX_RANK in tf_runtime.h).
+constexpr int kMaxArrayRank = 8;
 
 struct Expr;
 
@@ -96,6 +101,7 @@ enum class ExprKind
     IntegerLiteral, // Integer or Long, by value and suffix
     DoubleLiteral,
     Constant, // a Const or Enum member, replaced by its value by the semantic pass
+    Index,    // a(i, j): an array element (parsed as a Call; the semantic pass decides)
     StringLiteral,
     BooleanLiteral,
     Name,   // a variable, control or form
@@ -130,6 +136,7 @@ struct Expr
     // Resolved by the semantic pass.
     bool isErr = false;               // Name: the built-in Err object
     const EnumDef *enumDef = nullptr; // when type is Enum
+    int rank = 0; // a Name that is a whole array: its dimensions (0: not an array)
     // CType(value, type): the target type, written as convertTo or, for an
     // Enum, by name. The semantic pass turns it into a CInt/CLng/... call.
     Type convertTo = Type::Error;
@@ -160,6 +167,8 @@ enum class StmtKind
     Throw,    // Throw [number [, description]]; Err.Raise number [, source [, desc]]
     ErrClear, // Err.Clear
     Const,    // Const name [As type] = value, ...: declared holds the names
+    ReDim,    // ReDim [Preserve] a(bounds), ...: args are a(bounds) as Call shapes
+    Erase,    // Erase a, ...: args are the array names
     End       // the End statement: terminate the program
 };
 
@@ -236,6 +245,8 @@ struct Stmt
     // viaErrRaise they are Err.Raise's number, source and description.
     bool viaErrRaise = false;
 
+    bool preserve = false; // ReDim Preserve
+
     // Exit: which construct it leaves ("For", "Do", "While", "Sub",
     // "Function"), and for loops the loop statement, resolved.
     std::string exitWhat;
@@ -258,6 +269,14 @@ struct Variable
     double constReal = 0;
     std::string constText;
     bool constReady = false; // its value has been worked out
+
+    // Arrays: rank > 0. A fixed array (Dim a(10, 20)) has its upper bounds
+    // as written (bounds) and worked out (upper); a dynamic one (Dim a(),
+    // Dim a(,)) or an array parameter has neither until ReDim or the call.
+    int rank = 0;
+    bool isDynamic = false;
+    std::vector<std::unique_ptr<Expr>> bounds;
+    std::vector<std::int32_t> upper;
     bool isModuleLevel = false;
     bool isParameter = false;
     bool byRef = false;    // parameters only

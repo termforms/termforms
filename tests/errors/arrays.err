@@ -1,0 +1,23 @@
+arrays.bas:9:5: error: the array 'values' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+arrays.bas:10:11: error: the array 'values' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+arrays.bas:11:11: error: the array 'values' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+arrays.bas:20:15: error: the size of a fixed array must be a constant; for a size known only when running, use Dim sized() and ReDim sized(n)
+arrays.bas:21:9: error: an array has at most 8 dimensions
+arrays.bas:22:5: error: 'a' has 1 dimension, so it needs 1 index, not 2
+arrays.bas:23:5: error: 'g' has 2 dimensions, so it needs 2 indexes, not 1
+arrays.bas:24:7: error: an array index must be a whole number, not a Double; use CInt or CLng
+arrays.bas:25:9: error: 'a' is an array; use an element, as in a(0)
+arrays.bas:26:5: error: 'a' is a fixed array and cannot be assigned to; declare it Dim a() to copy arrays into it
+arrays.bas:27:11: error: cannot assign an array of Long with 1 dimension to an array of Integer with 1 dimension
+arrays.bas:28:11: error: assigning to an array needs an array here
+arrays.bas:29:11: error: 'a' is a fixed array; only a dynamic array (Dim a()) can be ReDim'd
+arrays.bas:30:11: error: 'dyn' has 1 dimension, so ReDim needs 1 bound, not 2
+arrays.bas:31:15: error: an array bound must be an Integer, not a Double; use CInt
+arrays.bas:32:11: error: ReDim needs an array, declared with Dim n()
+arrays.bas:33:9: error: cannot assign an Integer to a String (Option Strict); use CStr(value) to convert
+arrays.bas:34:10: error: argument 1 of 'Look' must be an array of Integer with 1 dimension, not of String with 2 dimensions
+arrays.bas:35:12: error: argument 1 of 'Change' needs an array here
+arrays.bas:36:19: error: 'a' has 1 dimension: the dimension must be 1 to 1
+arrays.bas:37:16: error: UBound needs an array here
+arrays.bas:38:11: error: Erase needs an array here
+arrays.bas:42:12: error: the array 'values' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it

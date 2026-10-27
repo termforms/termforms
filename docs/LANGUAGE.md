@@ -6,7 +6,8 @@ each phase; the full design lives in the project's design documents.
 Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
 language core step by step; so far: Sub and Function with parameters, the
-loops, Long and Double, Try/Catch, Const and Enum. `docs/REFERENCE.md` has every rule
+loops, Long and Double, Try/Catch, Const and Enum, and arrays.
+`docs/REFERENCE.md` has every rule
 as decided, including the ones not built yet.
 
 ## Rules that differ from VB
@@ -15,8 +16,8 @@ as decided, including the ones not built yet.
   variables. Keywords are not: `dim`, `Dim` and `DIM` all work. The compiler
   warns when a Sub looks like an event handler but its case does not match
   the control, because such a Sub would never be called.
-- **Arrays will be 0-based** (when they arrive): `Dim a(10)` gives 11
-  elements, `a(0)` to `a(10)`. There is no `Option Base`.
+- **Arrays are 0-based**: `Dim a(10)` gives 11 elements, `a(0)` to
+  `a(10)`. There is no `Option Base`, and no `Dim a(1 To 10)`.
 - **Parameters are ByVal by default** (VB.NET, not VB6). Write `ByRef` in
   the signature to let a Sub change the caller's variable.
 - **A `Dim` inside a block** (If, For, Do, While) is visible only inside it,
@@ -59,6 +60,7 @@ End Sub
 | Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `Try ... Catch ... Finally`, `Throw`, `Err.Raise`, `Err.Clear`, `End` |
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
 | Constants | `Const` (module level or in a procedure), `Enum ... End Enum` (Integer or `As Long`), `CType(value, type)` |
+| Arrays | fixed `Dim a(9)`, `Dim g(24, 79)`; dynamic `Dim a()`, `Dim t(,)` with `ReDim [Preserve]`; `Erase`, `UBound`, `LBound`; array parameters |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -115,6 +117,28 @@ s = CType(n, Status)                ' a number becomes a Status only with CType
 - An Enum is its own type: a `Status` variable takes only Status values,
   and Status and another Enum cannot be compared. As text an Enum value is
   its number.
+
+## Arrays
+
+```vb
+Dim scores(9) As Integer            ' fixed: scores(0) to scores(9)
+Dim names() As String               ' dynamic: empty until ReDim
+ReDim names(2)
+names(0) = "Ann"
+ReDim Preserve names(UBound(names) + 1)   ' grow, keeping the contents
+
+Function Total(values() As Integer) As Integer   ' an array parameter
+    Dim i As Integer
+    For i = 0 To UBound(values)
+        Total = Total + values(i)
+    Next
+End Function
+```
+
+- Only a dynamic array (`Dim a()`, `Dim t(,)` for two dimensions) can be
+  ReDim'd; a fixed array's size is a constant. `b = a` copies the elements.
+- An index outside the array is error 9. An array parameter is read-only
+  unless it is ByRef.
 
 ## Errors
 

@@ -33,10 +33,12 @@ struct BuiltinInfo
     bool dollarForm; // may also be written with $ (Str$)
 };
 
-constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false}, {"CLng", Builtin::CLng, false},
-                                     {"CDbl", Builtin::CDbl, false}, {"CStr", Builtin::CStr, false},
-                                     {"Str", Builtin::Str, true},    {"Val", Builtin::Val, false},
-                                     {"Fix", Builtin::Fix, false},   {"Int", Builtin::Int, false}};
+constexpr BuiltinInfo kBuiltins[] = {
+    {"CInt", Builtin::CInt, false},     {"CLng", Builtin::CLng, false},
+    {"CDbl", Builtin::CDbl, false},     {"CStr", Builtin::CStr, false},
+    {"Str", Builtin::Str, true},        {"Val", Builtin::Val, false},
+    {"Fix", Builtin::Fix, false},       {"Int", Builtin::Int, false},
+    {"LBound", Builtin::LBound, false}, {"UBound", Builtin::UBound, false}};
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -95,6 +97,13 @@ public:
         registerGlobals();
         registerProcedures();
         evaluateModuleConstants();
+        for (auto &v : module_.globals) // bounds may use the module's Consts
+        {
+            if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
+            {
+                resolveShape(*v);
+            }
+        }
         for (auto &proc : module_.procedures)
         {
             wireEvent(*proc);
@@ -404,6 +413,12 @@ private:
             case StmtKind::Const:
                 checkLocalConst(s);
                 break;
+            case StmtKind::ReDim:
+                checkReDim(s);
+                break;
+            case StmtKind::Erase:
+                checkErase(s);
+                break;
             case StmtKind::ErrClear:
             case StmtKind::End:
                 break;
@@ -417,6 +432,14 @@ private:
         if (v.type == Type::Error || !resolveType(v))
         {
             return; // already reported
+        }
+        if (v.rank > 0 && !v.isDynamic && !v.isParameter)
+        {
+            resolveShape(v);
+            if (v.type == Type::Error)
+            {
+                return;
+            }
         }
         if (const Variable *existing = lookupLocal(v.name))
         {
@@ -475,6 +498,14 @@ private:
     void checkAssignment(Stmt &s)
     {
         Expr &target = *s.target;
+        if (target.kind == ExprKind::Name)
+        {
+            if (Variable *v = lookupVariable(target.text); v != nullptr && v->rank > 0)
+            {
+                checkArrayAssignment(s, *v);
+                return;
+            }
+        }
         checkExpr(*s.value);
         if (target.kind == ExprKind::Name)
         {
@@ -505,6 +536,14 @@ private:
         if (target.kind == ExprKind::Constant)
         {
             diagnostics_.error(target.location, "an Enum member cannot be assigned to");
+            return;
+        }
+        if (target.kind == ExprKind::Index)
+        {
+            if (!readOnlyArray(*target.variable, target.location))
+            {
+                requireAssignable(infoOf(target), infoOf(*s.value), s.value->location);
+            }
             return;
         }
         if (target.kind == ExprKind::Name || target.kind == ExprKind::Member)
@@ -648,11 +687,20 @@ private:
     // the callee writes through it.
     void checkArguments(const Procedure &callee, std::vector<ExprPtr> &args, Location where)
     {
-        for (auto &arg : args)
-        {
-            checkExpr(*arg);
-        }
         const std::size_t want = callee.parameters.size();
+        for (std::size_t i = 0; i < args.size(); ++i)
+        {
+            // An array parameter takes a whole array; anything else a value.
+            const Variable *param = i < want ? callee.parameters[i].get() : nullptr;
+            if (param != nullptr && param->rank > 0)
+            {
+                checkArrayArgument(callee, i, *param, *args[i]);
+            }
+            else
+            {
+                checkExpr(*args[i]);
+            }
+        }
         if (args.size() != want)
         {
             diagnostics_.error(where, "'" + callee.name + "' takes " + std::to_string(want) +
@@ -664,17 +712,21 @@ private:
         {
             const Variable &param = *callee.parameters[i];
             const Expr &arg = *args[i];
-            if (param.type == Type::Error || arg.type == Type::Error)
+            if (param.type == Type::Error || arg.type == Type::Error || param.rank > 0)
             {
-                continue;
+                continue; // array arguments were checked above
             }
             const std::string which =
                 "argument " + std::to_string(i + 1) + " of '" + callee.name + "'";
             if (param.byRef)
             {
-                if (arg.kind != ExprKind::Name || arg.variable == nullptr)
+                const bool element = arg.kind == ExprKind::Index;
+                if ((arg.kind != ExprKind::Name || arg.variable == nullptr) && !element)
                 {
                     diagnostics_.error(arg.location, which + " is ByRef, so it must be a variable");
+                }
+                else if (element && readOnlyArray(*arg.variable, arg.location))
+                {
                 }
                 else if (arg.type != param.type || arg.enumDef != param.enumDef)
                 {
@@ -700,6 +752,13 @@ private:
         if (e.convertTo != Type::Error)
         {
             return checkCType(e);
+        }
+        if (current_ != nullptr)
+        {
+            if (Variable *v = lookupVariable(e.text); v != nullptr && v->rank > 0)
+            {
+                return checkIndex(e, *v);
+            }
         }
         e.procedure = findProcedure(e.text);
         if (e.procedure == nullptr)
@@ -736,6 +795,10 @@ private:
     // Conversions and number functions; each takes one argument.
     Type checkBuiltin(Expr &e, const BuiltinInfo &b)
     {
+        if (b.id == Builtin::LBound || b.id == Builtin::UBound)
+        {
+            return checkBounds(e, b);
+        }
         e.builtin = b.id;
         const std::string name = e.text + (e.suffix != 0 ? std::string(1, e.suffix) : ""); // Str$
         for (auto &arg : e.args)
@@ -783,6 +846,8 @@ private:
             case Builtin::Fix:
             case Builtin::Int:
                 return isNumeric(t) ? t : wrongArgument("a number");
+            case Builtin::LBound: // handled by checkBounds
+            case Builtin::UBound:
             case Builtin::None:
                 break;
         }
@@ -1365,6 +1430,288 @@ private:
                                                               : typeName(info.type);
     }
 
+    // -- Arrays ------------------------------------------------------------
+
+    Variable *lookupVariable(const std::string &name)
+    {
+        if (Variable *v = current_ != nullptr ? lookupLocal(name) : nullptr)
+        {
+            return v;
+        }
+        auto g = globals_.find(name);
+        return g == globals_.end() ? nullptr : g->second;
+    }
+
+    // A fixed array's upper bounds must be known when compiling (use
+    // Dim a() and ReDim for a size known only when running).
+    void resolveShape(Variable &v)
+    {
+        if (v.rank > kMaxArrayRank)
+        {
+            diagnostics_.error(v.location, "an array has at most " + std::to_string(kMaxArrayRank) +
+                                               " dimensions");
+            v.type = Type::Error;
+            return;
+        }
+        for (auto &bound : v.bounds)
+        {
+            checkExpr(*bound);
+            const auto value = fold(*bound);
+            if (!value)
+            {
+                if (!foldReported_)
+                {
+                    diagnostics_.error(bound->location,
+                                       "the size of a fixed array must be a constant; for a size "
+                                       "known only when running, use Dim " +
+                                           v.name + "() and ReDim " + v.name + "(n)");
+                }
+                foldReported_ = false;
+                v.type = Type::Error;
+                return;
+            }
+            const Type t = lowered(TypeInfo{value->type, value->def});
+            if (t != Type::Integer && t != Type::Long)
+            {
+                diagnostics_.error(bound->location, "an array bound must be a whole number, not " +
+                                                        article(TypeInfo{value->type, value->def}));
+                v.type = Type::Error;
+                return;
+            }
+            if (value->integer < 0 || value->integer > INT32_MAX)
+            {
+                diagnostics_.error(bound->location,
+                                   "an array's upper bound must be from 0 to 2147483647 (arrays "
+                                   "start at 0)");
+                v.type = Type::Error;
+                return;
+            }
+            v.upper.push_back(static_cast<std::int32_t>(value->integer));
+        }
+    }
+
+    // A bare array name where a whole array is wanted (b = a, ReDim, Erase,
+    // UBound, an array argument). Null, after an error, if it is not one.
+    Variable *wholeArray(Expr &e, const char *context)
+    {
+        Variable *v = e.kind == ExprKind::Name ? lookupVariable(e.text) : nullptr;
+        if (v == nullptr || v->rank == 0)
+        {
+            if (v == nullptr && e.kind == ExprKind::Name)
+            {
+                checkExpr(e); // reports the undeclared name
+            }
+            else
+            {
+                checkExpr(e);
+                diagnostics_.error(e.location, std::string(context) + " needs an array here");
+            }
+            return nullptr;
+        }
+        e.variable = v;
+        e.type = v->type;
+        e.enumDef = v->enumDef;
+        e.rank = v->rank;
+        return v;
+    }
+
+    // "the array 'a' is ByVal here": its elements and size cannot change.
+    bool readOnlyArray(const Variable &v, Location where)
+    {
+        if (v.isParameter && !v.byRef)
+        {
+            diagnostics_.error(where, "the array '" + v.name +
+                                          "' is a ByVal parameter, so it cannot be changed here; "
+                                          "make it ByRef to change it");
+            return true;
+        }
+        return false;
+    }
+
+    static std::string dimensions(int rank)
+    {
+        return rank == 1 ? "1 dimension" : std::to_string(rank) + " dimensions";
+    }
+
+    // a(i, j): one whole-number index per dimension.
+    Type checkIndex(Expr &e, Variable &v)
+    {
+        e.kind = ExprKind::Index;
+        e.variable = &v;
+        e.enumDef = v.enumDef;
+        bool ok = true;
+        for (auto &index : e.args)
+        {
+            checkExpr(*index);
+            const Type t = lowered(infoOf(*index));
+            if (t != Type::Integer && t != Type::Long && t != Type::Error)
+            {
+                diagnostics_.error(index->location, "an array index must be a whole number, not " +
+                                                        article(infoOf(*index)) +
+                                                        "; use CInt or CLng");
+                ok = false;
+            }
+        }
+        if (static_cast<int>(e.args.size()) != v.rank)
+        {
+            diagnostics_.error(e.location, "'" + v.name + "' has " + dimensions(v.rank) +
+                                               ", so it needs " + std::to_string(v.rank) +
+                                               (v.rank == 1 ? " index" : " indexes") + ", not " +
+                                               std::to_string(e.args.size()));
+            ok = false;
+        }
+        return ok ? v.type : Type::Error;
+    }
+
+    // b = a: copies the elements; b must be dynamic (or an array parameter
+    // passed ByRef) and of the same element type and dimensions.
+    void checkArrayAssignment(Stmt &s, Variable &target)
+    {
+        wholeArray(*s.target, "assignment");
+        Variable *source = wholeArray(*s.value, "assigning to an array");
+        if (source == nullptr || readOnlyArray(target, s.target->location))
+        {
+            return;
+        }
+        if (!target.isDynamic)
+        {
+            diagnostics_.error(s.target->location, "'" + target.name +
+                                                       "' is a fixed array and cannot be assigned "
+                                                       "to; declare it Dim " +
+                                                       target.name + "() to copy arrays into it");
+            return;
+        }
+        if (source->type != target.type || source->enumDef != target.enumDef ||
+            source->rank != target.rank)
+        {
+            diagnostics_.error(s.value->location,
+                               "cannot assign an array of " + name(infoOf(*source)) + " with " +
+                                   dimensions(source->rank) + " to an array of " +
+                                   name(infoOf(target)) + " with " + dimensions(target.rank));
+        }
+    }
+
+    // ReDim [Preserve] a(n, m), ...
+    void checkReDim(Stmt &s)
+    {
+        for (auto &target : s.args)
+        {
+            Variable *v = lookupVariable(target->text);
+            for (auto &bound : target->args)
+            {
+                checkExpr(*bound);
+                const Type t = lowered(infoOf(*bound));
+                if (t != Type::Integer && t != Type::Error)
+                {
+                    diagnostics_.error(
+                        bound->location,
+                        "an array bound must be an Integer, not " + article(infoOf(*bound)) +
+                            (t == Type::Long || t == Type::Double ? "; use CInt" : ""));
+                }
+            }
+            if (v == nullptr || v->rank == 0)
+            {
+                diagnostics_.error(target->location, "ReDim needs an array, declared with Dim " +
+                                                         target->text + "()");
+                continue;
+            }
+            target->variable = v;
+            if (readOnlyArray(*v, target->location))
+            {
+                continue;
+            }
+            if (!v->isDynamic)
+            {
+                diagnostics_.error(target->location,
+                                   "'" + v->name +
+                                       "' is a fixed array; only a dynamic array (Dim " + v->name +
+                                       "()) can be ReDim'd");
+                continue;
+            }
+            if (static_cast<int>(target->args.size()) != v->rank)
+            {
+                diagnostics_.error(target->location,
+                                   "'" + v->name + "' has " + dimensions(v->rank) +
+                                       ", so ReDim needs " + std::to_string(v->rank) +
+                                       (v->rank == 1 ? " bound" : " bounds") + ", not " +
+                                       std::to_string(target->args.size()));
+            }
+        }
+    }
+
+    void checkErase(Stmt &s)
+    {
+        for (auto &name : s.args)
+        {
+            if (Variable *v = wholeArray(*name, "Erase"))
+            {
+                readOnlyArray(*v, name->location);
+            }
+        }
+    }
+
+    // UBound(a [, dimension]) and LBound: an Integer.
+    Type checkBounds(Expr &e, const BuiltinInfo &b)
+    {
+        e.builtin = b.id;
+        if (e.args.empty() || e.args.size() > 2)
+        {
+            for (auto &arg : e.args)
+            {
+                checkExpr(*arg);
+            }
+            diagnostics_.error(e.location, std::string("'") + b.name +
+                                               "' takes an array and, optionally, a dimension");
+            return Type::Error;
+        }
+        Variable *v = wholeArray(*e.args[0], b.name);
+        if (e.args.size() == 2)
+        {
+            checkExpr(*e.args[1]);
+            if (lowered(infoOf(*e.args[1])) != Type::Integer)
+            {
+                diagnostics_.error(e.args[1]->location, "the dimension must be an Integer, not " +
+                                                            article(infoOf(*e.args[1])));
+                return Type::Error;
+            }
+            const auto d = fold(*e.args[1]);
+            foldReported_ = false;
+            if (v != nullptr && d && (d->integer < 1 || d->integer > v->rank))
+            {
+                diagnostics_.error(e.args[1]->location,
+                                   "'" + v->name + "' has " + dimensions(v->rank) +
+                                       ": the dimension must be 1 to " + std::to_string(v->rank));
+                return Type::Error;
+            }
+        }
+        return v != nullptr ? Type::Integer : Type::Error;
+    }
+
+    // An array argument: a whole array of the parameter's element type and
+    // dimensions. ByRef lets the callee change or ReDim it, so a ByVal
+    // array parameter of the caller cannot be passed on that way.
+    void checkArrayArgument(const Procedure &callee, std::size_t i, const Variable &param,
+                            Expr &arg)
+    {
+        const std::string which = "argument " + std::to_string(i + 1) + " of '" + callee.name + "'";
+        Variable *v = wholeArray(arg, which.c_str());
+        if (v == nullptr || param.type == Type::Error)
+        {
+            return;
+        }
+        if (v->type != param.type || v->enumDef != param.enumDef || v->rank != param.rank)
+        {
+            diagnostics_.error(arg.location, which + " must be an array of " + name(infoOf(param)) +
+                                                 " with " + dimensions(param.rank) + ", not of " +
+                                                 name(infoOf(*v)) + " with " + dimensions(v->rank));
+            return;
+        }
+        if (param.byRef)
+        {
+            readOnlyArray(*v, arg.location);
+        }
+    }
+
     // -- Errors ------------------------------------------------------------
 
     void checkTry(Stmt &s)
@@ -1603,6 +1950,8 @@ private:
                 return Type::Double;
             case ExprKind::Constant:
                 return e.type; // set when the Const or member was replaced
+            case ExprKind::Index:
+                return e.type; // already checked as a Call, which it was parsed as
             case ExprKind::StringLiteral:
                 return Type::String;
             case ExprKind::BooleanLiteral:
@@ -1650,6 +1999,14 @@ private:
                 return Type::Error;
             }
             return makeConstant(e, *v);
+        }
+        if (v != nullptr && v->rank > 0)
+        {
+            const std::string commas(static_cast<std::size_t>(v->rank - 1), ',');
+            diagnostics_.error(e.location,
+                               "'" + e.text + "' is an array; use an element, as in " + e.text +
+                                   "(" + (v->rank == 1 ? "0" : "0" + std::string(commas)) + ")");
+            return Type::Error;
         }
         if (v != nullptr)
         {

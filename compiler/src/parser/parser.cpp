@@ -11,12 +11,16 @@
 //   sub        := SUB name [params] EOS block END SUB EOS
 //   function   := FUNCTION name [params] [AS type] EOS block END FUNCTION EOS
 //   params     := '(' [param { ',' param }] ')'
-//   param      := [BYVAL | BYREF] name [AS type]
+//   param      := [BYVAL | BYREF] name ['(' { ',' } ')'] [AS type]
 //   statement  := dim | if | for | do | while | try | EXIT what | RETURN [expr]
 //               | THROW [expr [',' expr]] | Err.Raise args | Err.Clear
 //               | CALL name ['(' [args] ')'] | END
 //               | target '=' expr | name [args] | name '(' [args] ')'
-//   dim        := DIM name [AS type] { ',' name [AS type] }
+//   dim        := DIM name [shape] [AS type] { ',' name [shape] [AS type] }
+//   shape      := '(' expr { ',' expr } ')'   a fixed array: upper bounds
+//               | '(' { ',' } ')'             a dynamic array: () or (,) ...
+//   redim      := REDIM [PRESERVE] name '(' expr { ',' expr } ')' { ',' ... }
+//   erase      := ERASE name { ',' name }
 //   const      := CONST name [AS type] '=' expr { ',' name [AS type] '=' expr }
 //   enum       := ENUM name [AS type] EOS { name ['=' expr] EOS } END ENUM
 //   type       := INTEGER | LONG | DOUBLE | STRING | BOOLEAN | name (an Enum)
@@ -438,6 +442,10 @@ private:
                 return;
             }
             p->type = typeFromSuffix(suffix);
+            if (peek().isSymbol("("))
+            {
+                parseShape(*p, false);
+            }
             parseOptionalAs(*p, "parameter '" + p->name + "'");
             proc.parameters.push_back(std::move(p));
             if (!acceptSymbol(","))
@@ -445,6 +453,45 @@ private:
                 return;
             }
         }
+    }
+
+    // An array's "(...)": "(10, 20)" gives a fixed array its upper bounds
+    // (only in a Dim); "()" or "(,)" a dynamic array or array parameter of
+    // that many dimensions.
+    void parseShape(Variable &v, bool boundsAllowed)
+    {
+        next(); // '('
+        if (peek().isSymbol(")") || peek().isSymbol(","))
+        {
+            v.rank = 1;
+            while (acceptSymbol(","))
+            {
+                ++v.rank;
+            }
+            v.isDynamic = true;
+            expectSymbol(")");
+            return;
+        }
+        if (!boundsAllowed)
+        {
+            error(peek().location,
+                  "an array parameter has no size: write " + v.name + "() or " + v.name + "(,)");
+        }
+        do
+        {
+            ExprPtr bound = parseExpression();
+            if (peek().isKeyword("TO"))
+            {
+                // Arrays start at 0 (decided 27 Oct 2026): no lower bounds.
+                error(peek().location, "arrays start at 0: write " + v.name +
+                                           "(n) for elements 0 to n, not a range with 'To'");
+                next();
+                bound = parseExpression();
+            }
+            v.bounds.push_back(std::move(bound));
+        } while (acceptSymbol(","));
+        v.rank = static_cast<int>(v.bounds.size());
+        expectSymbol(")");
     }
 
     // "[As type]" after a parameter or Function name, which has no Variant
@@ -679,6 +726,44 @@ private:
             }
             return s;
         }
+        if (t.isKeyword("REDIM"))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::ReDim;
+            s->location = next().location;
+            s->preserve = acceptKeyword("PRESERVE");
+            do
+            {
+                auto target = std::make_unique<Expr>();
+                target->kind = ExprKind::Call;
+                target->location = peek().location;
+                target->suffix = peek().suffix;
+                target->text = expectIdentifier("an array name");
+                if (expectSymbol("("))
+                {
+                    parseArguments(target->args);
+                    expectSymbol(")");
+                }
+                s->args.push_back(std::move(target));
+            } while (acceptSymbol(","));
+            return s;
+        }
+        if (t.isKeyword("ERASE"))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::Erase;
+            s->location = next().location;
+            do
+            {
+                auto name = std::make_unique<Expr>();
+                name->kind = ExprKind::Name;
+                name->location = peek().location;
+                name->suffix = peek().suffix;
+                name->text = expectIdentifier("an array name");
+                s->args.push_back(std::move(name));
+            } while (acceptSymbol(","));
+            return s;
+        }
         if (t.isKeyword("THROW"))
         {
             auto s = std::make_unique<Stmt>();
@@ -715,7 +800,8 @@ private:
         {
             // "name = ..." or "name.Prop = ..." is an assignment; anything
             // else starting with a name is a call.
-            if (peek(1).isSymbol("=") || peek(1).isSymbol("."))
+            if (peek(1).isSymbol("=") || peek(1).isSymbol(".") ||
+                (peek(1).isSymbol("(") && parenthesisedThen(1, "=")))
             {
                 auto s = std::make_unique<Stmt>();
                 s->kind = StmtKind::Assign;
@@ -767,6 +853,29 @@ private:
         }
         parseArguments(s->args);
         return s;
+    }
+
+    // At the '(' `ahead` tokens on: is its matching ')' followed by symbol?
+    // "a(i) = 5" is an assignment to an array element, not a call.
+    bool parenthesisedThen(std::size_t ahead, std::string_view symbol) const
+    {
+        int depth = 0;
+        for (;; ++ahead)
+        {
+            const Token &t = peek(ahead);
+            if (t.kind == TokenKind::EndOfStatement || t.kind == TokenKind::EndOfFile)
+            {
+                return false;
+            }
+            if (t.isSymbol("("))
+            {
+                ++depth;
+            }
+            else if (t.isSymbol(")") && --depth == 0)
+            {
+                return peek(ahead + 1).isSymbol(symbol);
+            }
+        }
     }
 
     // At '(': does its matching ')' end the statement? Distinguishes
@@ -1096,6 +1205,10 @@ private:
             }
             v->type = typeFromSuffix(suffix);
             v->isModuleLevel = module != nullptr;
+            if (peek().isSymbol("("))
+            {
+                parseShape(*v, true);
+            }
             pending.push_back(std::move(v));
 
             if (acceptKeyword("AS"))

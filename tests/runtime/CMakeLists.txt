@@ -24,3 +24,10 @@ tf_set_warnings(test_errors)
 
 add_test(NAME runtime.errors COMMAND test_errors)
 set_tests_properties(runtime.errors PROPERTIES LABELS runtime)
+
+add_executable(test_arrays test_arrays.c)
+target_link_libraries(test_arrays PRIVATE tfrt)
+tf_set_warnings(test_arrays)
+
+add_test(NAME runtime.arrays COMMAND test_arrays)
+set_tests_properties(runtime.arrays PROPERTIES LABELS runtime)

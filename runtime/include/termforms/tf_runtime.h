@@ -71,6 +71,8 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_INVALID_ARGUMENT 5     /* Invalid procedure call or argument */
 #define TF_ERR_OVERFLOW 6             /* Overflow */
 #define TF_ERR_OUT_OF_MEMORY 7        /* Out of memory (always fatal) */
+#define TF_ERR_SUBSCRIPT 9            /* Subscript out of range */
+#define TF_ERR_ARRAY_LOCKED 10        /* This array is fixed or temporarily locked */
 #define TF_ERR_DIVISION_BY_ZERO 11    /* Division by zero */
 #define TF_ERR_TYPE_MISMATCH 13       /* Type mismatch */
 #define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
@@ -263,6 +265,77 @@ tf_string *tf_str_from_f64(double value);
 /* Str$: the same text with a leading space when value >= 0, as in VB. +1 */
 tf_string *tf_str_str_i64(int64_t value);
 tf_string *tf_str_str_f64(double value);
+
+/* ------------------------------------------------------------------------ */
+/* Arrays                                                                   */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Every array starts at 0 and stores its elements column-major (the first
+ * index varies fastest), as VB does, so ReDim Preserve of the last
+ * dimension never moves existing elements. A fixed array (Dim a(10)) is
+ * sized once; a dynamic one (Dim a()) starts empty and is sized by ReDim.
+ * Generated code owns tf_array values directly (as locals, globals) and
+ * passes them by pointer; a zeroed tf_array is a valid empty array.
+ *
+ * Errors: an index out of range is error 9 (and the element returned is a
+ * scratch one, so a statement that goes on to its error check harms
+ * nothing); ReDim or Erase of a fixed array passed ByRef, or of an array
+ * locked because one of its elements is being passed ByRef, is error 10.
+ */
+#define TF_ARRAY_MAX_RANK 8
+
+typedef enum tf_elem
+{
+    TF_ELEM_I32,   /* Integer, Integer-based Enum */
+    TF_ELEM_I64,   /* Long, Long-based Enum */
+    TF_ELEM_F64,   /* Double */
+    TF_ELEM_BOOL,  /* Boolean (int) */
+    TF_ELEM_STRING /* tf_string *, released when replaced or freed */
+} tf_elem;
+
+typedef struct tf_array
+{
+    void *data;    /* NULL when empty */
+    int64_t count; /* elements */
+    int32_t rank;  /* dimensions, 0 when empty */
+    int32_t elem;  /* tf_elem */
+    int32_t fixed; /* Dim a(10): cannot be ReDim'd or Erased away */
+    int32_t locks; /* elements currently passed ByRef */
+    int32_t upper[TF_ARRAY_MAX_RANK];
+} tf_array;
+
+/* A fixed array, all elements 0 / "" / False. */
+void tf_array_init(tf_array *a, tf_elem elem, int32_t rank, const int32_t *upper);
+
+/* ReDim [Preserve]: an upper bound of -1 gives an empty dimension. */
+void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const int32_t *upper);
+
+/* Erase: a dynamic array becomes empty; a fixed one keeps its size and has
+   its elements reset. A Dim of the array inside a loop, run again, does
+   the same. */
+void tf_array_erase(tf_array *a);
+
+/* Releases everything the array holds (at the procedure's end). */
+void tf_array_free(tf_array *a);
+
+/* to = from: to (dynamic) becomes a copy; strings are shared by reference. */
+void tf_array_copy(tf_array *to, const tf_array *from);
+
+/* The address of an element, after checking each index (error 9). */
+void *tf_array_at1(tf_array *a, int64_t i);
+void *tf_array_at2(tf_array *a, int64_t i, int64_t j);
+void *tf_array_atn(tf_array *a, int32_t rank, const int64_t *index);
+
+/* LBound (always 0) and UBound of dimension 1..rank; error 9 if the array
+   is empty or has no such dimension. */
+int32_t tf_array_lbound(const tf_array *a, int32_t dimension);
+int32_t tf_array_ubound(const tf_array *a, int32_t dimension);
+
+/* Around a call that receives an element ByRef: ReDim and Erase of the
+   array are error 10 meanwhile, so the element's address stays valid. */
+void tf_array_lock(tf_array *a);
+void tf_array_unlock(tf_array *a);
 
 /* ------------------------------------------------------------------------ */
 /* Forms and controls                                                       */
