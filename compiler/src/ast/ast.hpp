@@ -111,7 +111,10 @@ enum class Builtin
     Lof,
     FreeFile,
     SeekPos, // Seek(n)
-    Count,   // not a name programs use: For Each's element count of an array (a Long)
+    FileGet,
+    FilePut,
+    FileSeek, // Seek #n, offset
+    Count,    // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
     DictCount,
@@ -124,7 +127,8 @@ enum class Builtin
 
 // The library functions' signatures (strings, files), for checking and for
 // C; statements such as Open are made into calls of these too. Each parameter
-// S (a String), I (an Integer) or A (a whole String array); the first
+// S (a String), I (an Integer), L (a Long), A (a whole String array) or B (a
+// whole Byte array with one dimension); the first
 // `required` must be given and the rest default to `defaults` (S: text, I:
 // a number), except that InStr's optional parameter comes first
 // (InStr([start,] s, find)). fails: a bad argument can raise an error.
@@ -169,6 +173,11 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Lof, "I", 1, {}, Type::Long, "tf_file_lof", true},
     {Builtin::FreeFile, "", 0, {}, Type::Integer, "tf_file_free", true},
     {Builtin::SeekPos, "I", 1, {}, Type::Long, "tf_file_seek_pos", true},
+    // Get/Put #n, [offset], buffer [, count]: the parser gives a flag (1 if
+    // written) before each optional part, so no value is a "missing" mark.
+    {Builtin::FileGet, "IILBII", 6, {}, Type::Void, "tf_file_get", true},
+    {Builtin::FilePut, "IILBII", 6, {}, Type::Void, "tf_file_put", true},
+    {Builtin::FileSeek, "IL", 2, {}, Type::Void, "tf_file_seek", true},
 };
 
 inline const StringFunction *findStringFunction(Builtin id)

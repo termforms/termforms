@@ -2312,7 +2312,7 @@ private:
                 const Expr &arg = *e.args[i];
                 const char kind = f->params[i];
                 args += (i == 0 ? "" : ", ") +
-                        (kind == 'A'   ? wholeArrayRef(arg, scope)
+                        (kind == 'A' || kind == 'B' ? wholeArrayRef(arg, scope)
                          : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
                                        : settle(arg, expr(arg, scope), scope).code);
             }

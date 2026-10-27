@@ -94,6 +94,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_FILE_EXISTS 58         /* File already exists */
 #define TF_ERR_DISK_FULL 61           /* Disk full */
 #define TF_ERR_PAST_END 62            /* Input past end of file */
+#define TF_ERR_BAD_RECORD 63          /* Bad record number */
 #define TF_ERR_TOO_MANY_FILES 67      /* Too many files */
 #define TF_ERR_PERMISSION 70          /* Permission denied */
 #define TF_ERR_PATH_ACCESS 75         /* Path/File access error */
@@ -465,6 +466,19 @@ void tf_array_unlock(tf_array *a);
    the whole string. Join: a String array's elements, the delimiter between. */
 void tf_str_split(tf_array *to, const tf_string *s, const tf_string *delimiter);
 tf_string *tf_str_join(const tf_array *strings, const tf_string *delimiter);
+
+/* Binary files (Open ... For Binary): Get reads into a Byte array, Put
+   writes from one, at an offset from 0 (has_offset 0: where the last read
+   or write ended), count bytes (has_count 0: the buffer's size). Get with
+   a count resizes the buffer (a dynamic array); reading past the end gives
+   fewer bytes: a dynamic buffer is shortened to them (UBound -1 for none),
+   a fixed one has the rest set to 0. A negative offset is error 63, a
+   negative count 5, a count beyond Put's buffer 9, another mode 54. */
+void tf_file_get(int32_t number, int32_t has_offset, int64_t offset, tf_array *buffer,
+                 int32_t has_count, int32_t count);
+void tf_file_put(int32_t number, int32_t has_offset, int64_t offset, const tf_array *buffer,
+                 int32_t has_count, int32_t count);
+void tf_file_seek(int32_t number, int64_t offset);
 
 /* ------------------------------------------------------------------------ */
 /* Dictionaries: String keys, values of one type                            */

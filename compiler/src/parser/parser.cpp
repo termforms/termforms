@@ -894,6 +894,25 @@ private:
         {
             return parseLineInput();
         }
+        if ((isWord(t, "GET") || isWord(t, "PUT")) && peek(1).isSymbol("#"))
+        {
+            return parseGetPut(isWord(t, "GET"));
+        }
+        if (isWord(t, "SEEK") && peek(1).isSymbol("#"))
+        {
+            StmtPtr s = libraryStatement(next().location);
+            next(); // #
+            ExprPtr call = libraryCall(Builtin::FileSeek, "Seek #", s->location);
+            call->args.push_back(parseExpression());
+            if (!expectSymbol(","))
+            {
+                failed_ = true;
+                return nullptr;
+            }
+            call->args.push_back(parseExpression());
+            s->args.push_back(std::move(call));
+            return s;
+        }
         return nullptr;
     }
 
@@ -1065,6 +1084,36 @@ private:
         }
         call->args.push_back(std::move(text));
         call->args.push_back(integer(newline ? 1 : 0, s->location));
+        s->args.push_back(std::move(call));
+        return s;
+    }
+
+    // Get #n, [offset], buffer [, count] and Put the same: each optional part
+    // goes to the runtime with a flag saying whether it was written.
+    StmtPtr parseGetPut(bool get)
+    {
+        StmtPtr s = libraryStatement(next().location);
+        next(); // #
+        ExprPtr call = libraryCall(get ? Builtin::FileGet : Builtin::FilePut,
+                                   get ? "Get #" : "Put #", s->location);
+        call->args.push_back(parseExpression());
+        if (!expectSymbol(","))
+        {
+            failed_ = true;
+            return nullptr;
+        }
+        const bool hasOffset = !peek().isSymbol(",");
+        call->args.push_back(integer(hasOffset ? 1 : 0, s->location));
+        call->args.push_back(hasOffset ? parseExpression() : integer(0, s->location));
+        if (!expectSymbol(","))
+        {
+            failed_ = true;
+            return nullptr;
+        }
+        call->args.push_back(parsePrimary()); // the buffer: a Byte array
+        const bool hasCount = acceptSymbol(",");
+        call->args.push_back(integer(hasCount ? 1 : 0, s->location));
+        call->args.push_back(hasCount ? parseExpression() : integer(0, s->location));
         s->args.push_back(std::move(call));
         return s;
     }

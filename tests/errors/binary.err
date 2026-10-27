@@ -1,0 +1,5 @@
+binary.bas:10:16: error: the array 'buf' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+binary.bas:15:16: error: 'Get #' needs an array of Bytes with 1 dimension
+binary.bas:16:16: error: 'Put #' needs an array here
+binary.bas:17:16: error: a Get with a count resizes its buffer, so 'fixed' must be a dynamic array: Dim fixed() As Byte
+binary.bas:18:13: error: the offset of 'Get #' must be a Long, not a Double; use CLng(value) to convert

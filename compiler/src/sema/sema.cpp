@@ -2771,28 +2771,45 @@ private:
         {
             Expr &arg = *e.args[static_cast<std::size_t>(i)];
             const char want = f.params[i + skip];
-            if (want == 'A')
+            if (want == 'A' || want == 'B')
             {
+                const Type element = want == 'A' ? Type::String : Type::Byte;
                 const Variable *a = wholeArray(arg, ("'" + name + "'").c_str());
-                if (a != nullptr && (a->isDictionary || a->type != Type::String || a->rank != 1))
+                if (a != nullptr && (a->isDictionary || a->type != element || a->rank != 1))
                 {
-                    diagnostics_.error(arg.location, "'" + name +
-                                                         "' needs an array of Strings with 1 "
-                                                         "dimension");
+                    diagnostics_.error(arg.location, "'" + name + "' needs an array of " +
+                                                         typeName(element) + "s with 1 dimension");
                     ok = false;
+                }
+                else if (a != nullptr && f.id == Builtin::FileGet)
+                {
+                    // Get fills (and with a count resizes) its buffer.
+                    if (readOnlyPath(arg, arg.location))
+                    {
+                        ok = false;
+                    }
+                    else if (!a->isDynamic && e.args[4]->integer != 0)
+                    {
+                        diagnostics_.error(arg.location,
+                                           "a Get with a count resizes its buffer, so '" + a->name +
+                                               "' must be a dynamic array: Dim " + a->name +
+                                               "() As Byte");
+                        ok = false;
+                    }
                 }
                 ok = ok && a != nullptr;
                 continue;
             }
             checkExpr(arg);
             const TypeInfo got = infoOf(arg);
-            const TypeInfo needed(want == 'S' ? Type::String : Type::Integer);
+            const TypeInfo needed(want == 'S'   ? Type::String
+                                  : want == 'L' ? Type::Long
+                                                : Type::Integer);
             if (got.type != Type::Error && !assignable(needed, got))
             {
-                diagnostics_.error(arg.location, "argument " + std::to_string(i + 1) + " of '" +
-                                                     name + "' must be " + article(needed) +
-                                                     ", not " + article(got) +
-                                                     conversionHint(needed, got));
+                diagnostics_.error(arg.location, argumentName(f.id, i + skip) + " of '" + name +
+                                                     "' must be " + article(needed) + ", not " +
+                                                     article(got) + conversionHint(needed, got));
                 ok = false;
             }
             ok = ok && got.type != Type::Error;
@@ -2832,6 +2849,28 @@ private:
             e.rank = 1;
         }
         return f.result;
+    }
+
+    // "argument 2"; for a file statement, what the part is (its call also
+    // carries flags the programmer did not write, so numbers would mislead).
+    static std::string argumentName(Builtin id, int i)
+    {
+        switch (id)
+        {
+            case Builtin::FileOpen:
+                return i == 0 ? "the file name" : "the file number";
+            case Builtin::FileGet:
+            case Builtin::FilePut:
+                return i == 0 ? "the file number" : i == 2 ? "the offset" : "the count";
+            case Builtin::FileSeek:
+                return i == 0 ? "the file number" : "the offset";
+            case Builtin::FileClose:
+            case Builtin::FilePrint:
+            case Builtin::LineInput:
+                return i == 0 ? "the file number" : "argument " + std::to_string(i + 1);
+            default:
+                return "argument " + std::to_string(i + 1);
+        }
     }
 
     // UBound(a [, dimension]) and LBound: an Integer.

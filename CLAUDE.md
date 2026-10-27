@@ -127,6 +127,9 @@ authoritative for design rationale.
   (`parseFileStatement`); statements become `StmtKind::Library` calls of
   built-ins in `kStringFunctions`; Line Input is an assignment. Run tests
   now run in `<work>/<name>.dir`, emptied first, so they may write files.
+  6b-3 done: binary files (Get/Put/Seek #; the parser passes a 0/1 flag
+  before each optional part, so no value means "missing"; library
+  parameter kinds L = Long, B = Byte array).
   6a done: the string functions (table `kStringFunctions` in ast.hpp,
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case

@@ -117,6 +117,8 @@ const char *tf_error_text(int32_t number)
             return "Disk full";
         case TF_ERR_PAST_END:
             return "Input past end of file";
+        case TF_ERR_BAD_RECORD:
+            return "Bad record number";
         case TF_ERR_TOO_MANY_FILES:
             return "Too many files";
         case TF_ERR_PERMISSION:

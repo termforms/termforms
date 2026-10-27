@@ -13,7 +13,8 @@
 typedef struct open_file
 {
     FILE *f;
-    int32_t mode; /* TF_FILE_INPUT ..., or 0 when the number is free */
+    int32_t mode;  /* TF_FILE_INPUT ..., or 0 when the number is free */
+    int32_t wrote; /* Binary: the last access wrote (C needs a seek before reading) */
 } open_file;
 
 /* One program, one thread, as the rest of the runtime. */
@@ -100,6 +101,7 @@ void tf_file_open(const tf_string *path, int32_t mode, int32_t number)
     }
     files[number].f = f;
     files[number].mode = mode;
+    files[number].wrote = 0;
 }
 
 void tf_file_close(int32_t number)
@@ -285,6 +287,10 @@ int tf_file_eof(int32_t number)
     {
         return 1; /* writing: always at the end */
     }
+    if (of->mode == TF_FILE_BINARY)
+    {
+        return tf_platform_ftell(of->f) >= tf_file_lof(number);
+    }
     const int c = getc(of->f);
     if (c == EOF)
     {
@@ -313,4 +319,120 @@ int64_t tf_file_seek_pos(int32_t number)
 {
     open_file *of = file_for(number);
     return of != NULL ? tf_platform_ftell(of->f) : 0;
+}
+
+/* The Binary file for number positioned for a read or write at offset (or
+   where it is); NULL after an error. C requires a seek between writing and
+   reading, so one is made whenever the direction changes. */
+static open_file *binary_at(int32_t number, int32_t has_offset, int64_t offset, int writing)
+{
+    open_file *of = file_for(number);
+    if (of == NULL)
+    {
+        return NULL;
+    }
+    if (of->mode != TF_FILE_BINARY)
+    {
+        tf_raise(TF_ERR_BAD_FILE_MODE, NULL);
+        return NULL;
+    }
+    if (has_offset && offset < 0)
+    {
+        tf_raise(TF_ERR_BAD_RECORD, NULL);
+        return NULL;
+    }
+    if (has_offset ? tf_platform_fseek(of->f, offset, SEEK_SET) != 0
+                   : of->wrote != writing && tf_platform_fseek(of->f, 0, SEEK_CUR) != 0)
+    {
+        tf_raise(os_error(writing), NULL);
+        return NULL;
+    }
+    of->wrote = writing;
+    return of;
+}
+
+void tf_file_get(int32_t number, int32_t has_offset, int64_t offset, tf_array *buffer,
+                 int32_t has_count, int32_t count)
+{
+    if (has_count && count < 0)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    open_file *of = binary_at(number, has_offset, offset, 0);
+    if (of == NULL)
+    {
+        return;
+    }
+    if (has_count)
+    {
+        const int32_t upper = count - 1;
+        tf_array_redim(buffer, TF_ELEM_U8, NULL, 0, 1, &upper);
+        if (tf_error_pending)
+        {
+            return; /* the buffer is locked (passed ByRef meanwhile) */
+        }
+    }
+    const size_t wanted = (size_t)buffer->count;
+    const size_t got = wanted > 0 ? fread(buffer->data, 1, wanted, of->f) : 0;
+    if (got < wanted && ferror(of->f))
+    {
+        tf_raise(TF_ERR_DEVICE_IO, NULL);
+        return;
+    }
+    if (got < wanted)
+    {
+        if (buffer->fixed)
+        {
+            memset((unsigned char *)buffer->data + got, 0, wanted - got);
+        }
+        else
+        {
+            const int32_t upper = (int32_t)got - 1;
+            tf_array_redim(buffer, TF_ELEM_U8, NULL, 1, 1, &upper);
+        }
+    }
+}
+
+void tf_file_put(int32_t number, int32_t has_offset, int64_t offset, const tf_array *buffer,
+                 int32_t has_count, int32_t count)
+{
+    if (has_count && count < 0)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    if (has_count && count > buffer->count)
+    {
+        tf_raise(TF_ERR_SUBSCRIPT, NULL);
+        return;
+    }
+    open_file *of = binary_at(number, has_offset, offset, 1);
+    if (of == NULL)
+    {
+        return;
+    }
+    const size_t n = (size_t)(has_count ? count : buffer->count);
+    if (n > 0 && fwrite(buffer->data, 1, n, of->f) != n)
+    {
+        tf_raise(os_error(1), NULL);
+    }
+}
+
+void tf_file_seek(int32_t number, int64_t offset)
+{
+    open_file *of = file_for(number);
+    if (of == NULL)
+    {
+        return;
+    }
+    if (offset < 0)
+    {
+        tf_raise(TF_ERR_BAD_RECORD, NULL);
+        return;
+    }
+    if (tf_platform_fseek(of->f, offset, SEEK_SET) != 0)
+    {
+        tf_raise(os_error(0), NULL);
+    }
 }

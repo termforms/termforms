@@ -627,3 +627,13 @@ TEST_CASE("file statements are known by their shape, so their words stay free as
                              "    Line Input #1, Line\n    Close #1\n    n = FreeFile\n";
     CHECK(check(inClick(decl, body)) == "");
 }
+
+TEST_CASE("Get and Put move bytes between a binary file and a Byte array")
+{
+    const std::string body = "    Dim buf() As Byte, fixed(3) As Byte, at As Long\n"
+                             "    Open \"d\" For Binary As #1\n    Get #1, , buf, 16\n"
+                             "    Get #1, at, fixed\n    Put #1, 0, buf\n    Seek #1, at\n"
+                             "    at = Seek(1)\n    Close\n";
+    CHECK(check(inClick("", body)) == "");
+    CHECK(check(inClick("", "    Dim fixed(3) As Byte\n    Get #1, 0, fixed, 2\n")) != "");
+}

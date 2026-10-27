@@ -267,6 +267,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef; adding to, removing from or clearing a Dictionary whose entry is being passed ByRef | now |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
 | 457 | This key is already associated with an element of this collection | `d.Add` of a key that is there | now |
+| 63 | Bad record number | a negative offset in Get, Put or Seek # | now |
 | 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
 | 380 | Invalid property value | a control property set out of range | forms |
 
@@ -665,6 +666,31 @@ Close                                   ' every open file
 - Files still open when the program ends are written out and closed.
 - The program's current folder is where it was started; relative names
   are taken from there.
+
+### Binary files (Proposed)
+
+```vb
+Dim buf() As Byte
+Open "data.bin" For Binary As #1   ' read and write; made if it is not there
+ReDim buf(511)
+Get #1, 1024, buf                  ' 512 bytes from offset 1024 (offsets from 0)
+Get #1, , buf                      ' the next 512: no offset, where the last ended
+Get #1, , buf, 16                  ' 16 bytes; buf is resized to 16
+Put #1, 0, buf                     ' write buf at offset 0 (or Put #1, , buf, n)
+Seek #1, 0                         ' set the position; Seek(1) reads it
+```
+
+- The buffer is a Byte array with one dimension. Without a count, Get
+  reads (and Put writes) as many bytes as it holds, so a ReDim sets the
+  size for every later read; a count sets it for that one, and Get
+  resizes the buffer to it (so it must be a dynamic array).
+- Reading past the end is not an error: a dynamic buffer is shortened to
+  the bytes read (UBound -1 for none), a fixed one has the rest set to 0.
+  `EOF(n)` is True once the position is at or past the end.
+- Put past the end makes the file longer; any gap is filled with zeros.
+- Errors: 54 for Get/Put on a file not opened For Binary; 63 (Bad record
+  number) for a negative offset; 5 for a negative count; 9 for a Put count
+  larger than the buffer.
 
 ### Byte (Proposed)
 
