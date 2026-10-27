@@ -217,7 +217,14 @@ authoritative for design rationale.
   (Proposed, for Jim). Shortcut text is checked in sema
   (`shortcutProblem`) and read in the runtime (`parse_shortcut`): keep the
   two alike. A ListIndex or Shortcut store is fallible (storeMayFail).
-- **Next:** Phase 4 step 7: the TextBox edit buffer.
+  Step 4.7 done: the TextBox edit buffer (`tf_edit.c`, a `tf_edit` in
+  each TextBox: caret and anchor as byte offsets; selection, words, undo
+  of a typing run, the program's own clipboard), SelStart/SelLength/
+  SelText/MaxLength/Locked/PasswordChar, Change on code changes too (so a
+  Text store is fallible), arrows and Home/End/Del decoded with
+  modifiers ({SHIFT+LEFT} in key scripts), reads bounded by the
+  decoder's room (a long paste was cut at 64 bytes).
+- **Next:** Phase 4 step 8: the mouse (SGR, on by default).
 
 ## Settled design decisions (do not relitigate without Jim)
 

@@ -1787,12 +1787,16 @@ private:
         {
             return true;
         }
-        // A CheckBox's Value outside 0-2, a ListIndex out of range and a
-        // Shortcut the runtime cannot read are error 380 (and setting Value
-        // or ListIndex runs the Click handler, which may fail).
+        // A CheckBox's Value outside 0-2, a ListIndex out of range, a
+        // Shortcut the runtime cannot read and a negative SelStart,
+        // SelLength or MaxLength are error 380; setting Value or ListIndex
+        // runs the Click handler, and Text or SelText the Change handler,
+        // either of which may fail.
+        static const std::set<std::string> kFallible = {"Value",    "ListIndex", "Shortcut",
+                                                        "SelStart", "SelLength", "MaxLength",
+                                                        "Text",     "SelText"};
         if (target.kind == ExprKind::Member && target.left != nullptr &&
-            target.left->control != nullptr &&
-            (target.text == "Value" || target.text == "ListIndex" || target.text == "Shortcut"))
+            target.left->control != nullptr && kFallible.count(target.text) != 0)
         {
             return true;
         }

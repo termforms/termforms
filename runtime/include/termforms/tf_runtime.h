@@ -635,7 +635,13 @@ typedef enum tf_prop
     TF_PROP_TOPINDEX,    /* ListBox: the first item shown */
     TF_PROP_INTERVAL,    /* Timer: milliseconds between Timer events; 0 stops it */
     TF_PROP_CHECKED,     /* Menu: a check mark before the item */
-    TF_PROP_SHORTCUT     /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
+    TF_PROP_SHORTCUT,    /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
+    TF_PROP_SELSTART,    /* TextBox: where the selection starts, in code points */
+    TF_PROP_SELLENGTH,   /* TextBox: how many code points are selected */
+    TF_PROP_SELTEXT,     /* TextBox: the selected text; setting it replaces the selection */
+    TF_PROP_MAXLENGTH,   /* TextBox: code points the user may type; 0 no limit */
+    TF_PROP_LOCKED,      /* TextBox: the user may select and copy, not change */
+    TF_PROP_PASSWORDCHAR /* TextBox: shown for every character; "" shows the text */
 } tf_prop;
 
 typedef enum tf_event

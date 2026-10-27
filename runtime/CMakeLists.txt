@@ -29,6 +29,7 @@ set(TF_RUNTIME_SOURCES
     src/tui/tf_keys.c
     src/tui/tf_screen.c
     src/tui/tf_input.c
+    src/tui/tf_edit.c
     src/tui/tf_forms.c
     src/platform/posix/tf_fs_posix.c
     src/platform/posix/tf_sys_posix.c

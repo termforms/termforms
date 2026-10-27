@@ -138,7 +138,7 @@ static int decode_escape(const tf_keys *keys, tf_key *key)
 
     /* CSI: parameter bytes 0x30-0x3F, intermediates 0x20-0x2F, final 0x40-0x7E.
        The first parameter picks the key, the second (if any) is 1 + the
-       modifiers ("ESC [ 1 ; 5 S" is Ctrl+F4); other keys ignore it. */
+       modifiers ("ESC [ 1 ; 5 S" is Ctrl+F4, "ESC [ 1 ; 2 D" Shift+Left). */
     int number = 0;
     int modifier = 0;
     int parameter = 0;
@@ -164,6 +164,7 @@ static int decode_escape(const tf_keys *keys, tf_key *key)
                 return i + 1;
             }
             *kind = c == '~' ? tilde_key(number) : letter_key(c);
+            key->mods = modifier > 1 ? modifier - 1 : 0; /* Shift+Left selects, Ctrl+Left: words */
             return i + 1;
         }
         else if (c >= 0x20)

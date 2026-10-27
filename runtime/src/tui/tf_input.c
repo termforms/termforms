@@ -7,8 +7,8 @@
  *
  *   {ENTER} {TAB} {BACKTAB} {BKSP} {DEL} {LEFT} {RIGHT} {UP} {DOWN}
  *   {HOME} {END} {ESC} {F1}..{F12} {CTRL+<letter>} {ALT+<letter>}, CTRL+ /
- *   ALT+ / SHIFT+ before F<n> ({CTRL+F4}), {WAIT n} (n ms pass, so Timers
- *   run), and {{ (a literal brace)
+ *   ALT+ / SHIFT+ before F<n> or a name ({CTRL+F4}, {SHIFT+LEFT}), {WAIT n}
+ *   (n ms pass, so Timers run), and {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
@@ -131,6 +131,7 @@ static tf_key next_scripted(void)
                 strncmp(NAMED_KEYS[i].name, name, length) == 0)
             {
                 key.kind = NAMED_KEYS[i].kind;
+                key.mods = mods; /* {SHIFT+LEFT}, {CTRL+RIGHT} */
                 return key;
             }
         }
@@ -179,8 +180,16 @@ tf_key tf_input_wait(int timeout_ms)
             }
             wait = wait < 0 || left < wait ? (int)(left > 0 ? left : 0) : wait;
         }
-        unsigned char bytes[64];
-        const int n = tf_term_read(bytes, (int)sizeof bytes, wait);
+        /* Read only what the decoder has room for: the rest of a long paste
+           waits in the terminal's buffer instead of being lost. */
+        unsigned char bytes[sizeof decoder.pending];
+        const int room = (int)sizeof decoder.pending - decoder.count;
+        if (room == 0)
+        {
+            tf_keys_next(&decoder, &key, 1); /* full of something undecodable */
+            continue;
+        }
+        const int n = tf_term_read(bytes, room, wait);
 
         if (tf_term_take_resize())
         {

@@ -60,10 +60,14 @@ struct tf_control
     int is_dialog; /* a MsgBox or InputBox */
     int escapable; /* a dialog: may Ctrl+F4 close it (it has a Cancel answer)? */
 
-    /* TextBox only: cursor as a byte offset into text, and the index of the
-     * first visible code point. */
-    int32_t cursor;
+    /* TextBox only: its text, caret and selection; the first code point
+     * shown; PasswordChar (shown for every character; 0 none, its text in
+     * `password`); and SelText as last read (tf_get_str lends it). */
+    tf_edit edit;
     int32_t scroll;
+    uint32_t password_char;
+    tf_string *password;
+    tf_string *sel_text;
 
     /* ListBox only: the items, which are selected, the current item
      * (ListIndex), the first shown (TopIndex), MultiSelect and Sorted. */
@@ -319,12 +323,46 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
         tf_str_assign(&control->text, tf_str_from_utf8(shown_as, (int32_t)strlen(shown_as)));
         return;
     }
+    if (control->type == TF_CTL_TEXTBOX && (prop == TF_PROP_TEXT || prop == TF_PROP_SELTEXT))
+    {
+        /* As VB, Change fires when the program changes the text too. */
+        const int same = prop == TF_PROP_TEXT
+                             ? tf_str_compare(control->edit.text, v) == 0
+                             : tf_edit_sel_length(&control->edit) == 0 && tf_str_lenb(v) == 0;
+        if (prop == TF_PROP_TEXT)
+        {
+            tf_edit_set_text(&control->edit, v);
+            control->scroll = 0;
+        }
+        else
+        {
+            tf_edit_replace_selection(&control->edit, v);
+        }
+        if (!same)
+        {
+            fire(control, TF_EVENT_CHANGE);
+        }
+        return;
+    }
+    if (prop == TF_PROP_PASSWORDCHAR)
+    {
+        /* Its first character; "" shows the text again. */
+        uint32_t cp = 0;
+        if (tf_str_lenb(v) > 0)
+        {
+            tf_utf8_decode(tf_str_cstr(v), tf_str_lenb(v), &cp);
+        }
+        control->password_char = cp;
+        control->edit.concealed = cp != 0;
+        char encoded[4];
+        const int n = cp == 0 ? 0 : tf_utf8_encode(cp, encoded);
+        tf_str_assign(&control->password, tf_str_from_utf8(encoded, n));
+        return;
+    }
     tf_str_retain(v);
     if (prop == TF_PROP_TEXT)
     {
         tf_str_assign(&control->text, v);
-        control->cursor = tf_str_lenb(v); /* cursor to the end, as in VB */
-        control->scroll = 0;
     }
     else
     {
@@ -334,6 +372,22 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
 
 tf_string *tf_get_str(const tf_control *control, tf_prop prop)
 {
+    if (control->type == TF_CTL_TEXTBOX)
+    {
+        tf_control *box = (tf_control *)control; /* SelText's copy is kept to be lent */
+        switch (prop)
+        {
+            case TF_PROP_TEXT:
+                return control->edit.text;
+            case TF_PROP_SELTEXT:
+                tf_str_assign(&box->sel_text, tf_edit_sel_text(&control->edit));
+                return control->sel_text;
+            case TF_PROP_PASSWORDCHAR:
+                return control->password;
+            default:
+                break;
+        }
+    }
     if (control->type == TF_CTL_LISTBOX && prop == TF_PROP_TEXT)
     {
         /* The current item's text (VB's Text of a ListBox). */
@@ -433,6 +487,30 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_CHECKED:
             control->checked = value != 0;
             break;
+        case TF_PROP_SELSTART:
+        case TF_PROP_SELLENGTH:
+        case TF_PROP_MAXLENGTH:
+            if (value < 0)
+            {
+                tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
+                break;
+            }
+            if (prop == TF_PROP_MAXLENGTH)
+            {
+                control->edit.max_length = value; /* limits typing, not the program */
+            }
+            else if (prop == TF_PROP_SELSTART)
+            {
+                tf_edit_select(&control->edit, value, 0);
+            }
+            else
+            {
+                tf_edit_select(&control->edit, tf_edit_sel_start(&control->edit), value);
+            }
+            break;
+        case TF_PROP_LOCKED:
+            control->edit.locked = value != 0;
+            break;
         default:
             break;
     }
@@ -483,6 +561,14 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->interval;
         case TF_PROP_CHECKED:
             return control->checked;
+        case TF_PROP_SELSTART:
+            return tf_edit_sel_start(&control->edit);
+        case TF_PROP_SELLENGTH:
+            return tf_edit_sel_length(&control->edit);
+        case TF_PROP_MAXLENGTH:
+            return control->edit.max_length;
+        case TF_PROP_LOCKED:
+            return control->edit.locked;
         default:
             return 0;
     }
@@ -670,21 +756,6 @@ static void strip_accelerator(const char *caption, char *out, size_t capacity)
     out[used] = '\0';
 }
 
-/* Number of code points in the first byte_offset bytes of s. */
-static int32_t code_points_before(const tf_string *s, int32_t byte_offset)
-{
-    const char *bytes = tf_str_cstr(s);
-    int32_t count = 0;
-    for (int32_t i = 0; i < byte_offset; ++i)
-    {
-        if (((unsigned char)bytes[i] & 0xC0u) != 0x80u)
-        {
-            count++;
-        }
-    }
-    return count;
-}
-
 /* Cells needed to show UTF-8 text (one per code point in this version). */
 static int utf8_cells(const char *text)
 {
@@ -711,6 +782,8 @@ static const char *skip_code_points(const char *bytes, int32_t count)
     return bytes;
 }
 
+/* The text from the first code point shown; the selection stands out while
+   the box has the focus (as Windows hides it otherwise). */
 static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focused)
 {
     const int w = tb->width < max_width ? (int)tb->width : max_width;
@@ -720,22 +793,29 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
     }
     tf_screen_fill(x, y, w, 1, ' ', TF_BLACK, TF_WHITE);
 
-    /* Keep the cursor inside the visible window. */
-    const int32_t cursor_cp = code_points_before(tb->text, tb->cursor);
-    if (cursor_cp < tb->scroll)
+    /* Keep the caret inside the visible window. */
+    const int32_t caret = tf_edit_cursor_index(&tb->edit);
+    if (caret < tb->scroll)
     {
-        tb->scroll = cursor_cp;
+        tb->scroll = caret;
     }
-    else if (cursor_cp >= tb->scroll + w)
+    else if (caret >= tb->scroll + w)
     {
-        tb->scroll = cursor_cp - w + 1;
+        tb->scroll = caret - w + 1;
     }
 
-    tf_screen_text(x, y, skip_code_points(tf_str_cstr(tb->text), tb->scroll), w, TF_BLACK,
-                   TF_WHITE);
+    const char *p = skip_code_points(tf_str_cstr(tb->edit.text), tb->scroll);
+    for (int i = 0; i < w && *p != '\0'; ++i)
+    {
+        uint32_t cp = 0;
+        p += tf_utf8_decode(p, (int)strlen(p), &cp);
+        const int lit = focused && tf_edit_selected(&tb->edit, tb->scroll + i);
+        tf_screen_put(x + i, y, tb->password_char != 0 ? tb->password_char : cp,
+                      lit ? TF_WHITE : TF_BLACK, lit ? TF_BLUE : TF_WHITE);
+    }
     if (focused)
     {
-        tf_screen_cursor(x + (int)(cursor_cp - tb->scroll), y, 1);
+        tf_screen_cursor(x + (int)(caret - tb->scroll), y, 1);
     }
 }
 
@@ -1816,98 +1896,6 @@ static int access(tf_control *form, uint32_t letter)
     return 0;
 }
 
-/* Replaces bytes [from, to) of the text with insert, keeping the cursor
- * after the inserted text. */
-static void edit_text(tf_control *tb, int32_t from, int32_t to, const char *insert, int32_t length)
-{
-    const char *old = tf_str_cstr(tb->text);
-    const int32_t old_length = tf_str_lenb(tb->text);
-    const int32_t new_length = old_length - (to - from) + length;
-
-    char *buffer = tf_xmalloc((size_t)new_length + 1);
-    memcpy(buffer, old, (size_t)from);
-    memcpy(buffer + from, insert, (size_t)length);
-    memcpy(buffer + from + length, old + to, (size_t)(old_length - to));
-
-    tf_str_assign(&tb->text, tf_str_from_utf8(buffer, new_length));
-    free(buffer);
-    tb->cursor = from + length;
-    fire(tb, TF_EVENT_CHANGE);
-}
-
-static int32_t previous_boundary(const tf_control *tb)
-{
-    const char *bytes = tf_str_cstr(tb->text);
-    int32_t i = tb->cursor;
-    while (i > 0)
-    {
-        --i;
-        if (((unsigned char)bytes[i] & 0xC0u) != 0x80u)
-        {
-            break;
-        }
-    }
-    return i;
-}
-
-static int32_t next_boundary(const tf_control *tb)
-{
-    const char *bytes = tf_str_cstr(tb->text);
-    const int32_t length = tf_str_lenb(tb->text);
-    int32_t i = tb->cursor;
-    if (i < length)
-    {
-        ++i;
-        while (i < length && ((unsigned char)bytes[i] & 0xC0u) == 0x80u)
-        {
-            ++i;
-        }
-    }
-    return i;
-}
-
-static void textbox_key(tf_control *tb, tf_key key)
-{
-    switch (key.kind)
-    {
-        case TF_KEY_CHAR:
-        {
-            char encoded[4];
-            const int n = tf_utf8_encode(key.ch, encoded);
-            edit_text(tb, tb->cursor, tb->cursor, encoded, n);
-            break;
-        }
-        case TF_KEY_BACKSPACE:
-            if (tb->cursor > 0)
-            {
-                edit_text(tb, previous_boundary(tb), tb->cursor, "", 0);
-            }
-            break;
-        case TF_KEY_DELETE:
-            if (tb->cursor < tf_str_lenb(tb->text))
-            {
-                const int32_t at = tb->cursor;
-                edit_text(tb, at, next_boundary(tb), "", 0);
-                tb->cursor = at;
-            }
-            break;
-        case TF_KEY_LEFT:
-            tb->cursor = previous_boundary(tb);
-            break;
-        case TF_KEY_RIGHT:
-            tb->cursor = next_boundary(tb);
-            break;
-        case TF_KEY_HOME:
-            tb->cursor = 0;
-            break;
-        case TF_KEY_END:
-            tb->cursor = tf_str_lenb(tb->text);
-            break;
-        default:
-            break;
-    }
-}
-
 static void toggle(tf_control *check)
 {
     check->value = check->value == 1 ? 0 : 1; /* grey (2) becomes clear */
@@ -1999,22 +1987,16 @@ static int control_key(tf_control *form, tf_control *c, tf_key key)
     switch (c->type)
     {
         case TF_CTL_TEXTBOX:
+        {
             /* Only what editing uses: Enter and Esc go on to the Default and
                Cancel buttons. */
-            switch (key.kind)
+            const int used = tf_edit_key(&c->edit, key);
+            if (used == TF_EDIT_CHANGED)
             {
-                case TF_KEY_CHAR:
-                case TF_KEY_BACKSPACE:
-                case TF_KEY_DELETE:
-                case TF_KEY_LEFT:
-                case TF_KEY_RIGHT:
-                case TF_KEY_HOME:
-                case TF_KEY_END:
-                    textbox_key(c, key);
-                    return 1;
-                default:
-                    return 0;
+                fire(c, TF_EVENT_CHANGE);
             }
+            return used != TF_EDIT_UNUSED;
+        }
         case TF_CTL_COMMANDBUTTON:
             if (key.kind == TF_KEY_ENTER || is_space(key))
             {
@@ -2578,6 +2560,9 @@ void tf_form_free(tf_control *form)
         free(c->selected);
         tf_str_release(c->caption);
         tf_str_release(c->text);
+        tf_edit_free(&c->edit);
+        tf_str_release(c->password);
+        tf_str_release(c->sel_text);
         free(c->name);
         free(c);
     }
@@ -2899,7 +2884,7 @@ tf_string *tf_inputbox(const tf_string *prompt, const tf_string *title, const tf
         {
             if (form->children[i]->type == TF_CTL_TEXTBOX)
             {
-                text = tf_str_ref(form->children[i]->text);
+                text = tf_str_ref(form->children[i]->edit.text);
             }
         }
     }

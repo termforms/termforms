@@ -154,6 +154,47 @@ int tf_utf8_decode(const char *s, int length, uint32_t *cp);
 int tf_utf8_encode(uint32_t cp, char out[4]);
 
 /* ------------------------------------------------------------------------ */
+/* Edit buffer (tf_edit.c): a TextBox's text, caret and selection          */
+/* ------------------------------------------------------------------------ */
+
+typedef struct tf_edit
+{
+    tf_string *text;    /* NULL is "" */
+    int32_t cursor;     /* the caret, a byte offset */
+    int32_t anchor;     /* the selection's other end (== cursor: none) */
+    int32_t max_length; /* code points the user may type; 0 no limit */
+    int locked;         /* the user may select and copy but not change it */
+    int concealed;      /* a password: no Cut or Copy */
+    tf_string *undo;    /* the text before the last change (Ctrl+Z) */
+    int32_t undo_cursor;
+    int has_undo;
+    int typing; /* the last change was typing (more typing joins it) */
+} tf_edit;
+
+/* What tf_edit_key did with a key. */
+#define TF_EDIT_UNUSED 0  /* not an editing key */
+#define TF_EDIT_MOVED 1   /* used: caret or selection, or nothing to do */
+#define TF_EDIT_CHANGED 2 /* the text changed */
+
+int tf_edit_key(tf_edit *e, tf_key key);
+
+/* The program's changes: Text (caret to the end, no undo), SelStart and
+   SelLength (code points, clamped), SelText. */
+void tf_edit_set_text(tf_edit *e, const tf_string *text);
+void tf_edit_select(tf_edit *e, int32_t start, int32_t length);
+void tf_edit_replace_selection(tf_edit *e, const tf_string *text);
+int32_t tf_edit_sel_start(const tf_edit *e);
+int32_t tf_edit_sel_length(const tf_edit *e);
+tf_string *tf_edit_sel_text(const tf_edit *e); /* owned */
+
+/* For drawing: the caret's code point index; whether code point cp is
+   selected. */
+int32_t tf_edit_cursor_index(const tf_edit *e);
+int tf_edit_selected(const tf_edit *e, int32_t cp);
+
+void tf_edit_free(tf_edit *e);
+
+/* ------------------------------------------------------------------------ */
 /* Input                                                                    */
 /* ------------------------------------------------------------------------ */
 

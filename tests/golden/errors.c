@@ -108,7 +108,7 @@ static void p_Form_Load(void)
         TF_LINE(35); { const int32_t next = tf_i32_add(v_i, 1); if (tf_error_pending) goto done; v_i = next; }
     }
 #line 36 "errors.bas"
-    TF_LINE(36); { tf_string *t1 = tf_str_ref(g_log); int32_t t2 = p_Twice(v_i); if (tf_error_pending) { tf_str_release(t1); goto done; } tf_string *t3 = tf_str_from_i32(t2); tf_string *t4 = tf_str_concat(t1, t3); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); goto done; } tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); }
+    TF_LINE(36); { tf_string *t1 = tf_str_ref(g_log); int32_t t2 = p_Twice(v_i); if (tf_error_pending) { tf_str_release(t1); goto done; } tf_string *t3 = tf_str_from_i32(t2); tf_string *t4 = tf_str_concat(t1, t3); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); goto done; } tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); } if (tf_error_pending) goto done;
 #line 37 "errors.bas"
 done:;
 }

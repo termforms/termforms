@@ -1,0 +1,14 @@
+ ┌───────────────────────── Edit ─────────────────────────┐
+ │one 2 three                                             │
+ │12345                                                   │
+ │locked text                                             │
+ │************                                            │
+ │ < Show >                                               │
+ │                                                        │
+ │[Good  dear mornilocked text] [12345] [locked text]     │
+ │[locked text!] changes=43 sel=4,3:two [one 2 three]     │
+ │changes=45 max=5 pw=* E380                              │
+ │                                                        │
+ │                                                        │
+ │                                                        │
+ └────────────────────────────────────────────────────────┘

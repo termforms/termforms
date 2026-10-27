@@ -920,7 +920,7 @@ Module=lib/stock.bas
 | Control | Shows as | Properties beyond Left, Top, Width, Height, Enabled, Visible | Events |
 |---|---|---|---|
 | Label | its Caption (words wrapped if Height > 1) | Caption | Click |
-| TextBox | an edit field | Text | Change |
+| TextBox | an edit field | Text, SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar | Change |
 | CommandButton | `< Caption >` | Caption, Default, Cancel | Click |
 | CheckBox | `[X] Caption` (`[ ]`, `[-]` for 2) | Caption, Value (0, 1, 2) | Click |
 | OptionButton | `(•) Caption` | Caption, Value (Boolean) | Click |
@@ -1087,6 +1087,42 @@ End
   are enabled and visible, before the focused control sees the key (no
   KeyDown).
 - The drop-down is drawn over the form and may reach past its edge.
+
+### TextBox editing (Proposed)
+
+The TextBox sits on an edit buffer of its own (runtime `tf_edit.c`), so
+the multi-line TextBox and the ComboBox after v1 edit the same way. Keys
+and properties follow a Windows edit control, as VB's TextBox does.
+
+- **Keys**: Left/Right, Home/End; Shift with them selects; Ctrl+Left and
+  Ctrl+Right move by words (Shift too); typing replaces the selection;
+  Backspace and Del delete it; Ctrl+A selects all; Ctrl+X, Ctrl+C and
+  Ctrl+V cut, copy and paste; Ctrl+Z undoes the last change and again
+  redoes it (a run of typing is one change). Left or Right with a
+  selection goes to its start or end. There is no overwrite mode (VB's
+  TextBox has none).
+- **The clipboard is the program's own**: what Ctrl+C copies, Ctrl+V
+  pastes, within the program. The terminal's own copy and paste work as
+  ever (Shift+drag, and its paste key, which types the text in).
+- A word is letters, digits and `_`; anything beyond ASCII counts as a
+  letter.
+- **SelStart, SelLength** are in code points (as Len); setting them
+  clamps to the text, and a negative value is error 380. Setting
+  SelLength selects from SelStart with the caret at the end. **SelText**
+  is the selected text; setting it replaces the selection.
+- **MaxLength** (code points, 0 no limit) limits what the user types or
+  pastes, not what the program sets. **Locked** lets the user move,
+  select and copy, but not change the text. **PasswordChar** (its first
+  character; "" for none) is shown for each character, and Cut and Copy
+  give nothing out.
+- **Change fires when the program changes the text too** (setting Text
+  or SelText), as VB; not when it is set to what it already is.
+- Setting Text puts the caret at the end, with nothing selected, and
+  forgets the undo. The selection is shown only while the box has the
+  focus (as Windows). The focus arriving does not select the text (as
+  VB; set SelStart and SelLength in GotFocus for that).
+- A long paste is no longer cut at 64 bytes: the input reads only what
+  its decoder has room for.
 
 ## Forms and events (Settled, 23 Oct 2026)
 
