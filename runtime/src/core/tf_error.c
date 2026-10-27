@@ -101,6 +101,8 @@ const char *tf_error_text(int32_t number)
             return "Out of string space";
         case TF_ERR_NOTHING:
             return "Object variable or With block variable not set";
+        case TF_ERR_KEY_EXISTS:
+            return "This key is already associated with an element of this collection";
         case TF_ERR_TERMINAL:
             return "Terminal error";
         default:

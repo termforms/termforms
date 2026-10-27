@@ -558,3 +558,30 @@ TEST_CASE("lexer: Each and In are reserved")
     CHECK(tf::isReservedKeyword("each"));
     CHECK(tf::isReservedKeyword("In"));
 }
+
+// -- Dictionary (Phase 3 step 5c) ----------------------------------------------
+
+TEST_CASE("a Dictionary is declared with its value type and used by String key")
+{
+    const std::string decl = "Type P\n    Ages As Dictionary(Of Integer)\nEnd Type\n";
+    const std::string body =
+        "    Dim d As Dictionary(Of Long), p As P, k As String, ks() As String\n"
+        "    d(\"a\") = 1\n    d.Add \"b\", 2\n    p.Ages(\"x\") = CInt(d(\"a\"))\n"
+        "    If d.Exists(\"a\") Then d.Remove \"a\"\n    ks = d.Keys\n"
+        "    For Each k In p.Ages.Keys\n    Next\n    d.Clear\n"
+        "    k = CStr(d.Count)\n";
+    CHECK(check(inClick(decl, body)) == "");
+    CHECK(check(inClick("", "    Dim d As Dictionary(Of Integer)\n    d(1) = 2\n")) != "");
+}
+
+TEST_CASE("a whole array member or Keys cannot stand for a single value")
+{
+    const std::string decl = "Type P\n    Lines() As String\nEnd Type\n";
+    CHECK(check(inClick(decl, "    Dim p As P, s As String\n    s = p.Lines\n")) != "");
+    CHECK(check(inClick(decl, "    Dim p As P, s As String\n    s = p.Lines(0)\n")) == "");
+}
+
+TEST_CASE("lexer: Of is reserved")
+{
+    CHECK(tf::isReservedKeyword("of"));
+}

@@ -160,12 +160,13 @@ private:
         for (const auto &def : module_.types)
         {
             const std::string t = "t_" + def->name;
-            out << "static void " << t << "_init(void *record);\n"
-                << "static void " << t << "_free(void *record);\n"
-                << "static void " << t << "_copy(void *to, const void *from);\n";
+            // Not every program uses every helper (a Type never copied).
+            out << "static TF_MAYBE_UNUSED void " << t << "_init(void *record);\n"
+                << "static TF_MAYBE_UNUSED void " << t << "_free(void *record);\n"
+                << "static TF_MAYBE_UNUSED void " << t << "_copy(void *to, const void *from);\n";
             if (holdsArrays(*def))
             {
-                out << "static int " << t << "_busy(const " << t << " *x);\n";
+                out << "static TF_MAYBE_UNUSED int " << t << "_busy(const " << t << " *x);\n";
             }
             if (opsNeeded_.count(def.get()) != 0) // only arrays and Refs of the Type need it
             {
@@ -796,6 +797,10 @@ private:
             case StmtKind::ErrClear:
                 code = "tf_err_clear();";
                 break;
+            case StmtKind::Method: // d.Remove k, d.Clear (d.Add became an assignment)
+                code = wrap(scope, builtin(*s.value, scope).code + ";");
+                code += checks_ ? " if (tf_error_pending) " + failJump() : "";
+                break;
             case StmtKind::End:
                 code = "tf_end(0);";
                 break;
@@ -1399,7 +1404,14 @@ private:
                     case Builtin::UBound:
                         return true; // an empty array, a dimension it does not have
                     case Builtin::Count:
-                        return mayFail(*e.args[0]); // a Ref on the way that is Nothing
+                    case Builtin::DictCount:
+                    case Builtin::DictExists:
+                        return false;         // the arguments' own failures are checked above
+                    case Builtin::DictRemove: // not there (5); locked (10)
+                    case Builtin::DictClear:
+                    case Builtin::DictKeys: // into a locked array (10)
+                    case Builtin::DictItems:
+                        return true;
                     default:
                         return false;
                 }
@@ -1493,7 +1505,22 @@ private:
         if (target.rank > 0) // b = a, o.Lines = other: copy the whole array
         {
             const std::string to = wholeArrayRef(target, scope);
-            return "tf_array_copy(" + to + ", " + wholeArrayRef(*s.value, scope) + ");";
+            const Expr &from = *s.value;
+            if (from.kind == ExprKind::Call && from.builtin == Builtin::DictKeys)
+            {
+                return "tf_dict_keys(" + to + ", " + wholeArrayRef(*from.args[0], scope) + ");";
+            }
+            if (from.kind == ExprKind::Call && from.builtin == Builtin::DictItems)
+            {
+                const Variable &d = wholeVariable(*from.args[0]);
+                return "tf_dict_items(" + to + ", " + wholeArrayRef(*from.args[0], scope) + ", " +
+                       elemKind(d) + ", " + elemOps(d) + ");";
+            }
+            return "tf_array_copy(" + to + ", " + wholeArrayRef(from, scope) + ");";
+        }
+        if (target.kind == ExprKind::Index && target.byKey)
+        {
+            return dictionaryStore(s, scope);
         }
         if (target.kind == ExprKind::Index ||
             (target.kind == ExprKind::Member && target.field != nullptr))
@@ -1695,6 +1722,79 @@ private:
     {
         return e.left != nullptr ? "&" + parenthesised(lvalue(*e.left, scope, arrays))
                                  : arrayRef(*e.variable);
+    }
+
+    // The declaration of the array (or Dictionary) an element is in.
+    static const Variable &arrayOf(const Expr &e)
+    {
+        return e.left != nullptr ? *e.left->field : *e.variable;
+    }
+
+    // The declaration of a whole array or Dictionary: d, or o.Ages.
+    static const Variable &wholeVariable(const Expr &e)
+    {
+        return e.kind == ExprKind::Name ? *e.variable : *e.field;
+    }
+
+    // A Dictionary key, borrowed for the call (an owned one is parked).
+    std::string keyOf(const Expr &key, StatementScope &scope)
+    {
+        return borrowed(settle(key, expr(key, scope), scope), scope).code;
+    }
+
+    // d(key) = value, and d.Add key, value. Adding a key may move d's values
+    // in memory, so the value is computed completely (records copied out)
+    // before the entry's address is taken, and the address is used once.
+    std::string dictionaryStore(const Stmt &s, StatementScope &scope)
+    {
+        const Expr &target = *s.target;
+        const Variable &d = arrayOf(target);
+        const std::string ref = elementArray(target, scope);
+        const std::string key = keyOf(*target.args[0], scope);
+        const Value v = settle(*s.value, expr(*s.value, scope), scope);
+
+        const std::string value = scope.newTemp();
+        if (target.type == Type::Record)
+        {
+            const std::string t = "t_" + target.typeDef->name;
+            scope.prelude.push_back(
+                t + " " + value + "; " + t + "_init(&" + value + "); " +
+                copyRecord(target, "&" + value, recordValue(*s.value, v, scope)));
+            scope.releases.push_back(t + "_free(&" + value + ");");
+        }
+        else if (target.type == Type::String)
+        {
+            scope.prelude.push_back("tf_string *" + value + " = " + ownedCode(v) + ";");
+        }
+        else if (target.type == Type::Ref)
+        {
+            scope.prelude.push_back(declarationOf(target, value) + " = " +
+                                    ownedRef(*s.value, target.typeDef, v) + ";");
+        }
+        else
+        {
+            scope.prelude.push_back(declarationOf(target, value) + " = " + v.code + ";");
+        }
+
+        const std::string slot = scope.newTemp();
+        const std::string type = cTypeOf(target);
+        scope.prelude.push_back(type + (type.back() == '*' ? "*" : " *") + slot + " = " +
+                                pointerCastOf(target) +
+                                (target.adding ? "tf_dict_add(" : "tf_dict_put(") + ref + ", " +
+                                elemKind(d) + ", " + elemOps(d) + ", " + key + ");");
+        if (target.type == Type::Record)
+        {
+            return copyRecord(target, slot, value);
+        }
+        if (target.type == Type::String)
+        {
+            return "tf_str_assign(" + slot + ", " + value + ");";
+        }
+        if (target.type == Type::Ref)
+        {
+            return "*" + slot + " = tf_ref_replace(*" + slot + ", " + value + ");";
+        }
+        return "*" + slot + " = " + value + ";";
     }
 
     // A whole array (a Name or a record's array member) as a tf_array *.
@@ -2178,6 +2278,21 @@ private:
         {
             return {"tf_array_count(" + wholeArrayRef(*e.args[0], scope) + ")", false};
         }
+        if (e.builtin == Builtin::DictCount || e.builtin == Builtin::DictClear)
+        {
+            return {
+                std::string(e.builtin == Builtin::DictCount ? "tf_dict_count(" : "tf_dict_clear(") +
+                    wholeArrayRef(*e.args[0], scope) + ")",
+                false};
+        }
+        if (e.builtin == Builtin::DictExists || e.builtin == Builtin::DictRemove)
+        {
+            const std::string ref = wholeArrayRef(*e.args[0], scope);
+            return {std::string(e.builtin == Builtin::DictExists ? "tf_dict_exists("
+                                                                 : "tf_dict_remove(") +
+                        ref + ", " + keyOf(*e.args[1], scope) + ")",
+                    false};
+        }
         if (e.builtin == Builtin::LBound || e.builtin == Builtin::UBound)
         {
             const std::string dimension =
@@ -2447,6 +2562,12 @@ private:
     // tf_array_at1(ref, i) and its kin, the indexes evaluated left to right.
     std::string elementAt(const Expr &e, const std::string &ref, StatementScope &scope)
     {
+        if (e.byKey) // d(key): reading (or changing) an entry that must be there
+        {
+            const Variable &d = arrayOf(e);
+            return "tf_dict_get(" + ref + ", " + elemKind(d) + ", " + elemOps(d) + ", " +
+                   keyOf(*e.args[0], scope) + ")";
+        }
         std::vector<std::string> indexes;
         for (const auto &index : e.args)
         {

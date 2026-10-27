@@ -36,6 +36,15 @@ extern "C" {
 #define TF_NORETURN
 #endif
 
+/* Marks generated helpers a program may not use (a Type never copied has an
+   unused _copy), so strict warnings stay quiet. MSVC warns of these only at
+   /W4 (C4505), and has no attribute for it in C. */
+#if defined(__GNUC__) || defined(__clang__)
+#define TF_MAYBE_UNUSED __attribute__((unused))
+#else
+#define TF_MAYBE_UNUSED
+#endif
+
 /* Immutable, reference-counted UTF-8 string; see "Strings" below. */
 typedef struct tf_string tf_string;
 
@@ -76,6 +85,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_DIVISION_BY_ZERO 11    /* Division by zero */
 #define TF_ERR_TYPE_MISMATCH 13       /* Type mismatch */
 #define TF_ERR_NOTHING 91             /* Object variable or With block variable not set */
+#define TF_ERR_KEY_EXISTS 457         /* This key is already associated with an element of ... */
 #define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
 #define TF_ERR_TERMINAL 900           /* Terminal error (always fatal) */
 #define TF_ERR_FIRST_USER 1000        /* the first number left to programs */
@@ -321,6 +331,7 @@ typedef struct tf_array
     int32_t locks;            /* elements currently passed ByRef */
     const tf_record_ops *ops; /* TF_ELEM_RECORD only */
     int32_t upper[TF_ARRAY_MAX_RANK];
+    struct tf_dict_index *dict; /* a Dictionary's keys; NULL for an array */
 } tf_array;
 
 /* A fixed array, all elements 0 / "" / False (records: their init). ops is
@@ -367,6 +378,42 @@ int32_t tf_array_ubound(const tf_array *a, int32_t dimension);
    array are error 10 meanwhile, so the element's address stays valid. */
 void tf_array_lock(tf_array *a);
 void tf_array_unlock(tf_array *a);
+
+/* ------------------------------------------------------------------------ */
+/* Dictionaries: String keys, values of one type                            */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * A Dictionary is a tf_array of rank 1 whose elements are its values, in
+ * the order their keys were first added, plus an index of those keys
+ * (case-sensitive, compared byte for byte). So it is declared, freed,
+ * copied, locked and held in records exactly as a dynamic array; a zeroed
+ * tf_array is an empty Dictionary.
+ *
+ * Adding a key may move the values in memory (as ReDim may move an
+ * array's), so a value's address is taken only after anything that could
+ * add to the same Dictionary, and adding or removing while a value is
+ * passed ByRef (the Dictionary locked) is error 10.
+ *
+ * get: the value for key; error 5 if there is none. put: the same, adding
+ * the key (value 0 / "" / a new record) if it is not there. add: adds the
+ * key, error 457 if it is there. Errors return a scratch value, as for
+ * arrays. elem and ops describe the values (ops for TF_ELEM_RECORD): a
+ * Dictionary nothing has been added to does not know them yet.
+ */
+void *tf_dict_get(tf_array *d, tf_elem elem, const tf_record_ops *ops, const tf_string *key);
+void *tf_dict_put(tf_array *d, tf_elem elem, const tf_record_ops *ops, tf_string *key);
+void *tf_dict_add(tf_array *d, tf_elem elem, const tf_record_ops *ops, tf_string *key);
+int tf_dict_exists(const tf_array *d, const tf_string *key);
+int32_t tf_dict_count(const tf_array *d);
+void tf_dict_remove(tf_array *d, const tf_string *key); /* error 5 if not there */
+void tf_dict_clear(tf_array *d);
+
+/* Keys and Items: copies into a dynamic array (rank 1; UBound -1 when the
+   Dictionary is empty), in insertion order. Error 10 if to is fixed or
+   locked, as for any array assignment. */
+void tf_dict_keys(tf_array *to, const tf_array *d);
+void tf_dict_items(tf_array *to, const tf_array *d, tf_elem elem, const tf_record_ops *ops);
 
 /* ------------------------------------------------------------------------ */
 /* Refs: reference-counted records                                           */

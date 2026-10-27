@@ -31,3 +31,10 @@ tf_set_warnings(test_arrays)
 
 add_test(NAME runtime.arrays COMMAND test_arrays)
 set_tests_properties(runtime.arrays PROPERTIES LABELS runtime)
+
+add_executable(test_dict test_dict.c)
+target_link_libraries(test_dict PRIVATE tfrt)
+tf_set_warnings(test_dict)
+
+add_test(NAME runtime.dict COMMAND test_dict)
+set_tests_properties(runtime.dict PROPERTIES LABELS runtime)

@@ -98,9 +98,16 @@ authoritative for design rationale.
   Step 5c (27 Oct 2026): Jim settled the Dictionary design (REFERENCE.md
   "Dictionary") and For Each in v1. 5c-1 done: For Each over arrays
   (`Each`, `In` reserved).
-- **Next:** 5c-2 Dictionary (runtime hash table keeping insertion order;
-  `Dictionary(Of T)` as a value like arrays; Keys/Items return arrays so
-  For Each works on them).
+  5c-2 done: Dictionary (`Of` reserved). Smaller rules Proposed in
+  REFERENCE.md "Dictionary: details". Also: an array member or d.Keys
+  used as a single value is now an error (`checkWhole`; it used to reach
+  the C compiler), and generated Type helpers are `TF_MAYBE_UNUSED`.
+  tests/golden/errors.c fails -Wunused-but-set-variable under strict
+  flags (its BASIC sets r and never reads it): the test's fault, not
+  codegen's; left as is.
+- **Next:** Phase 3 step 6 (string library, file I/O, Command$,
+  Environ$); confirm with Jim. Step 5 (arrays, Types, Ref, With, For
+  Each, Dictionary) is complete.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -291,6 +298,18 @@ Key mechanisms:
   condition `n < Count(path)` (`Builtin::Count`, internal), and the body
   starting with `x = path(n)` (an Index with `linear`, which codegen emits
   as `tf_array_atlin`) and `n = n + 1`. Codegen emits setup, then emitDo.
+- **Dictionary in C:** a `tf_array` (rank 1, its values in insertion
+  order) plus `dict`, an index of keys (tf_array.c "Dictionaries"), so
+  array code declares, frees, copies, locks and holds it in records. A
+  Variable has `isDictionary` with rank 1 / dynamic; `d(k)` is an Index
+  with `byKey` (read: `tf_dict_get`, error 5); `d(k) = v` and `d.Add`
+  (an Assign whose target has `adding`) go through `dictionaryStore`,
+  which parks the whole value before `tf_dict_put/add`, as adding may
+  move the values. d.Count/Exists/Keys/Items/Remove/Clear become
+  `Builtin::Dict*` calls with the Dictionary as args[0]; Remove and Clear
+  are `StmtKind::Method`. Keys/Items are only valid where `checkWhole`
+  allows a whole array (array assignment, For Each, which copies them
+  into a hidden array first).
 - **With:** no codegen of its own. Sema (`checkWith`/`anchorWith`) moves
   the parts of the target evaluated once (the last Ref, Function call or
   New on the path, then later indexes) into assignments to hidden locals

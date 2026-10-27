@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <utility>
 
 namespace tf
 {
@@ -63,6 +64,11 @@ struct TypeInfo
     TypeInfo(Type t, const EnumDef *d = nullptr, const TypeDef *r = nullptr)
         : type(t), def(d), record(r)
     {
+    }
+
+    bool operator==(const TypeInfo &other) const
+    {
+        return type == other.type && def == other.def && record == other.record;
     }
 };
 
@@ -242,6 +248,13 @@ private:
             if (proc->result != nullptr)
             {
                 resolveType(*proc->result);
+                if (proc->result->isDictionary)
+                {
+                    diagnostics_.error(proc->result->location,
+                                       "a Function cannot return a Dictionary; pass one ByRef "
+                                       "for it to fill");
+                    proc->result->type = Type::Error;
+                }
             }
         }
     }
@@ -430,6 +443,9 @@ private:
             case StmtKind::With:
                 checkWith(s);
                 break;
+            case StmtKind::Method:
+                checkMethod(s);
+                break;
             case StmtKind::ErrClear:
             case StmtKind::End:
                 break;
@@ -525,7 +541,7 @@ private:
                 return;
             }
         }
-        checkExpr(target);
+        checkWhole(target); // o.Lines = other is a whole array
         if (target.kind == ExprKind::Member && target.field != nullptr && target.rank > 0)
         {
             checkArrayAssignment(s); // o.Lines = other
@@ -886,7 +902,13 @@ private:
                 return isNumeric(t) ? t : wrongArgument("a number");
             case Builtin::LBound: // handled by checkBounds
             case Builtin::UBound:
-            case Builtin::Count: // made by For Each, never by name
+            case Builtin::Count: // made by For Each and Dictionary members, never by name
+            case Builtin::DictCount:
+            case Builtin::DictExists:
+            case Builtin::DictKeys:
+            case Builtin::DictItems:
+            case Builtin::DictRemove:
+            case Builtin::DictClear:
             case Builtin::None:
                 break;
         }
@@ -1615,7 +1637,18 @@ private:
     // o.Lines(i): an element of an array member.
     Type checkMemberIndex(Expr &e)
     {
-        checkExpr(*e.left);
+        if (e.left->kind == ExprKind::Member && e.left->text == "Exists" && e.left->left != nullptr)
+        {
+            if (const Variable *d = dictionaryOf(*e.left->left))
+            {
+                return checkExists(e, *d);
+            }
+            if (e.left->left->type == Type::Error && e.left->left->kind == ExprKind::Member)
+            {
+                return Type::Error; // already reported
+            }
+        }
+        checkWhole(*e.left);
         if (e.left->type == Type::Error)
         {
             for (auto &index : e.args)
@@ -1695,6 +1728,277 @@ private:
             return true;
         }
         return root != nullptr && root->rank > 0 && readOnlyArray(*root, where);
+    }
+
+    // -- Dictionaries ----------------------------------------------------------
+
+    // The Dictionary that object is (d, o.Ages, or .Ages in a With), or null
+    // (anything else, checked as it is; nothing reported for a non-Dictionary).
+    const Variable *dictionaryOf(Expr &object)
+    {
+        if (object.kind == ExprKind::Name)
+        {
+            const Variable *v = lookupVariable(object.text);
+            return v != nullptr && v->isDictionary ? wholeArray(object, "") : nullptr;
+        }
+        if (object.kind != ExprKind::Member)
+        {
+            return nullptr;
+        }
+        checkWhole(object);
+        return object.field != nullptr && object.field->isDictionary ? object.field : nullptr;
+    }
+
+    // d.Keys or d.Items, not yet checked: an array value.
+    bool isDictionaryList(Expr &e)
+    {
+        if (e.kind == ExprKind::Call &&
+            (e.builtin == Builtin::DictKeys || e.builtin == Builtin::DictItems))
+        {
+            return true;
+        }
+        return e.kind == ExprKind::Member && (e.text == "Keys" || e.text == "Items") &&
+               e.left != nullptr && dictionaryOf(*e.left) != nullptr;
+    }
+
+    // d (a Dictionary) where an array is wanted: says what to do instead.
+    bool dictionaryHere(const Variable *v, Location where, const char *instead)
+    {
+        if (v == nullptr || !v->isDictionary)
+        {
+            return false;
+        }
+        diagnostics_.error(where, "'" + v->name + "' is a Dictionary; " + instead);
+        return true;
+    }
+
+    // e (object.Name) becomes a call of the built-in for that member.
+    static void becomeBuiltin(Expr &e, Builtin id)
+    {
+        ExprPtr object = std::move(e.left);
+        e.kind = ExprKind::Call;
+        e.builtin = id;
+        e.args.clear();
+        e.args.push_back(std::move(object));
+    }
+
+    // e checked where a whole array (or Dictionary) may stand: an array
+    // member (o.Lines) or d.Keys is then not an error.
+    Type checkWhole(Expr &e)
+    {
+        wantWhole_ = true;
+        const Type t = checkExpr(e);
+        wantWhole_ = false;
+        return t;
+    }
+
+    // A member that is a whole array or Dictionary, where a single value is
+    // wanted ("s = o.Lines"), is an error.
+    Type wholeWanted(const Expr &e, Type t, bool whole)
+    {
+        if (t == Type::Error || e.rank == 0 || whole)
+        {
+            return t;
+        }
+        if (e.field != nullptr && e.field->isDictionary)
+        {
+            diagnostics_.error(e.location,
+                               "'" + e.text + "' is a Dictionary; use an entry, as in " + e.text +
+                                   "(\"key\"), or a member such as " + e.text + ".Count");
+        }
+        else
+        {
+            diagnostics_.error(e.location, "'" + e.text + "' is an array; use an element, as in " +
+                                               e.text + "(0)");
+        }
+        return Type::Error;
+    }
+
+    // d.Count, d.Keys, d.Items.
+    Type dictionaryMember(Expr &e, const Variable &d, bool whole)
+    {
+        const std::string &m = e.text;
+        if (m == "Count")
+        {
+            becomeBuiltin(e, Builtin::DictCount);
+            return Type::Integer;
+        }
+        if ((m == "Keys" || m == "Items") && !whole)
+        {
+            diagnostics_.error(e.location, "'" + m +
+                                               "' gives an array: assign it to a dynamic "
+                                               "array, or go through it with For Each");
+            return Type::Error;
+        }
+        if (m == "Keys" || m == "Items")
+        {
+            becomeBuiltin(e, m == "Keys" ? Builtin::DictKeys : Builtin::DictItems);
+            e.rank = 1;
+            e.enumDef = m == "Keys" ? nullptr : d.enumDef;
+            e.typeDef = m == "Keys" ? nullptr : d.typeDef;
+            return m == "Keys" ? Type::String : d.type;
+        }
+        if (m == "Exists")
+        {
+            diagnostics_.error(e.location, "Exists needs a key: " + d.name + ".Exists(key)");
+        }
+        else if (m == "Add" || m == "Remove" || m == "Clear")
+        {
+            diagnostics_.error(e.location, "'" + m + "' is a statement: write " + d.name + "." + m +
+                                               (m == "Add"      ? " key, value"
+                                                : m == "Remove" ? " key"
+                                                                : "") +
+                                               " on its own");
+        }
+        else
+        {
+            diagnostics_.error(e.location, "a Dictionary has no member '" + m +
+                                               "'; it has Count, Keys, Items, Exists, Add, "
+                                               "Remove and Clear");
+        }
+        return Type::Error;
+    }
+
+    // d.Exists(key): parsed as an Index of the member Exists.
+    Type checkExists(Expr &e, const Variable &d)
+    {
+        for (auto &key : e.args)
+        {
+            checkExpr(*key);
+        }
+        if (e.args.size() != 1)
+        {
+            diagnostics_.error(e.location, "Exists takes one key: " + d.name + ".Exists(key)");
+            return Type::Error;
+        }
+        if (!requireKey(*e.args[0]))
+        {
+            return Type::Error;
+        }
+        ExprPtr key = std::move(e.args[0]);
+        ExprPtr object = std::move(e.left->left);
+        e.kind = ExprKind::Call;
+        e.builtin = Builtin::DictExists;
+        e.left = nullptr;
+        e.args.clear();
+        e.args.push_back(std::move(object));
+        e.args.push_back(std::move(key));
+        return Type::Boolean;
+    }
+
+    bool requireKey(const Expr &key)
+    {
+        const Type t = lowered(infoOf(key));
+        if (t != Type::String && t != Type::Error)
+        {
+            diagnostics_.error(key.location, "a Dictionary's key is a String, not " +
+                                                 article(infoOf(key)) + "; use CStr");
+        }
+        return t == Type::String;
+    }
+
+    // d.Add key, value / d.Remove key / d.Clear (also with parentheses).
+    void checkMethod(Stmt &s)
+    {
+        std::vector<ExprPtr> args;
+        ExprPtr member = std::move(s.target);
+        if (member->kind == ExprKind::Index) // d.Remove("x")
+        {
+            args = std::move(member->args);
+            member = std::move(member->left);
+        }
+        for (auto &arg : s.args)
+        {
+            args.push_back(std::move(arg));
+        }
+        s.args.clear();
+        if (member->kind != ExprKind::Member)
+        {
+            diagnostics_.error(member->location, "expected '=' after this");
+            return;
+        }
+        const Variable *d = member->left != nullptr ? dictionaryOf(*member->left) : nullptr;
+        if (d == nullptr)
+        {
+            for (auto &arg : args)
+            {
+                checkExpr(*arg);
+            }
+            if (member->left == nullptr || member->left->type != Type::Error)
+            {
+                diagnostics_.error(member->location, "'" + member->text +
+                                                         "' is not a statement; to set it, write " +
+                                                         "'= value' after it");
+            }
+            return;
+        }
+        const std::string &m = member->text;
+        const std::size_t wanted = m == "Add" ? 2 : m == "Remove" ? 1 : 0;
+        if (m != "Add" && m != "Remove" && m != "Clear")
+        {
+            diagnostics_.error(member->location, "a Dictionary's statements are Add, Remove and "
+                                                 "Clear, not '" +
+                                                     m + "'");
+            return;
+        }
+        if (args.size() != wanted)
+        {
+            for (auto &arg : args)
+            {
+                checkExpr(*arg);
+            }
+            diagnostics_.error(member->location,
+                               m + (m == "Add"
+                                        ? " takes a key and a value: " + d->name + ".Add key, value"
+                                    : m == "Remove" ? " takes a key: " + d->name + ".Remove key"
+                                                    : " takes nothing: " + d->name + ".Clear"));
+            return;
+        }
+        ExprPtr object = std::move(member->left);
+        if (m == "Add")
+        {
+            // d.Add k, v is d(k) = v that must add: an ordinary assignment.
+            auto entry = std::make_unique<Expr>();
+            entry->location = member->location;
+            entry->adding = true;
+            entry->args.push_back(std::move(args[0]));
+            if (object->kind == ExprKind::Name)
+            {
+                entry->kind = ExprKind::Call; // d(k), as parsed
+                entry->text = object->text;
+            }
+            else
+            {
+                entry->kind = ExprKind::Index; // o.Ages(k)
+                entry->left = std::move(object);
+            }
+            s.kind = StmtKind::Assign;
+            s.target = std::move(entry);
+            s.value = std::move(args[1]);
+            checkAssignment(s);
+            return;
+        }
+        if (readOnlyPath(*object, object->location))
+        {
+            return;
+        }
+        auto call = std::make_unique<Expr>();
+        call->kind = ExprKind::Call;
+        call->location = member->location;
+        call->text = m;
+        call->type = Type::Void;
+        call->builtin = m == "Remove" ? Builtin::DictRemove : Builtin::DictClear;
+        call->args.push_back(std::move(object));
+        if (m == "Remove")
+        {
+            checkExpr(*args[0]);
+            if (!requireKey(*args[0]))
+            {
+                return;
+            }
+            call->args.push_back(std::move(args[0]));
+        }
+        s.value = std::move(call);
     }
 
     // -- With ----------------------------------------------------------------
@@ -1810,7 +2114,31 @@ private:
     void checkForEach(Stmt &s)
     {
         const Type varType = checkExpr(*s.target);
-        const Variable *array = wholeArray(*s.value, "For Each");
+        // For Each k In d.Keys: the keys (or values) are copied into a hidden
+        // array at the start, so changing d inside the loop is safe.
+        StmtPtr list;
+        const Variable *array = nullptr;
+        if (isDictionaryList(*s.value))
+        {
+            if (checkWhole(*s.value) != Type::Error)
+            {
+                Variable &held = hiddenLocal(*s.value);
+                held.rank = 1;
+                held.isDynamic = true;
+                const Location at = s.value->location;
+                list = assign(nameOf(held, at), std::move(s.value), s.location);
+                s.value = nameOf(held, at);
+                array = &held;
+            }
+        }
+        else
+        {
+            array = wholeArray(*s.value, "For Each");
+            if (dictionaryHere(array, s.value->location, "go through its .Keys or .Items"))
+            {
+                array = nullptr;
+            }
+        }
         const bool variable = s.target->kind == ExprKind::Name && s.target->variable != nullptr &&
                               varType != Type::Error;
         if (varType != Type::Error && !variable)
@@ -1843,6 +2171,10 @@ private:
         }
 
         scopes_.emplace_back(); // the hidden locals
+        if (list != nullptr)
+        {
+            s.setup.push_back(std::move(list));
+        }
         anchorWith(s.value, s.setup, s.location);
         const Expr &path = *s.value;
         Expr like;
@@ -1960,6 +2292,7 @@ private:
         e->type = v.type;
         e->typeDef = v.typeDef;
         e->enumDef = v.enumDef;
+        e->rank = v.rank;
         e->variable = &v;
         return e;
     }
@@ -1980,6 +2313,8 @@ private:
         c->typeDef = e.typeDef;
         c->field = e.field;
         c->rank = e.rank;
+        c->linear = e.linear;
+        c->byKey = e.byKey;
         c->variable = e.variable;
         c->control = e.control;
         if (e.left != nullptr)
@@ -2077,7 +2412,7 @@ private:
                 return v;
             }
         }
-        const Type t = checkExpr(e); // reports an undeclared name, and so on
+        const Type t = checkWhole(e); // reports an undeclared name, and so on
         if (e.kind == ExprKind::Member && e.field != nullptr && e.rank > 0)
         {
             return e.field;
@@ -2094,9 +2429,10 @@ private:
     {
         if (v.isParameter && !v.byRef)
         {
-            diagnostics_.error(where, "the array '" + v.name +
-                                          "' is a ByVal parameter, so it cannot be changed here; "
-                                          "make it ByRef to change it");
+            diagnostics_.error(
+                where, std::string(v.isDictionary ? "the Dictionary '" : "the array '") + v.name +
+                           "' is a ByVal parameter, so it cannot be changed here; "
+                           "make it ByRef to change it");
             return true;
         }
         return false;
@@ -2121,6 +2457,30 @@ private:
     {
         e.enumDef = array.enumDef;
         e.typeDef = array.typeDef;
+        if (array.isDictionary) // d(key)
+        {
+            e.byKey = true;
+            for (auto &key : e.args)
+            {
+                checkExpr(*key);
+            }
+            if (e.args.size() != 1)
+            {
+                diagnostics_.error(e.location, "'" + arrayName +
+                                                   "' is a Dictionary: it takes one key, as in " +
+                                                   arrayName + "(\"key\")");
+                return Type::Error;
+            }
+            const Type t = lowered(infoOf(*e.args[0]));
+            if (t != Type::String && t != Type::Error)
+            {
+                diagnostics_.error(e.args[0]->location, "a Dictionary's key is a String, not " +
+                                                            article(infoOf(*e.args[0])) +
+                                                            "; use CStr");
+                return Type::Error;
+            }
+            return t == Type::Error ? Type::Error : array.type;
+        }
         bool ok = true;
         for (auto &index : e.args)
         {
@@ -2150,9 +2510,46 @@ private:
     void checkArrayAssignment(Stmt &s)
     {
         const Variable *target = wholeArray(*s.target, "assignment");
+        if (isDictionaryList(*s.value)) // keys = d.Keys, values = d.Items
+        {
+            checkWhole(*s.value);
+            if (target == nullptr || s.value->type == Type::Error ||
+                readOnlyPath(*s.target, s.target->location))
+            {
+                return;
+            }
+            const TypeInfo got = infoOf(*s.value);
+            if (target->isDictionary || !target->isDynamic || target->rank != 1 ||
+                !(infoOf(*target) == got))
+            {
+                diagnostics_.error(s.target->location,
+                                   "'" + s.value->text + "' gives an array of " + name(got) +
+                                       ", so it is assigned to a dynamic array: Dim " +
+                                       target->name + "() As " + name(got));
+            }
+            return;
+        }
         const Variable *source = wholeArray(*s.value, "assigning to an array");
         if (target == nullptr || source == nullptr || readOnlyPath(*s.target, s.target->location))
         {
+            return;
+        }
+        if (target->isDictionary != source->isDictionary)
+        {
+            diagnostics_.error(s.value->location,
+                               std::string("cannot assign ") + (source->isDictionary
+                                                                    ? "a Dictionary to an array"
+                                                                    : "an array to a Dictionary"));
+            return;
+        }
+        if (target->isDictionary)
+        {
+            if (!(infoOf(*target) == infoOf(*source)))
+            {
+                diagnostics_.error(s.value->location,
+                                   "cannot assign a Dictionary(Of " + name(infoOf(*source)) +
+                                       ") to a Dictionary(Of " + name(infoOf(*target)) + ")");
+            }
             return;
         }
         if (!target->isDynamic)
@@ -2205,12 +2602,17 @@ private:
                 }
                 target->variable = found;
                 v = found;
+                if (dictionaryHere(v, target->location, "it grows as keys are added"))
+                {
+                    continue;
+                }
             }
             else if (target->kind == ExprKind::Index && target->left != nullptr)
             {
                 v = wholeArray(*target->left, "ReDim");
                 arrayName = target->left->text;
-                if (v == nullptr)
+                if (v == nullptr ||
+                    dictionaryHere(v, target->location, "it grows as keys are added"))
                 {
                     continue;
                 }
@@ -2248,7 +2650,8 @@ private:
     {
         for (auto &array : s.args)
         {
-            if (wholeArray(*array, "Erase") != nullptr)
+            const Variable *v = wholeArray(*array, "Erase");
+            if (v != nullptr && !dictionaryHere(v, array->location, "empty it with .Clear"))
             {
                 readOnlyPath(*array, array->location);
             }
@@ -2270,6 +2673,10 @@ private:
             return Type::Error;
         }
         const Variable *v = wholeArray(*e.args[0], b.name);
+        if (dictionaryHere(v, e.args[0]->location, "use its .Count"))
+        {
+            return Type::Error;
+        }
         if (e.args.size() == 2)
         {
             checkExpr(*e.args[1]);
@@ -2302,6 +2709,22 @@ private:
         const Variable *v = wholeArray(arg, which.c_str());
         if (v == nullptr || param.type == Type::Error)
         {
+            return;
+        }
+        if (v->isDictionary != param.isDictionary)
+        {
+            diagnostics_.error(arg.location,
+                               which + " must be " +
+                                   (param.isDictionary ? "a Dictionary" : "an array") + ", not " +
+                                   (v->isDictionary ? "a Dictionary" : "an array"));
+            return;
+        }
+        if (v->isDictionary &&
+            (v->type != param.type || v->enumDef != param.enumDef || v->typeDef != param.typeDef))
+        {
+            diagnostics_.error(arg.location, which + " must be a Dictionary(Of " +
+                                                 name(infoOf(param)) + "), not (Of " +
+                                                 name(infoOf(*v)) + ")");
             return;
         }
         if (v->type != param.type || v->enumDef != param.enumDef || v->typeDef != param.typeDef ||
@@ -2625,6 +3048,13 @@ private:
             }
             return makeConstant(e, *v);
         }
+        if (v != nullptr && v->isDictionary)
+        {
+            diagnostics_.error(e.location,
+                               "'" + e.text + "' is a Dictionary; use an entry, as in " + e.text +
+                                   "(\"key\"), or a member such as " + e.text + ".Count");
+            return Type::Error;
+        }
         if (v != nullptr && v->rank > 0)
         {
             const std::string commas(static_cast<std::size_t>(v->rank - 1), ',');
@@ -2744,6 +3174,7 @@ private:
 
     Type resolveMember(Expr &e)
     {
+        const bool whole = std::exchange(wantWhole_, false);
         if (e.left == nullptr) // .Name: a member of the innermost With's target
         {
             if (withs_.empty() || withs_.back() == nullptr)
@@ -2772,6 +3203,10 @@ private:
                 return resolveEnumMember(e, *it->second);
             }
         }
+        if (const Variable *d = dictionaryOf(object))
+        {
+            return dictionaryMember(e, *d, whole);
+        }
         const Type objectType = checkExpr(object);
         if (objectType == Type::Error)
         {
@@ -2779,7 +3214,7 @@ private:
         }
         if (objectType == Type::Record && object.rank == 0)
         {
-            return resolveField(e, *object.typeDef);
+            return wholeWanted(e, resolveField(e, *object.typeDef), whole);
         }
         if (objectType == Type::Ref && object.rank == 0)
         {
@@ -2788,7 +3223,8 @@ private:
                 diagnostics_.error(object.location, "Nothing has no members");
                 return Type::Error;
             }
-            return resolveField(e, *object.typeDef); // the record it refers to
+            return wholeWanted(e, resolveField(e, *object.typeDef),
+                               whole); // the record it refers to
         }
         if (object.control == nullptr)
         {
@@ -3042,6 +3478,7 @@ private:
     // one whose target was in error); hidden locals made so far.
     std::vector<const Expr *> withs_;
     int withCount_ = 0;
+    bool wantWhole_ = false; // see checkWhole
 };
 
 } // namespace

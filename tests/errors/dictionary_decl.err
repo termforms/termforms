@@ -1,0 +1,4 @@
+dictionary_decl.bas:5:14: error: a Dictionary is ready to use when declared: write 'As Dictionary(Of ...)' without New
+dictionary_decl.bas:6:20: error: an array of Dictionaries is not available; put the Dictionary in a Type and make an array of that
+dictionary_decl.bas:7:33: error: a Dictionary's values cannot be Dictionaries; put the inner Dictionary in a Type
+dictionary_decl.bas:8:16: error: a Const cannot be a Dictionary

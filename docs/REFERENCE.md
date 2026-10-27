@@ -256,7 +256,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 
 | Number | Text | Raised by | Since |
 | --- | --- | --- | --- |
-| 5 | Invalid procedure call or argument | an undefined power such as `(-8) ^ 0.5`; `Throw 0` | now |
+| 5 | Invalid procedure call or argument | an undefined power such as `(-8) ^ 0.5`; `Throw 0`; a Dictionary key that is not there (read, Remove) | now |
 | 6 | Overflow | Integer and Long arithmetic, a Double too large, CInt/CLng out of range | now |
 | 7 | Out of memory | running out of memory (always fatal, never caught) | now |
 | 11 | Division by zero | `/`, `\`, `Mod` by zero | now |
@@ -264,9 +264,9 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 14 | Out of string space | joining strings into one longer than a string can hold (about 2 GB); catchable, the result is "" | now |
 | 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
 | 9 | Subscript out of range | an array index outside its bounds; UBound of an empty array; ReDim Preserve changing a dimension other than the last | now |
-| 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef | now |
+| 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef; adding to, removing from or clearing a Dictionary whose entry is being passed ByRef | now |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
-| 457 | This key is already associated with an element of this collection | adding a Dictionary key twice | Dictionary |
+| 457 | This key is already associated with an element of this collection | `d.Add` of a key that is there | now |
 | 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
 | 380 | Invalid property value | a control property set out of range | forms |
 
@@ -569,6 +569,33 @@ Next
   add or replace), `d.Add key, value` (457 if the key exists),
   `d.Exists(key)`, `d.Remove key`, `d.Count`, `d.Clear`, `d.Keys` (a
   String array) and `d.Items` (an array of T).
+
+### Dictionary: details (Proposed)
+
+- **Only `d(key) = value` (and Add) adds a key.** Any other use of an
+  entry needs it to be there (error 5): reading it, changing a member of
+  one (`d(k).Name = "x"`), passing it ByRef, a With on it.
+- `Keys` and `Items` are **copies**, taken when evaluated: changing the
+  Dictionary inside `For Each k In d.Keys` is safe. They are assigned to
+  a dynamic array of their type (`Dim ks() As String: ks = d.Keys`) or
+  used in For Each; nowhere else (`UBound(d.Keys)` is an error: use
+  `d.Count`). An empty Dictionary's Keys has UBound -1, so `For i = 0 To
+  UBound(ks)` runs no passes.
+- While an entry is passed ByRef, adding a key, Remove and Clear are
+  error 10 (as ReDim of an array whose element is passed ByRef);
+  changing existing entries is allowed.
+- A With on an entry (`With d(k)`) keeps the key and looks the entry up
+  again at each use, as With does for an array element.
+- Values may be any type but an array or a Dictionary (put either in a
+  Type). A Dictionary may be a member of a Type; arrays of Dictionaries
+  are not available (make an array of a Type that holds one). A
+  Function cannot return a Dictionary (pass one ByRef to fill).
+- ByVal: read-only, not copied (as arrays). Assignment `d2 = d` copies
+  every entry; both must hold the same type.
+- `""` is a key like any other. `Count` is an Integer.
+- Remove takes time in proportion to the entries after the one removed
+  (the order is kept); looking up and adding take about the same time
+  however many entries there are.
 
 ## Forms and events (Settled, 23 Oct 2026)
 

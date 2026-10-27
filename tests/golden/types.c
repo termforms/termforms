@@ -21,13 +21,13 @@ struct t_Customer
     tf_array f_Tags;
 };
 
-static void t_Address_init(void *record);
-static void t_Address_free(void *record);
-static void t_Address_copy(void *to, const void *from);
-static void t_Customer_init(void *record);
-static void t_Customer_free(void *record);
-static void t_Customer_copy(void *to, const void *from);
-static int t_Customer_busy(const t_Customer *x);
+static TF_MAYBE_UNUSED void t_Address_init(void *record);
+static TF_MAYBE_UNUSED void t_Address_free(void *record);
+static TF_MAYBE_UNUSED void t_Address_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED void t_Customer_init(void *record);
+static TF_MAYBE_UNUSED void t_Customer_free(void *record);
+static TF_MAYBE_UNUSED void t_Customer_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED int t_Customer_busy(const t_Customer *x);
 static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy};
 
 static void t_Address_init(void *record)

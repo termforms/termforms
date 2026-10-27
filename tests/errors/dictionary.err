@@ -1,0 +1,17 @@
+dictionary.bas:12:10: error: a Function cannot return a Dictionary; pass one ByRef for it to fill
+dictionary.bas:16:5: error: the Dictionary 'd' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+dictionary.bas:17:5: error: the Dictionary 'd' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+dictionary.bas:23:11: error: a Dictionary's key is a String, not an Integer; use CStr
+dictionary.bas:24:9: error: 'd' is a Dictionary; use an entry, as in d("key"), or a member such as d.Count
+dictionary.bas:25:11: error: 'd' is a Dictionary; it grows as keys are added
+dictionary.bas:26:11: error: 'd' is a Dictionary; empty it with .Clear
+dictionary.bas:27:16: error: 'd' is a Dictionary; use its .Count
+dictionary.bas:28:19: error: 'd' is a Dictionary; go through its .Keys or .Items
+dictionary.bas:30:11: error: a Dictionary has no member 'Size'; it has Count, Keys, Items, Exists, Add, Remove and Clear
+dictionary.bas:31:7: error: Add takes a key and a value: d.Add key, value
+dictionary.bas:32:10: error: Exists needs a key: d.Exists(key)
+dictionary.bas:33:5: error: 'Keys' gives an array of String, so it is assigned to a dynamic array: Dim fixed() As String
+dictionary.bas:34:15: error: 'Keys' gives an array: assign it to a dynamic array, or go through it with For Each
+dictionary.bas:35:9: error: cannot assign a Dictionary to an array
+dictionary.bas:36:9: error: cannot assign a Dictionary(Of String) to a Dictionary(Of Integer)
+dictionary.bas:37:10: error: argument 1 of 'Look' must be a Dictionary, not an array

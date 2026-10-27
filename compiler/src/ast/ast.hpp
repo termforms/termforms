@@ -65,7 +65,15 @@ enum class Builtin
     Int,
     LBound,
     UBound,
-    Count // not a name programs use: For Each's element count of an array (a Long)
+    Count, // not a name programs use: For Each's element count of an array (a Long)
+    // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
+    // is the Dictionary, then the key): never written by name.
+    DictCount,
+    DictExists,
+    DictKeys,
+    DictItems,
+    DictRemove,
+    DictClear
 };
 
 // The most dimensions an array may have (TF_ARRAY_MAX_RANK in tf_runtime.h).
@@ -156,6 +164,10 @@ struct Expr
     const Variable *field = nullptr;  // Member of a record: the Type's member
     int rank = 0;        // a whole array (a Name or a record's array member): its dimensions
     bool linear = false; // an Index For Each makes: args[0] numbers the elements in storage order
+    // An Index that is a Dictionary's entry: args[0] is the key. adding: the
+    // target of d.Add (error 457 if the key is there).
+    bool byKey = false;
+    bool adding = false;
     // CType(value, type): the target type, written as convertTo or, for an
     // Enum, by name. The semantic pass turns it into a CInt/CLng/... call.
     Type convertTo = Type::Error;
@@ -189,6 +201,7 @@ enum class StmtKind
     ReDim,    // ReDim [Preserve] a(bounds), ...: args are a(bounds) as Call shapes
     Erase,    // Erase a, ...: args are the array names
     With,     // With target ... End With: see Stmt::body
+    Method,   // x.Name args: a Dictionary's Add, Remove or Clear (see Stmt::target)
     End       // the End statement: terminate the program
 };
 
@@ -223,7 +236,10 @@ struct Stmt
     bool insideLoop = false; // set by the semantic pass: re-initialised each pass
 
     // Assign: target = value. For: target is the loop variable, value the
-    // start. Return: value is the result, or null.
+    // start. Return: value is the result, or null. Method: target is
+    // x.Name, or x.Name(args) if written with parentheses, and args the
+    // rest; the semantic pass makes Add an Assign and Remove and Clear a
+    // value that is a call of their built-in.
     ExprPtr target;
     ExprPtr value;
 
@@ -318,6 +334,9 @@ struct Variable
     // Function's Type result, which (as the result itself) cannot be changed.
     bool isWithAnchor = false;
     bool withCopy = false;
+    // Dictionary(Of T): type is T; held as a dynamic array of rank 1 (its
+    // values) with an index of keys, so array rules mostly apply.
+    bool isDictionary = false;
 };
 
 // A property setting inside a Begin ... End block.

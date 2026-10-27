@@ -3,6 +3,8 @@
  * tf_array.c -- arrays: 0-based, column-major, bounds-checked, fixed or
  * dynamic (see tf_runtime.h for the rules).
  *
+ * A Dictionary is an array plus a key index (see "Dictionaries" below).
+ *
  * Every scalar element type is valid when its bytes are zero (0, 0.0,
  * False, the NULL that is ""), so new elements are made with calloc or
  * memset; a record element is then also given its Type's init, and is
@@ -16,6 +18,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+
+static void free_index(tf_array *a);
+static void copy_index(tf_array *to, const tf_array *from);
 
 static size_t elem_size(int32_t elem, const tf_record_ops *ops)
 {
@@ -275,6 +280,7 @@ void tf_array_erase(tf_array *a)
 void tf_array_free(tf_array *a)
 {
     release_elements(a, 0, a->count);
+    free_index(a);
     free(a->data);
     const int32_t elem = a->elem;
     const int32_t fixed = a->fixed;
@@ -306,6 +312,7 @@ static void copy_elements(tf_array *to, const tf_array *from)
         {
             from->ops->copy(element(to, i), element(from, i));
         }
+        copy_index(to, from);
         return;
     }
     to->data = tf_xmalloc((size_t)from->count * size);
@@ -326,6 +333,7 @@ static void copy_elements(tf_array *to, const tf_array *from)
             tf_ref_retain(refs[i]);
         }
     }
+    copy_index(to, from);
 }
 
 void tf_array_copy(tf_array *to, const tf_array *from)
@@ -429,4 +437,280 @@ void tf_array_lock(tf_array *a)
 void tf_array_unlock(tf_array *a)
 {
     --a->locks;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Dictionaries                                                             */
+/* ------------------------------------------------------------------------ */
+
+/* The keys, parallel to the values (element i's key is keys[i]), and an
+   open-addressing table from a key's hash to its entry. Removing an entry
+   closes the gap and rebuilds the table: Remove is O(n), lookups and
+   additions O(1) on average. */
+struct tf_dict_index
+{
+    tf_string **keys;
+    int64_t capacity;   /* entries the values and keys have room for */
+    int64_t *slots;     /* an entry number, or -1 for an empty slot */
+    int64_t slot_count; /* a power of two, more than twice capacity */
+};
+
+static uint64_t key_hash(const tf_string *key)
+{
+    /* FNV-1a: simple, and good enough for a table that is never more than
+       half full. */
+    uint64_t h = UINT64_C(14695981039346656037);
+    const int32_t length = key != NULL ? key->length : 0;
+    for (int32_t i = 0; i < length; ++i)
+    {
+        h ^= (unsigned char)key->data[i];
+        h *= UINT64_C(1099511628211);
+    }
+    return h;
+}
+
+static int same_key(const tf_string *a, const tf_string *b)
+{
+    const int32_t la = a != NULL ? a->length : 0;
+    const int32_t lb = b != NULL ? b->length : 0;
+    return la == lb && (la == 0 || memcmp(a->data, b->data, (size_t)la) == 0);
+}
+
+/* The entry holding key, or -1; *slot is then where it would go. */
+static int64_t find_entry(const tf_array *a, const tf_string *key, int64_t *slot)
+{
+    const struct tf_dict_index *x = a->dict;
+    if (x == NULL)
+    {
+        return -1;
+    }
+    const uint64_t mask = (uint64_t)x->slot_count - 1;
+    for (uint64_t i = key_hash(key) & mask;; i = (i + 1) & mask)
+    {
+        const int64_t entry = x->slots[i];
+        if (entry < 0)
+        {
+            if (slot != NULL)
+            {
+                *slot = (int64_t)i;
+            }
+            return -1;
+        }
+        if (same_key(x->keys[entry], key))
+        {
+            return entry;
+        }
+    }
+}
+
+static void rebuild_slots(tf_array *a)
+{
+    struct tf_dict_index *x = a->dict;
+    int64_t size = 8;
+    while (size <= 2 * x->capacity)
+    {
+        size *= 2;
+    }
+    free(x->slots);
+    x->slots = tf_xmalloc((size_t)size * sizeof *x->slots);
+    x->slot_count = size;
+    for (int64_t i = 0; i < size; ++i)
+    {
+        x->slots[i] = -1;
+    }
+    for (int64_t entry = 0; entry < a->count; ++entry)
+    {
+        int64_t slot = 0;
+        find_entry(a, x->keys[entry], &slot);
+        x->slots[slot] = entry;
+    }
+}
+
+static void free_index(tf_array *a)
+{
+    struct tf_dict_index *x = a->dict;
+    if (x == NULL)
+    {
+        return;
+    }
+    for (int64_t i = 0; i < a->count; ++i)
+    {
+        tf_str_release(x->keys[i]);
+    }
+    free(x->keys);
+    free(x->slots);
+    free(x);
+    a->dict = NULL;
+}
+
+/* to's elements are already copies of from's; give it the same keys. */
+static void copy_index(tf_array *to, const tf_array *from)
+{
+    if (from->dict == NULL)
+    {
+        return;
+    }
+    struct tf_dict_index *x = tf_xcalloc(1, sizeof *x);
+    x->capacity = from->count;
+    x->keys = tf_xcalloc((size_t)(from->count > 0 ? from->count : 1), sizeof *x->keys);
+    for (int64_t i = 0; i < from->count; ++i)
+    {
+        x->keys[i] = from->dict->keys[i];
+        tf_str_retain(x->keys[i]);
+    }
+    to->dict = x;
+    rebuild_slots(to);
+}
+
+static void *add_entry(tf_array *d, tf_elem elem, const tf_record_ops *ops, tf_string *key)
+{
+    if (d->locks > 0)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return tf_scratch_element((int32_t)elem, ops);
+    }
+    if (d->count >= INT32_MAX)
+    {
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, NULL); /* Count is an Integer */
+    }
+    if (d->dict == NULL)
+    {
+        d->dict = tf_xcalloc(1, sizeof *d->dict);
+        d->elem = (int32_t)elem;
+        d->ops = ops;
+        d->rank = 1;
+        rebuild_slots(d);
+    }
+    struct tf_dict_index *x = d->dict;
+    const size_t size = elem_size((int32_t)elem, ops);
+    if (d->count == x->capacity)
+    {
+        x->capacity = x->capacity < 8 ? 8 : x->capacity * 2;
+        d->data = tf_xrealloc(d->data, (size_t)x->capacity * size);
+        x->keys = tf_xrealloc(x->keys, (size_t)x->capacity * sizeof *x->keys);
+        rebuild_slots(d);
+    }
+    int64_t slot = 0;
+    find_entry(d, key, &slot);
+    const int64_t entry = d->count++;
+    d->upper[0] = (int32_t)(d->count - 1);
+    memset(element(d, entry), 0, size);
+    ready_elements(d, entry, entry + 1);
+    tf_str_retain(key);
+    x->keys[entry] = key;
+    x->slots[slot] = entry;
+    return element(d, entry);
+}
+
+void *tf_dict_get(tf_array *d, tf_elem elem, const tf_record_ops *ops, const tf_string *key)
+{
+    const int64_t entry = find_entry(d, key, NULL);
+    if (entry < 0)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return tf_scratch_element((int32_t)elem, ops);
+    }
+    return element(d, entry);
+}
+
+void *tf_dict_put(tf_array *d, tf_elem elem, const tf_record_ops *ops, tf_string *key)
+{
+    const int64_t entry = find_entry(d, key, NULL);
+    return entry >= 0 ? element(d, entry) : add_entry(d, elem, ops, key);
+}
+
+void *tf_dict_add(tf_array *d, tf_elem elem, const tf_record_ops *ops, tf_string *key)
+{
+    if (find_entry(d, key, NULL) >= 0)
+    {
+        tf_raise(TF_ERR_KEY_EXISTS, NULL);
+        return tf_scratch_element((int32_t)elem, ops);
+    }
+    return add_entry(d, elem, ops, key);
+}
+
+int tf_dict_exists(const tf_array *d, const tf_string *key)
+{
+    return find_entry(d, key, NULL) >= 0;
+}
+
+int32_t tf_dict_count(const tf_array *d)
+{
+    return (int32_t)d->count;
+}
+
+void tf_dict_remove(tf_array *d, const tf_string *key)
+{
+    if (d->locks > 0)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    const int64_t entry = find_entry(d, key, NULL);
+    if (entry < 0)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    struct tf_dict_index *x = d->dict;
+    const size_t size = elem_size(d->elem, d->ops);
+    release_elements(d, entry, entry + 1);
+    tf_str_release(x->keys[entry]);
+    const int64_t after = d->count - entry - 1;
+    memmove(element(d, entry), element(d, entry + 1), (size_t)after * size);
+    memmove(&x->keys[entry], &x->keys[entry + 1], (size_t)after * sizeof *x->keys);
+    --d->count;
+    d->upper[0] = (int32_t)(d->count - 1);
+    rebuild_slots(d);
+}
+
+void tf_dict_clear(tf_array *d)
+{
+    if (d->locks > 0)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    tf_array_free(d);
+}
+
+void tf_dict_keys(tf_array *to, const tf_array *d)
+{
+    if (to->locks > 0 || to->fixed)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    /* Built aside first: to may be d's own member (o.Names = o.Ages.Keys). */
+    tf_array keys = {0};
+    const int32_t upper = (int32_t)(d->count - 1);
+    set_shape(&keys, TF_ELEM_STRING, NULL, 1, &upper, d->count);
+    if (d->count > 0)
+    {
+        tf_string **strings = tf_xmalloc((size_t)d->count * sizeof *strings);
+        for (int64_t i = 0; i < d->count; ++i)
+        {
+            strings[i] = d->dict->keys[i];
+            tf_str_retain(strings[i]);
+        }
+        keys.data = strings;
+    }
+    tf_array_free(to);
+    *to = keys;
+}
+
+void tf_dict_items(tf_array *to, const tf_array *d, tf_elem elem, const tf_record_ops *ops)
+{
+    if (to->locks > 0 || to->fixed)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    tf_array items = {0};
+    copy_elements(&items, d);
+    free_index(&items);
+    const int32_t upper = (int32_t)(d->count - 1);
+    set_shape(&items, (int32_t)elem, ops, 1, &upper, d->count);
+    tf_array_free(to);
+    *to = items;
 }

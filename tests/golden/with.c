@@ -18,12 +18,12 @@ struct t_Customer
     t_Address f_Home;
 };
 
-static void t_Address_init(void *record);
-static void t_Address_free(void *record);
-static void t_Address_copy(void *to, const void *from);
-static void t_Customer_init(void *record);
-static void t_Customer_free(void *record);
-static void t_Customer_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED void t_Address_init(void *record);
+static TF_MAYBE_UNUSED void t_Address_free(void *record);
+static TF_MAYBE_UNUSED void t_Address_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED void t_Customer_init(void *record);
+static TF_MAYBE_UNUSED void t_Customer_free(void *record);
+static TF_MAYBE_UNUSED void t_Customer_copy(void *to, const void *from);
 static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy};
 
 static void t_Address_init(void *record)

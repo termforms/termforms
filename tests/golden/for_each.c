@@ -10,10 +10,10 @@ struct t_Order
     tf_array f_Lines;
 };
 
-static void t_Order_init(void *record);
-static void t_Order_free(void *record);
-static void t_Order_copy(void *to, const void *from);
-static int t_Order_busy(const t_Order *x);
+static TF_MAYBE_UNUSED void t_Order_init(void *record);
+static TF_MAYBE_UNUSED void t_Order_free(void *record);
+static TF_MAYBE_UNUSED void t_Order_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED int t_Order_busy(const t_Order *x);
 static const tf_record_ops t_Order_ops = {sizeof(t_Order), t_Order_init, t_Order_free, t_Order_copy};
 
 static void t_Order_init(void *record)

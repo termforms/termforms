@@ -64,6 +64,8 @@ End Sub
 | Types | `Type ... End Type` records with scalar, array and Type members; arrays of Types; Type parameters and Function results |
 | Refs | `Ref T`, `New T`, `Dim r As New T`, `Nothing`, `Is` / `IsNot`; Ref members, arrays of Refs |
 | With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
+| For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
+| Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -193,6 +195,24 @@ Wend
   `IsNot`, not `=`.
 - Records are freed when nothing refers to them any more, but records that
   refer to each other in a circle are never freed.
+
+## Dictionaries
+
+```vb
+Dim ages As Dictionary(Of Integer)      ' keys are Strings; ready to use
+ages("Ann") = 30                        ' adds, or replaces
+ages.Add "Bo", 25                       ' error 457 if "Bo" is there
+If ages.Exists("Cy") Then ages.Remove "Cy"
+For Each k In ages.Keys                 ' in the order keys were added
+    total = total + ages(k)
+Next
+```
+
+- Reading a key that is not there is error 5; only `d(k) = v` and `Add`
+  add one. Keys are case-sensitive.
+- A Dictionary behaves like an array: `d2 = d` copies it, ByVal it is
+  read-only, and it can be a member of a Type. `Keys` and `Items` give
+  copies, as arrays (`Dim ks() As String: ks = d.Keys`).
 
 ## With
 

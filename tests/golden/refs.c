@@ -17,13 +17,13 @@ struct t_Point
     int32_t f_X;
 };
 
-static void t_Node_init(void *record);
-static void t_Node_free(void *record);
-static void t_Node_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED void t_Node_init(void *record);
+static TF_MAYBE_UNUSED void t_Node_free(void *record);
+static TF_MAYBE_UNUSED void t_Node_copy(void *to, const void *from);
 static const tf_record_ops t_Node_ops = {sizeof(t_Node), t_Node_init, t_Node_free, t_Node_copy};
-static void t_Point_init(void *record);
-static void t_Point_free(void *record);
-static void t_Point_copy(void *to, const void *from);
+static TF_MAYBE_UNUSED void t_Point_init(void *record);
+static TF_MAYBE_UNUSED void t_Point_free(void *record);
+static TF_MAYBE_UNUSED void t_Point_copy(void *to, const void *from);
 static const tf_record_ops t_Point_ops = {sizeof(t_Point), t_Point_init, t_Point_free, t_Point_copy};
 
 static void t_Node_init(void *record)

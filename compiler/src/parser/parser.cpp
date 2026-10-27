@@ -538,6 +538,7 @@ private:
         {
             const Location typeAt = peek().location;
             const Type declared = parseTypeName(&v.typeName);
+            takeDictionary(v, typeAt);
             if (v.type != Type::Error && declared != Type::Error && v.type != declared)
             {
                 error(typeAt, "'" + v.name + "' has a type suffix that contradicts 'As " +
@@ -843,25 +844,13 @@ private:
             if (peek(1).isSymbol("=") || (peek(1).isSymbol(".") && !peek(1).spaced) ||
                 (peek(1).isSymbol("(") && (parenthesisedThen(1, "=") || parenthesisedThen(1, "."))))
             {
-                auto s = std::make_unique<Stmt>();
-                s->kind = StmtKind::Assign;
-                s->location = peek().location;
-                s->target = parsePrimary();
-                expectSymbol("=");
-                s->value = parseExpression();
-                return s;
+                return parseAssignOrMethod();
             }
             return parseCallStatement();
         }
-        if (t.isSymbol(".")) // .Name = ... inside a With
+        if (t.isSymbol(".")) // .Name = ... or .Add k, v inside a With
         {
-            auto s = std::make_unique<Stmt>();
-            s->kind = StmtKind::Assign;
-            s->location = t.location;
-            s->target = parsePrimary();
-            expectSymbol("=");
-            s->value = parseExpression();
-            return s;
+            return parseAssignOrMethod();
         }
         if (t.isKeyword("DIM") || t.isKeyword("IF") || t.isKeyword("FOR") || t.isKeyword("DO") ||
             t.isKeyword("WHILE") || t.isKeyword("TRY") || t.isKeyword("WITH"))
@@ -871,6 +860,32 @@ private:
         }
         error(t.location, "expected a statement but found " + describe(t));
         return nullptr;
+    }
+
+    // "x.Name = value", "a(i) = value"; or, with no "=", a method such as
+    // "d.Add key, value" (only a Dictionary has methods).
+    StmtPtr parseAssignOrMethod()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Assign;
+        s->location = peek().location;
+        s->target = parsePrimary();
+        if (acceptSymbol("="))
+        {
+            s->value = parseExpression();
+            return s;
+        }
+        if (s->target->kind != ExprKind::Member && s->target->kind != ExprKind::Index)
+        {
+            expectSymbol("=");
+            return nullptr;
+        }
+        s->kind = StmtKind::Method;
+        if (!atStatementEnd())
+        {
+            parseArguments(s->args);
+        }
+        return s;
     }
 
     // End of statement, or Else ending the Then part of a single-line If.
@@ -1191,6 +1206,11 @@ private:
             {
                 const Location typeAt = peek().location;
                 const Type declared = parseTypeName(&v->typeName);
+                if (dictionary_)
+                {
+                    dictionary_ = false;
+                    error(typeAt, "a Const cannot be a Dictionary");
+                }
                 if (v->type != Type::Error && declared != Type::Error && v->type != declared)
                 {
                     error(typeAt, "'" + v->name + "' has a type suffix that contradicts 'As " +
@@ -1333,6 +1353,8 @@ private:
                 std::string enumName;
                 bool isNew = false;
                 const Type declared = parseTypeName(&enumName, &isNew);
+                const bool dictionary = dictionary_;
+                dictionary_ = false;
                 // "As" types the names before it that have no suffix of their
                 // own; only the name written directly before it may not
                 // contradict it ("Dim n% As String").
@@ -1345,6 +1367,11 @@ private:
                         p.type = declared;
                         p.typeName = enumName;
                         p.autoNew = isNew;
+                        if (dictionary)
+                        {
+                            dictionary_ = true;
+                            takeDictionary(p, typeAt);
+                        }
                     }
                     else if (adjacent && p.type != declared && declared != Type::Error)
                     {
@@ -1394,6 +1421,30 @@ private:
     // semantic pass to resolve; without enumName, only built-in types).
     Type parseTypeName(std::string *enumName = nullptr, bool *isNew = nullptr)
     {
+        // Dictionary(Of T): T is returned, and dictionary_ set for the
+        // caller to take (takeDictionary) or reject.
+        if (enumName != nullptr && isNew != nullptr && peek().isKeyword("NEW") &&
+            peek(1).text == "Dictionary")
+        {
+            error(next().location, "a Dictionary is ready to use when declared: write "
+                                   "'As Dictionary(Of ...)' without New");
+        }
+        if (enumName != nullptr && at(TokenKind::Identifier) && peek().text == "Dictionary" &&
+            peek(1).isSymbol("("))
+        {
+            next();
+            next();
+            expectKeyword("OF", "Of");
+            if (at(TokenKind::Identifier) && peek().text == "Dictionary")
+            {
+                error(peek().location, "a Dictionary's values cannot be Dictionaries; put the "
+                                       "inner Dictionary in a Type");
+            }
+            const Type values = parseTypeName(enumName);
+            expectSymbol(")");
+            dictionary_ = true;
+            return values;
+        }
         // Ref Customer; New Customer (in a Dim: a Ref given a new record).
         const bool newOne = isNew != nullptr && acceptKeyword("NEW");
         if (enumName != nullptr && (newOne || acceptKeyword("REF")))
@@ -1432,6 +1483,26 @@ private:
         }
         error(peek().location, "expected a type but found " + describe(peek()));
         return Type::Error;
+    }
+
+    // After parseTypeName: if it was Dictionary(Of T), v becomes one (a
+    // dynamic array of rank 1 underneath).
+    void takeDictionary(Variable &v, Location where)
+    {
+        if (!dictionary_)
+        {
+            return;
+        }
+        dictionary_ = false;
+        if (v.rank > 0)
+        {
+            error(where, "an array of Dictionaries is not available; put the Dictionary in a "
+                         "Type and make an array of that");
+            return;
+        }
+        v.isDictionary = true;
+        v.rank = 1;
+        v.isDynamic = true;
     }
 
     // Moves declared variables to their owner and records them on the Dim.
@@ -1730,6 +1801,11 @@ private:
             e->args.push_back(parseExpression());
             expectSymbol(",");
             e->convertTo = parseTypeName(&e->convertToName);
+            if (dictionary_)
+            {
+                dictionary_ = false;
+                error(e->location, "CType cannot convert to a Dictionary");
+            }
             expectSymbol(")");
             return e;
         }
@@ -1789,6 +1865,7 @@ private:
     std::size_t pos_ = 0;
     int lastErrorLine_ = 0;
     Procedure *currentProcedure_ = nullptr;
+    bool dictionary_ = false;        // parseTypeName read Dictionary(Of T)
     std::vector<const char *> open_; // constructs around the current block
 };
 
