@@ -143,6 +143,9 @@ enum class Builtin
     Date,
     Time,
     Timer,
+    // Dialogs (step 4.4).
+    MsgBox,
+    InputBox,
     Count, // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
@@ -233,6 +236,8 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},
     {Builtin::Timer, "", 0, {}, Type::Double, "tf_timer", false},
+    {Builtin::MsgBox, "SIS", 1, {nullptr, "0", ""}, Type::Integer, "tf_msgbox", false},
+    {Builtin::InputBox, "SSS", 1, {nullptr, "", ""}, Type::String, "tf_inputbox", false},
 };
 
 inline const StringFunction *findStringFunction(Builtin id)

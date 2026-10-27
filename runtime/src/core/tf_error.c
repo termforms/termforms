@@ -45,6 +45,11 @@ void tf_runtime_init(const char *main_source_file)
     }
 }
 
+const char *tf_runtime_source(void)
+{
+    return source_file;
+}
+
 void tf_set_shutdown_hook(void (*hook)(void))
 {
     shutdown_hook = hook;

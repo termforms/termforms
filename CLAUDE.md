@@ -193,8 +193,15 @@ authoritative for design rationale.
   Step 4.3 done: Timer (the form loop waits with tf_input_wait until the
   next due Timer; tf_platform_monotonic_ms; key scripts' {WAIT n} moves a
   virtual clock, so headless Timer tests are exact).
-- **Next:** Phase 4 step 4: MsgBox, InputBox, the modal stack, VB's named
-  constants.
+  Step 4.4 done: the form stack (`stack`/`depth` in tf_forms.c; draw_stack;
+  run_until_closed is the one event loop, for the main form and dialogs);
+  MsgBox and InputBox built at run time from controls (build_dialog, ask);
+  VB's named constants (`kNamedConstants` in sema, resolved after
+  variables, names reserved). The headless dump happens when the script
+  ends, so a test can show a dialog.
+- **Next:** Phase 4 step 5: several forms (Show [vbModal], Hide, Unload;
+  re-add run_modal) and the remaining events (GotFocus, LostFocus,
+  KeyPress, KeyDown, Form_Unload, Form_Activate).
 
 ## Settled design decisions (do not relitigate without Jim)
 

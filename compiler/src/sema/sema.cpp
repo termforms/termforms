@@ -87,7 +87,79 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Now", Builtin::Now, false},
                                      {"Date", Builtin::Date, true},
                                      {"Time", Builtin::Time, true},
-                                     {"Timer", Builtin::Timer, false}};
+                                     {"Timer", Builtin::Timer, false},
+                                     {"MsgBox", Builtin::MsgBox, false},
+                                     {"InputBox", Builtin::InputBox, true}};
+
+// VB's named constants (settled with Jim, 28 Oct 2026): built-in Consts.
+// vbNewLine is LF, as TermForms writes lines (VB's is CR LF).
+struct NamedConstant
+{
+    const char *name;
+    std::int64_t number;
+    const char *text; // a String constant's value; null for a number
+};
+
+constexpr NamedConstant kNamedConstants[] = {
+    {"vbOKOnly", 0, nullptr},
+    {"vbOKCancel", 1, nullptr},
+    {"vbAbortRetryIgnore", 2, nullptr},
+    {"vbYesNoCancel", 3, nullptr},
+    {"vbYesNo", 4, nullptr},
+    {"vbRetryCancel", 5, nullptr},
+    {"vbCritical", 16, nullptr},
+    {"vbQuestion", 32, nullptr},
+    {"vbExclamation", 48, nullptr},
+    {"vbInformation", 64, nullptr},
+    {"vbDefaultButton1", 0, nullptr},
+    {"vbDefaultButton2", 256, nullptr},
+    {"vbDefaultButton3", 512, nullptr},
+    {"vbOK", 1, nullptr},
+    {"vbCancel", 2, nullptr},
+    {"vbAbort", 3, nullptr},
+    {"vbRetry", 4, nullptr},
+    {"vbIgnore", 5, nullptr},
+    {"vbYes", 6, nullptr},
+    {"vbNo", 7, nullptr},
+    {"vbUnchecked", 0, nullptr},
+    {"vbChecked", 1, nullptr},
+    {"vbGrayed", 2, nullptr},
+    {"vbModeless", 0, nullptr},
+    {"vbModal", 1, nullptr},
+    {"vbCr", 0, "\r"},
+    {"vbLf", 0, "\n"},
+    {"vbCrLf", 0, "\r\n"},
+    {"vbNewLine", 0, "\n"},
+    {"vbTab", 0, "\t"},
+    {"vbNullString", 0, ""},
+};
+
+// A named constant as a Const variable, made once; null if name is not one.
+Variable *namedConstant(const std::string &name)
+{
+    static std::map<std::string, std::unique_ptr<Variable>> made;
+    for (const NamedConstant &c : kNamedConstants)
+    {
+        if (name != c.name)
+        {
+            continue;
+        }
+        auto &v = made[name];
+        if (v == nullptr)
+        {
+            v = std::make_unique<Variable>();
+            v->name = name;
+            v->isConst = true;
+            v->constReady = true;
+            v->isModuleLevel = true;
+            v->type = c.text != nullptr ? Type::String : Type::Integer;
+            v->constInteger = c.number;
+            v->constText = c.text != nullptr ? c.text : "";
+        }
+        return v.get();
+    }
+    return nullptr;
+}
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -411,6 +483,10 @@ private:
             for (const BuiltinInfo &b : kBuiltins)
             {
                 claimed[b.name] = "built-in function";
+            }
+            for (const NamedConstant &c : kNamedConstants)
+            {
+                claimed[c.name] = "built-in constant";
             }
             claimed["Err"] = "built-in object";
         }
@@ -832,6 +908,11 @@ private:
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a built-in function");
             return;
         }
+        if (namedConstant(v.name) != nullptr)
+        {
+            diagnostics_.error(v.location, "'" + v.name + "' is a built-in constant");
+            return;
+        }
         scopes_.back()[v.name] = &v;
     }
 
@@ -898,6 +979,14 @@ private:
                 checkExpr(*s.value);
                 diagnostics_.error(target.location,
                                    "'" + target.text + "' is a Const and cannot be assigned to");
+                return;
+            }
+            if (v == nullptr && namedConstant(target.text) != nullptr)
+            {
+                checkExpr(*s.value);
+                diagnostics_.error(target.location, "'" + target.text +
+                                                        "' is a built-in constant and cannot be "
+                                                        "assigned to");
                 return;
             }
         }
@@ -1097,9 +1186,10 @@ private:
         // calls of a Sub (a program's own Sub of that name comes first).
         if (const BuiltinInfo *b = s.procedure == nullptr ? findBuiltin(s.callee, 0) : nullptr)
         {
-            // Shell may be a statement too, its exit code unused.
+            // Shell and MsgBox may be statements too, their results unused.
             if (const StringFunction *f = findStringFunction(b->id);
-                f != nullptr && (f->result == Type::Void || f->id == Builtin::Shell))
+                f != nullptr &&
+                (f->result == Type::Void || f->id == Builtin::Shell || f->id == Builtin::MsgBox))
             {
                 auto call = std::make_unique<Expr>();
                 call->kind = ExprKind::Call;
@@ -3783,6 +3873,10 @@ private:
             {
                 v = g->second;
             }
+        }
+        if (v == nullptr)
+        {
+            v = namedConstant(e.text); // vbYesNo, vbCrLf, ...
         }
 
         if (v != nullptr && v->isConst)

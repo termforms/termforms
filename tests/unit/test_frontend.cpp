@@ -689,3 +689,16 @@ TEST_CASE("a ListBox has AddItem, RemoveItem, Clear, List(i) and Selected(i)")
                        "End Sub\n") == "");
     CHECK(check(form + "Sub lst_Click()\n    lst.ListCount = 2\nEnd Sub\n") != "");
 }
+
+// -- Dialogs (Phase 4 step 4) -----------------------------------------------------
+
+TEST_CASE("MsgBox and InputBox, and VB's named constants")
+{
+    const std::string body =
+        "    Dim r As Integer, s As String\n"
+        "    r = MsgBox(\"x\", vbYesNoCancel + vbQuestion + vbDefaultButton2)\n"
+        "    MsgBox \"done\" & vbCrLf & vbTab\n"
+        "    If r = vbNo Then s = InputBox(\"name\", \"title\", \"default\")\n";
+    CHECK(check(inClick("", body)) == "");
+    CHECK(check(inClick("", "    Dim vbOK As Integer\n")) != "");
+}

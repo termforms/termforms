@@ -1,0 +1,4 @@
+dialogs.bas:10:9: error: 'vbOK' is a built-in constant
+dialogs.bas:11:5: error: 'vbYes' is a built-in constant and cannot be assigned to
+dialogs.bas:12:17: error: argument 2 of 'MsgBox' must be an Integer, not a String; use CInt(value) to convert
+dialogs.bas:13:5: error: 'InputBox' is a built-in function; use its result, as in x = InputBox(...)

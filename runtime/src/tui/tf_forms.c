@@ -47,6 +47,8 @@ struct tf_control
     int child_count;
     int child_capacity;
     int focus;
+    int closed;    /* its loop ends: closed by the user, a button, or Unload */
+    int escapable; /* a dialog: may Ctrl+F4 close it (it has a Cancel answer)? */
 
     /* TextBox only: cursor as a byte offset into text, and the index of the
      * first visible code point. */
@@ -72,6 +74,12 @@ struct tf_control
 
 static int headless = 0;
 static int64_t virtual_now = 0; /* a key script's clock: moved only by {WAIT n} */
+
+/* The forms shown, bottom first: the main form, then forms and dialogs
+   shown over it. Only the top one takes keys. */
+#define TF_STACK_MAX 32
+static tf_control *stack[TF_STACK_MAX];
+static int depth = 0;
 
 /* Milliseconds on the clock Timers run by: real time, or a key script's. */
 static int64_t now_ms(void)
@@ -744,6 +752,39 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
     }
 }
 
+static void draw_one(tf_control *form);
+
+/* The backdrop and every form on the stack; or, if the terminal is too
+   small for one of them, a message saying so. */
+static void draw_stack(void)
+{
+    int cols = 0;
+    int rows = 0;
+    tf_screen_size(&cols, &rows);
+    tf_screen_cursor(0, 0, 0);
+    for (int i = 0; i < depth; ++i)
+    {
+        const int fw = (int)stack[i]->width;
+        const int fh = (int)stack[i]->height;
+        if (cols < fw || rows < fh)
+        {
+            char message[96];
+            snprintf(message, sizeof message, "Please resize the terminal to at least %dx%d", fw,
+                     fh);
+            tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLACK);
+            const int length = (int)strlen(message);
+            const int x = length < cols ? (cols - length) / 2 : 0;
+            tf_screen_text(x, rows / 2, message, cols, TF_WHITE, TF_BLACK);
+            return;
+        }
+    }
+    tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLUE);
+    for (int i = 0; i < depth; ++i)
+    {
+        draw_one(stack[i]);
+    }
+}
+
 static void draw_label(const tf_control *label, int x, int y, int w, int h)
 {
     const int fg = usable(label) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
@@ -919,7 +960,7 @@ typedef struct area
     int x, y, w, h;
 } area;
 
-static area form_area; /* the running form's client area, set by draw_form */
+static area form_area; /* the client area of the form being drawn (draw_one) */
 
 static area inside(const tf_control *container)
 {
@@ -937,29 +978,14 @@ static area inside(const tf_control *container)
     return a;
 }
 
-static void draw_form(tf_control *form)
+/* One form, centred on the screen (the backdrop is already drawn). */
+static void draw_one(tf_control *form)
 {
     int cols = 0;
     int rows = 0;
     tf_screen_size(&cols, &rows);
-    tf_screen_cursor(0, 0, 0);
-
     const int fw = (int)form->width;
     const int fh = (int)form->height;
-
-    if (cols < fw || rows < fh)
-    {
-        char message[96];
-        snprintf(message, sizeof message, "Please resize the terminal to at least %dx%d", fw, fh);
-        tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLACK);
-        const int length = (int)strlen(message);
-        const int x = length < cols ? (cols - length) / 2 : 0;
-        tf_screen_text(x, rows / 2, message, cols, TF_WHITE, TF_BLACK);
-        return;
-    }
-
-    /* Backdrop, then the form centred on it. */
-    tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLUE);
     const int ox = (cols - fw) / 2;
     const int oy = (rows - fh) / 2;
     tf_screen_fill(ox, oy, fw, fh, ' ', TF_BLACK, TF_GREY);
@@ -1011,7 +1037,7 @@ static void draw_form(tf_control *form)
         const int y = a.y + (int)c->top;
         const int room = a.w - (int)c->left;
         const int rows_left = a.h - (int)c->top;
-        const int focused = i == form->focus;
+        const int focused = i == form->focus && depth > 0 && form == stack[depth - 1];
         const int h = (int)c->height < rows_left ? (int)c->height : rows_left;
         const int w = (int)c->width < room ? (int)c->width : room;
         switch (c->type)
@@ -1457,15 +1483,35 @@ static void fire_due(tf_control *form)
     }
 }
 
+/* The Timers of every form shown run (a dialog does not stop them). */
+static int64_t stack_due(void)
+{
+    int64_t next = -1;
+    for (int i = 0; i < depth; ++i)
+    {
+        const int64_t due = next_due(stack[i]);
+        next = due >= 0 && (next < 0 || due < next) ? due : next;
+    }
+    return next;
+}
+
+static void stack_fire(void)
+{
+    for (int i = 0; i < depth; ++i)
+    {
+        fire_due(stack[i]);
+    }
+}
+
 /* {WAIT n} in a key script: the clock moves n ms, stopping at each due
    Timer on the way. */
-static void wait_scripted(tf_control *form, int64_t ms)
+static void wait_scripted(int64_t ms)
 {
     const int64_t until = virtual_now + ms;
-    for (int64_t next = next_due(form); next >= 0 && next <= until; next = next_due(form))
+    for (int64_t next = stack_due(); next >= 0 && next <= until; next = stack_due())
     {
         virtual_now = next > virtual_now ? next : virtual_now;
-        fire_due(form);
+        stack_fire();
     }
     virtual_now = until;
 }
@@ -1543,12 +1589,13 @@ static void ui_resume(void)
     int rows = 25;
     tf_term_size(&cols, &rows);
     tf_screen_init(cols, rows, 1);
-    if (running_form != NULL)
-    {
-        draw_form(running_form);
-        tf_screen_flush();
-    }
+    draw_stack();
+    tf_screen_flush();
 }
+
+static int ui_is_open = 0;
+static int ending = 0; /* the key script ran out: every loop ends */
+static int dumped = 0; /* the headless screen was dumped when the script ended */
 
 /* Registered as the shutdown hook: runs on normal close, End, or an error. */
 static void ui_shutdown(void)
@@ -1557,11 +1604,11 @@ static void ui_shutdown(void)
     {
         /* Draw first: an error or End may come before the next redraw,
            and the dump should show what the program last set. */
-        if (running_form != NULL)
+        if (!dumped)
         {
-            draw_form(running_form);
+            draw_stack();
+            tf_screen_dump(stdout);
         }
-        tf_screen_dump(stdout);
     }
     else
     {
@@ -1572,6 +1619,11 @@ static void ui_shutdown(void)
 
 static void ui_open(void)
 {
+    if (ui_is_open)
+    {
+        return; /* a dialog in Form_Load or Sub Main opened it already */
+    }
+    ui_is_open = 1;
     /* Copied: tf_platform_getenv's result only lives until its next call. */
     static char *script = NULL;
     const char *headless_keys = tf_platform_getenv("TERMFORMS_HEADLESS");
@@ -1605,39 +1657,62 @@ static void ui_open(void)
     tf_set_shutdown_hook(ui_shutdown);
 }
 
-int tf_form_run(tf_control *form)
+/* Puts a form on top of the stack, focus on its first control and its
+   Timers counting from now. */
+static void push(tf_control *form)
 {
-    running_form = form;
-    ui_open();
+    if (depth == TF_STACK_MAX)
+    {
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "too many forms shown at once");
+    }
+    stack[depth++] = form;
+    form->closed = 0;
+    form->focus = -1;
     move_focus(form, 1);
-    /* Timers count from when the form is shown (the settings and Form_Load
-       ran before the clock was chosen). */
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
         c->due = now_ms() + c->interval;
     }
+}
 
-    for (;;)
+static void pop(void)
+{
+    if (depth > 0)
     {
-        draw_form(form);
+        --depth;
+    }
+}
+
+/* The event loop: keys go to the top form until it closes (or the key
+   script runs out, which ends every loop). Timers of all shown forms run. */
+static void run_until_closed(tf_control *top)
+{
+    while (!top->closed && !ending)
+    {
+        draw_stack();
         tf_screen_flush();
 
-        const int64_t due = next_due(form);
+        const int64_t due = stack_due();
         const int64_t wait = due < 0 ? -1 : due - now_ms();
         const tf_key key = tf_input_wait(due < 0 ? -1 : wait < 0 ? 0 : (int)wait);
         if (key.kind == TF_KEY_EOF)
         {
+            /* Dump now: the screen as the script left it, a dialog and all. */
+            draw_stack();
+            tf_screen_dump(stdout);
+            dumped = 1;
+            ending = 1;
             break;
         }
         if (key.kind == TF_KEY_NONE)
         {
-            fire_due(form); /* the wait ended: a Timer is due */
+            stack_fire(); /* the wait ended: a Timer is due */
             continue;
         }
         if (key.kind == TF_KEY_WAIT)
         {
-            wait_scripted(form, key.ch);
+            wait_scripted(key.ch);
             continue;
         }
         if (key.kind == TF_KEY_RESIZE)
@@ -1651,14 +1726,357 @@ int tf_form_run(tf_control *form)
             }
             continue;
         }
-        if (form_key(form, key))
+        if (form_key(top, key) && top->escapable)
+        {
+            top->closed = 1; /* Ctrl+F4 (a dialog only if it can be cancelled) */
+        }
+    }
+}
+
+int tf_form_run(tf_control *form)
+{
+    running_form = form;
+    ui_open();
+    form->escapable = 1;
+    push(form);
+    run_until_closed(form);
+    tf_run_shutdown_hook();
+    return 0;
+}
+
+void tf_form_free(tf_control *form)
+{
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        tf_control *c = form->children[i];
+        tf_list_clear(c);
+        free(c->items);
+        free(c->selected);
+        tf_str_release(c->caption);
+        tf_str_release(c->text);
+        free(c->name);
+        free(c);
+    }
+    free(form->children);
+    tf_str_release(form->caption);
+    free(form->name);
+    free(form);
+}
+
+/* ------------------------------------------------------------------------ */
+/* MsgBox and InputBox                                                      */
+/* ------------------------------------------------------------------------ */
+
+/* The dialog being shown and the answer its buttons give (a Timer's handler
+   may show another meanwhile, so these are saved around each). */
+static tf_control *dialog = NULL;
+static int32_t answer = 0;
+
+#define ANSWER(name, value)                                                                        \
+    static void name(void)                                                                         \
+    {                                                                                              \
+        answer = (value);                                                                          \
+        dialog->closed = 1;                                                                        \
+    }
+ANSWER(on_ok, 1)
+ANSWER(on_cancel, 2)
+ANSWER(on_abort, 3)
+ANSWER(on_retry, 4)
+ANSWER(on_ignore, 5)
+ANSWER(on_yes, 6)
+ANSWER(on_no, 7)
+
+static tf_string *text_of(const char *s)
+{
+    return tf_str_from_utf8(s, (int32_t)strlen(s));
+}
+
+static void set_caption(tf_control *c, const char *text)
+{
+    tf_string *s = text_of(text);
+    tf_set_str(c, TF_PROP_CAPTION, s);
+    tf_str_release(s);
+}
+
+/* The prompt's lines: split at line ends (CR LF, LF or CR) and wrapped at
+   width, & doubled so a Label shows it as written. Returns the count. */
+static int prompt_lines(const char *prompt, int width, char lines[][256], int most)
+{
+    int n = 0;
+    const char *p = prompt;
+    while (n < most)
+    {
+        const char *end = p;
+        while (*end != '\0' && *end != '\r' && *end != '\n')
+        {
+            ++end;
+        }
+        /* Wrap this line at width code points, at a space if there is one. */
+        const char *from = p;
+        do
+        {
+            const char *cut = from;
+            const char *space = NULL;
+            int cells = 0;
+            while (cut < end && cells < width)
+            {
+                if (*cut == ' ')
+                {
+                    space = cut;
+                }
+                uint32_t cp = 0;
+                cut += tf_utf8_decode(cut, (int)(end - cut), &cp);
+                ++cells;
+            }
+            if (cut < end && space != NULL && space > from)
+            {
+                cut = space;
+            }
+            size_t o = 0;
+            for (const char *q = from; q < cut && o + 2 < sizeof lines[0]; ++q)
+            {
+                if (*q == '&')
+                {
+                    lines[n][o++] = '&';
+                }
+                lines[n][o++] = *q;
+            }
+            lines[n][o] = '\0';
+            ++n;
+            from = cut;
+            while (from < end && *from == ' ')
+            {
+                ++from;
+            }
+        } while (from < end && n < most);
+        if (*end == '\0')
         {
             break;
         }
+        p = end + (end[0] == '\r' && end[1] == '\n' ? 2 : 1);
     }
+    return n;
+}
 
-    /* Draw the final state so a headless dump shows what the user last saw. */
-    draw_form(form);
-    tf_run_shutdown_hook();
-    return 0;
+/* The program's name (its main file's, without folder or .bas), the title
+   of a dialog that has none of its own, as VB uses the project's. */
+static const char *program_name(void)
+{
+    static char name[128];
+    const char *path = tf_runtime_source();
+    const char *base = path;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+        {
+            base = p + 1;
+        }
+    }
+    snprintf(name, sizeof name, "%s", base);
+    char *dot = strrchr(name, '.');
+    if (dot != NULL && dot != name)
+    {
+        *dot = '\0';
+    }
+    return name;
+}
+
+typedef struct button_spec
+{
+    const char *caption;
+    tf_handler handler;
+    int32_t value;
+} button_spec;
+
+/* Lays out a dialog: an optional icon, the prompt lines, an optional
+   TextBox (InputBox), and a row of buttons; the form sized to fit. */
+static tf_control *build_dialog(const char *title, const char *icon, const char *prompt,
+                                const char *edit, const button_spec *buttons, int count,
+                                int default_button, int cancel_button)
+{
+    int cols = 80;
+    int rows = 25;
+    tf_screen_size(&cols, &rows);
+    const int most_width = cols - 8 < 64 ? (cols - 8 > 10 ? cols - 8 : 10) : 64;
+    const int indent = icon != NULL ? 5 : 0;
+    static char lines[16][256];
+    const int n = prompt_lines(prompt, most_width - indent, lines, 16);
+
+    int text_width = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        const int w = utf8_cells(lines[i]);
+        text_width = w > text_width ? w : text_width;
+    }
+    int buttons_width = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        char plain[64];
+        strip_accelerator(buttons[i].caption, plain, sizeof plain);
+        buttons_width += utf8_cells(plain) + 4 + (i > 0 ? 2 : 0);
+    }
+    int inner = indent + text_width;
+    inner = buttons_width > inner ? buttons_width : inner;
+    inner = edit != NULL && inner < 30 ? 30 : inner;
+    const int title_width = utf8_cells(title) + 4;
+    inner = title_width > inner ? title_width : inner;
+
+    tf_control *form = tf_form_new("Dialog");
+    set_caption(form, title);
+    const int edit_rows = edit != NULL ? 2 : 0;
+    tf_set_int(form, TF_PROP_WIDTH, inner + 4);
+    tf_set_int(form, TF_PROP_HEIGHT, n + edit_rows + 4);
+
+    if (icon != NULL)
+    {
+        tf_control *mark = tf_control_new(form, TF_CTL_LABEL, "icon");
+        set_caption(mark, icon);
+        tf_set_int(mark, TF_PROP_LEFT, 1);
+        tf_set_int(mark, TF_PROP_WIDTH, 3);
+    }
+    for (int i = 0; i < n; ++i)
+    {
+        tf_control *line = tf_control_new(form, TF_CTL_LABEL, "prompt");
+        set_caption(line, lines[i]);
+        tf_set_int(line, TF_PROP_LEFT, 1 + indent);
+        tf_set_int(line, TF_PROP_TOP, i);
+        tf_set_int(line, TF_PROP_WIDTH, inner - indent);
+    }
+    if (edit != NULL)
+    {
+        tf_control *box = tf_control_new(form, TF_CTL_TEXTBOX, "text");
+        tf_string *s = text_of(edit);
+        tf_set_str(box, TF_PROP_TEXT, s);
+        tf_str_release(s);
+        tf_set_int(box, TF_PROP_LEFT, 1);
+        tf_set_int(box, TF_PROP_TOP, n);
+        tf_set_int(box, TF_PROP_WIDTH, inner);
+    }
+    int x = 1 + (inner - buttons_width) / 2;
+    for (int i = 0; i < count; ++i)
+    {
+        char plain[64];
+        strip_accelerator(buttons[i].caption, plain, sizeof plain);
+        tf_control *b = tf_control_new(form, TF_CTL_COMMANDBUTTON, "button");
+        set_caption(b, buttons[i].caption);
+        tf_set_int(b, TF_PROP_LEFT, x);
+        tf_set_int(b, TF_PROP_TOP, n + edit_rows + 1);
+        tf_set_int(b, TF_PROP_WIDTH, utf8_cells(plain) + 4);
+        tf_control_on(b, TF_EVENT_CLICK, buttons[i].handler);
+        b->is_default = i == default_button;
+        b->is_cancel = i == cancel_button;
+        x += utf8_cells(plain) + 6;
+    }
+    form->escapable = cancel_button >= 0;
+    return form;
+}
+
+/* Shows a built dialog; the focus starts on its Default button (or, for an
+   InputBox, in the TextBox), as VB. Returns the answer. */
+static int32_t ask(tf_control *form, int32_t escape_answer, int focus_default)
+{
+    tf_control *saved_dialog = dialog;
+    const int32_t saved_answer = answer;
+    dialog = form;
+    answer = escape_answer;
+    ui_open();
+    push(form);
+    if (focus_default)
+    {
+        for (int i = 0; i < form->child_count; ++i)
+        {
+            if (form->children[i]->is_default)
+            {
+                form->focus = i;
+            }
+        }
+    }
+    run_until_closed(form);
+    pop();
+    const int32_t result = answer;
+    dialog = saved_dialog;
+    answer = saved_answer;
+    return result;
+}
+
+int32_t tf_msgbox(const tf_string *prompt, int32_t buttons, const tf_string *title)
+{
+    static const button_spec ok = {"OK", on_ok, 1}, cancel = {"Cancel", on_cancel, 2},
+                             abort_ = {"&Abort", on_abort, 3}, retry = {"&Retry", on_retry, 4},
+                             ignore = {"&Ignore", on_ignore, 5}, yes = {"&Yes", on_yes, 6},
+                             no = {"&No", on_no, 7};
+    button_spec set[3];
+    int count = 0;
+    int cancel_button = -1;
+    switch (buttons & 7)
+    {
+        case 1: /* vbOKCancel */
+            set[0] = ok, set[1] = cancel, count = 2, cancel_button = 1;
+            break;
+        case 2: /* vbAbortRetryIgnore */
+            set[0] = abort_, set[1] = retry, set[2] = ignore, count = 3;
+            break;
+        case 3: /* vbYesNoCancel */
+            set[0] = yes, set[1] = no, set[2] = cancel, count = 3, cancel_button = 2;
+            break;
+        case 4: /* vbYesNo */
+            set[0] = yes, set[1] = no, count = 2;
+            break;
+        case 5: /* vbRetryCancel */
+            set[0] = retry, set[1] = cancel, count = 2, cancel_button = 1;
+            break;
+        default: /* vbOKOnly: Esc is OK */
+            set[0] = ok, count = 1, cancel_button = 0;
+            break;
+    }
+    const int chosen = (buttons >> 8) & 3; /* vbDefaultButton2 = 256, 3 = 512 */
+    const int default_button = chosen < count ? chosen : 0;
+    const char *icon = NULL;
+    switch (buttons & 0x70)
+    {
+        case 16:
+            icon = "(X)"; /* vbCritical */
+            break;
+        case 32:
+            icon = "(?)"; /* vbQuestion */
+            break;
+        case 48:
+            icon = "(!)"; /* vbExclamation */
+            break;
+        case 64:
+            icon = "(i)"; /* vbInformation */
+            break;
+        default:
+            break;
+    }
+    const char *heading = tf_str_lenb(title) > 0 ? tf_str_cstr(title) : program_name();
+    tf_control *form = build_dialog(heading, icon, tf_str_cstr(prompt), NULL, set, count,
+                                    default_button, cancel_button);
+    const int32_t result = ask(form, cancel_button >= 0 ? set[cancel_button].value : 0, 1);
+    tf_form_free(form);
+    return result;
+}
+
+tf_string *tf_inputbox(const tf_string *prompt, const tf_string *title, const tf_string *initial)
+{
+    static const button_spec ok = {"OK", on_ok, 1}, cancel = {"Cancel", on_cancel, 2};
+    const button_spec set[2] = {ok, cancel};
+    const char *heading = tf_str_lenb(title) > 0 ? tf_str_cstr(title) : program_name();
+    tf_control *form =
+        build_dialog(heading, NULL, tf_str_cstr(prompt), tf_str_cstr(initial), set, 2, 0, 1);
+    const int32_t result = ask(form, 2, 0);
+    /* OK gives the text; Cancel (or Esc) gives "", as VB. */
+    tf_string *text = NULL;
+    if (result == 1)
+    {
+        for (int i = 0; i < form->child_count; ++i)
+        {
+            if (form->children[i]->type == TF_CTL_TEXTBOX)
+            {
+                text = tf_str_ref(form->children[i]->text);
+            }
+        }
+    }
+    tf_form_free(form);
+    return text;
 }

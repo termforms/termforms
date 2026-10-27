@@ -961,6 +961,39 @@ Module=lib/stock.bas
   for keys (not while code runs). In a key script, `{WAIT n}` makes n ms
   pass, so tests of Timers are exact.
 
+### MsgBox, InputBox and VB's constants (Proposed)
+
+```vb
+If MsgBox("Save changes?", vbYesNoCancel + vbQuestion, "Editor") = vbYes Then Save
+MsgBox "Done"                                  ' as a statement: the answer unused
+name = InputBox("Your name:", "Hello", "Ann")  ' "" if cancelled
+```
+
+- `MsgBox(prompt [, buttons [, title]])` shows a dialog over the forms
+  and waits: `buttons` is VB's sum of a button set (vbOKOnly, vbOKCancel,
+  vbAbortRetryIgnore, vbYesNoCancel, vbYesNo, vbRetryCancel), an icon
+  (vbCritical, vbQuestion, vbExclamation, vbInformation, drawn as `(X)`,
+  `(?)`, `(!)`, `(i)`) and a default button (vbDefaultButton2, 3); it
+  returns vbOK ... vbNo. The prompt's lines break at vbCrLf / vbLf and
+  wrap at word ends.
+- `InputBox(prompt [, title [, default]])` returns the text typed, or ""
+  if cancelled. The focus starts in its TextBox; a MsgBox's on its default
+  button.
+- With no title, a dialog's title is the program's name (as VB uses the
+  project's).
+- Esc answers Cancel when the box has a Cancel button, OK when it is an
+  OK box, and does nothing on Yes/No and Abort/Retry/Ignore; Ctrl+F4 the
+  same. Buttons have access keys (&Yes, &No, &Abort, &Retry, &Ignore).
+- A dialog may come before any form is shown (in Form_Load, or a program
+  of Sub Main): it then opens the terminal itself. Timers of the forms
+  under a dialog keep running.
+- **VB's named constants** are built in and their names reserved: those
+  above, vbOK ... vbNo, vbUnchecked / vbChecked / vbGrayed, vbModal /
+  vbModeless, vbCr, vbLf, vbCrLf, vbTab, vbNullString, and **vbNewLine,
+  which is vbLf** (TermForms writes lines with LF; VB's is CR LF).
+- When a key script ends with a dialog shown, the screen is dumped as it
+  is then, the dialog included.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

@@ -49,6 +49,9 @@ tf_string *tf_str_alloc(int32_t length);
  * user's shell is never left in raw mode or on the alternate screen.
  */
 void tf_set_shutdown_hook(void (*hook)(void));
+
+/* The main source file's path, as given to tf_runtime_init. */
+const char *tf_runtime_source(void);
 void tf_run_shutdown_hook(void);
 
 /* ------------------------------------------------------------------------ */

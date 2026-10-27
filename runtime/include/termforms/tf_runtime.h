@@ -680,6 +680,21 @@ int tf_list_selected(const tf_control *list, int32_t index);
 void tf_list_set_selected(tf_control *list, int32_t index, int selected);
 
 /*
+ * VB's MsgBox and InputBox: a dialog over the forms shown (opening the
+ * terminal first if no form is shown yet, as in Form_Load or Sub Main).
+ * buttons is VB's: the button set (vbOKOnly 0 ... vbRetryCancel 5) plus an
+ * icon (vbCritical 16, vbQuestion 32, vbExclamation 48, vbInformation 64)
+ * plus the default (vbDefaultButton2 256, 3 512). MsgBox returns the
+ * button's value (vbOK 1 ... vbNo 7); InputBox the text, or "" if
+ * cancelled. A title of "" is the program's name.
+ */
+int32_t tf_msgbox(const tf_string *prompt, int32_t buttons, const tf_string *title);
+tf_string *tf_inputbox(const tf_string *prompt, const tf_string *title, const tf_string *initial);
+
+/* Frees a form and its controls (one made at run time: a dialog). */
+void tf_form_free(tf_control *form);
+
+/*
  * Shows the form and runs its event loop until the user closes it
  * (Ctrl+F4, or Alt+F4 where the terminal passes it on) or the program
  * executes End. Returns the exit code.
