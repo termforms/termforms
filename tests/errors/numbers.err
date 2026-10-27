@@ -14,7 +14,7 @@ numbers.bas:27:9: error: 'Val' is a built-in function and needs an argument: Val
 numbers.bas:28:5: error: 'CStr' is a built-in function; use its result, as in x = CStr(...)
 numbers.bas:29:9: error: no Sub or Function named 'cint' (did you mean 'CInt'? names are case-sensitive)
 numbers.bas:30:9: error: number does not fit in an Integer
-numbers.bas:31:9: error: the For loop variable must be a numeric variable (Integer, Long or Double)
+numbers.bas:31:9: error: the For loop variable must be a numeric variable (Integer, Long or Double) or an Enum variable
 numbers.bas:33:26: error: the Step of a For loop over an Integer must be an Integer, not a Double; declare the loop variable As Double
 numbers.bas:35:15: error: argument 1 of 'TakesLong' is ByRef Long, so it must be a Long variable, not an Integer
 numbers.bas:35:18: error: argument 2 of 'TakesLong' must be an Integer, not a Long (Option Strict); use CInt(value) to convert

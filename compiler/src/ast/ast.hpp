@@ -29,6 +29,7 @@ enum class Type
     Double,
     String,
     Boolean,
+    Enum,   // a user Enum; which one is in the Expr's or Variable's enumDef
     Control // a form or control used as an object
 };
 
@@ -62,6 +63,28 @@ enum class Builtin
     Int
 };
 
+struct Expr;
+
+// One member of an Enum: "Red" or "Blue = 10".
+struct EnumMember
+{
+    std::string name;
+    Location location;
+    std::unique_ptr<Expr> value; // null: one more than the member before
+    std::int64_t resolved = 0;   // set by the semantic pass
+    bool ready = false;          // resolved has been set (members are set in order)
+};
+
+// Enum Name [As Integer | As Long] ... End Enum. A distinct type whose
+// values are stored as its underlying type.
+struct EnumDef
+{
+    std::string name;
+    Location location;
+    Type underlying = Type::Integer;
+    std::vector<EnumMember> members;
+};
+
 const char *typeName(Type type);
 
 // ---------------------------------------------------------------------------
@@ -72,6 +95,7 @@ enum class ExprKind
 {
     IntegerLiteral, // Integer or Long, by value and suffix
     DoubleLiteral,
+    Constant, // a Const or Enum member, replaced by its value by the semantic pass
     StringLiteral,
     BooleanLiteral,
     Name,   // a variable, control or form
@@ -91,7 +115,8 @@ struct Expr
     Location location;
     Type type = Type::Error; // set by the semantic pass
 
-    // IntegerLiteral / BooleanLiteral; DoubleLiteral
+    // IntegerLiteral / BooleanLiteral; DoubleLiteral. A Constant holds its
+    // value in integer (Integer, Long, Boolean, Enum), real or text.
     std::int64_t integer = 0;
     double real = 0;
     // StringLiteral value, Name identifier, Member property name, operator text
@@ -103,7 +128,12 @@ struct Expr
     std::vector<std::unique_ptr<Expr>> args; // Call arguments (text is the callee)
 
     // Resolved by the semantic pass.
-    bool isErr = false;              // Name: the built-in Err object
+    bool isErr = false;               // Name: the built-in Err object
+    const EnumDef *enumDef = nullptr; // when type is Enum
+    // CType(value, type): the target type, written as convertTo or, for an
+    // Enum, by name. The semantic pass turns it into a CInt/CLng/... call.
+    Type convertTo = Type::Error;
+    std::string convertToName;
     Variable *variable = nullptr;    // Name
     ControlDef *control = nullptr;   // Name
     Procedure *procedure = nullptr;  // Call of a Sub or Function
@@ -129,6 +159,7 @@ enum class StmtKind
     Try,      // Try ... Catch [When c] ... Finally ... End Try
     Throw,    // Throw [number [, description]]; Err.Raise number [, source [, desc]]
     ErrClear, // Err.Clear
+    Const,    // Const name [As type] = value, ...: declared holds the names
     End       // the End statement: terminate the program
 };
 
@@ -156,8 +187,10 @@ struct Stmt
     StmtKind kind;
     Location location;
 
-    // Dim: the variables it declares (owned by the procedure or module).
+    // Dim and Const: the names they declare (owned by the procedure or
+    // module). For a Const, constValues holds each one's value expression.
     std::vector<Variable *> declared;
+    std::vector<ExprPtr> constValues;
     bool insideLoop = false; // set by the semantic pass: re-initialised each pass
 
     // Assign: target = value. For: target is the loop variable, value the
@@ -217,7 +250,14 @@ struct Variable
 {
     std::string name;
     Type type = Type::Error;
+    std::string typeName;             // As <name> for an Enum, until resolved
+    const EnumDef *enumDef = nullptr; // when type is Enum
     Location location;
+    bool isConst = false; // a Const: never stored, its uses become its value
+    std::int64_t constInteger = 0;
+    double constReal = 0;
+    std::string constText;
+    bool constReady = false; // its value has been worked out
     bool isModuleLevel = false;
     bool isParameter = false;
     bool byRef = false;    // parameters only
@@ -273,7 +313,8 @@ struct Module
     std::string fileName;
     std::unique_ptr<ControlDef> form; // at most one in this version
     std::vector<std::unique_ptr<Variable>> globals;
-    Block moduleStatements; // module-level Dim statements
+    Block moduleStatements; // module-level Dim and Const statements, in order
+    std::vector<std::unique_ptr<EnumDef>> enums;
     std::vector<std::unique_ptr<Procedure>> procedures;
 };
 

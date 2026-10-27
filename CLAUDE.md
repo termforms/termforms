@@ -36,7 +36,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (27 Oct 2026, Phase 3 step 3 done)
+## Status (27 Oct 2026, Phase 3 step 4 done)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -73,8 +73,11 @@ authoritative for design rationale.
   catchable (checked before allocating); out of memory stays 7, fatal.
   **Const (and Enum unless complex) added to v1 scope** (Jim, 27 Oct
   2026); their detailed rules are still to be settled with him.
-- **Next:** Phase 3 step 4 (Const and Enum; rules settled), then
-  arrays/Types/Dictionary, or Phase 4 work; ask Jim.
+  Step 4 done (27 Oct 2026): Const and Enum, CType, as settled; the
+  smaller details in REFERENCE.md ("Constants and enumerations
+  (Proposed)") still want Jim's confirmation.
+- **Next:** Phase 3 step 5 (arrays, Types and Ref, Dictionary), or Phase 4
+  work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -228,6 +231,14 @@ Key mechanisms:
   fallible value before use; `checkpoint()` releases temps then jumps.
   `mayFail()` decides what can fail. With multiple modules (step 6),
   `checks_` must become whole-program.
+- **Const and Enum:** sema folds every Const and Enum member value at
+  compile time (`fold()`, with the runtime's checked-arithmetic rules and
+  its Double text) and rewrites each use into an `ExprKind::Constant`
+  node; codegen writes the value and gives a Const no storage. An Enum
+  type is `Type::Enum` plus `enumDef` on the Variable/Expr; sema compares
+  through `TypeInfo` (`assignable`, `article`), and `lowered()` / codegen's
+  `storage()` turn an Enum into its underlying Integer/Long. `CType(x, E)`
+  is checked as CInt/CLng (`checkCType`), so it needs no code of its own.
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in
@@ -325,8 +336,7 @@ Phase 3, language core:
 1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
 2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
 3. ~~Try/Catch/Finally, Err, Throw~~ (done 27 Oct 2026).
-4. Const and Enum (rules settled 27 Oct 2026, REFERENCE.md); before
-   arrays, so array sizes can be named (`Dim a(MAX_ITEMS)`).
+4. ~~Const and Enum~~ (done 27 Oct 2026).
 5. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
 6. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
 7. Multiple modules and the `.vbp` project file.

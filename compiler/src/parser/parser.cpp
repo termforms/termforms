@@ -4,7 +4,7 @@
 //
 // Grammar of this version (keywords upper case, EOS = end of statement):
 //
-//   module     := { formBlock | sub | function | dim EOS }
+//   module     := { formBlock | sub | function | enum | dim EOS | const EOS }
 //   formBlock  := BEGIN Form name EOS { setting | control } END EOS
 //   control    := BEGIN type name EOS { setting } END EOS
 //   setting    := name '=' ['-'] literal EOS
@@ -17,6 +17,9 @@
 //               | CALL name ['(' [args] ')'] | END
 //               | target '=' expr | name [args] | name '(' [args] ')'
 //   dim        := DIM name [AS type] { ',' name [AS type] }
+//   const      := CONST name [AS type] '=' expr { ',' name [AS type] '=' expr }
+//   enum       := ENUM name [AS type] EOS { name ['=' expr] EOS } END ENUM
+//   type       := INTEGER | LONG | DOUBLE | STRING | BOOLEAN | name (an Enum)
 //   if         := IF expr THEN EOS block { ELSEIF expr THEN EOS block }
 //                 [ELSE EOS block] END IF
 //               | IF expr THEN statement [ELSE statement]   (single line)
@@ -29,6 +32,7 @@
 //   expr       := or-expression, with VB precedence from lowest to highest:
 //                 Or, And, Not, comparisons, &, + -, Mod, \, * /, unary -, ^
 //   primary    := literal | name ['(' [args] ')'] | name '.' property | '(' expr ')'
+//               | CTYPE '(' expr ',' type ')'
 //
 // A block ends at a keyword that closes a construct (Next, Loop, Wend,
 // Else, ElseIf, Catch, Finally, End If/Sub/Function/While/Try) if some
@@ -78,6 +82,15 @@ public:
             {
                 module.moduleStatements.push_back(parseDim(&module, nullptr));
                 expectEndOfStatement();
+            }
+            else if (peek().isKeyword("CONST"))
+            {
+                module.moduleStatements.push_back(parseConst(&module, nullptr));
+                expectEndOfStatement();
+            }
+            else if (peek().isKeyword("ENUM"))
+            {
+                parseEnum(module);
             }
             else
             {
@@ -441,7 +454,7 @@ private:
         if (acceptKeyword("AS"))
         {
             const Location typeAt = peek().location;
-            const Type declared = parseTypeName();
+            const Type declared = parseTypeName(&v.typeName);
             if (v.type != Type::Error && declared != Type::Error && v.type != declared)
             {
                 error(typeAt, "'" + v.name + "' has a type suffix that contradicts 'As " +
@@ -592,6 +605,27 @@ private:
         if (t.isKeyword("TRY"))
         {
             return parseTry();
+        }
+        if (t.isKeyword("CONST"))
+        {
+            StmtPtr s = parseConst(nullptr, currentProcedure_);
+            expectEndOfStatement();
+            return s;
+        }
+        if (t.isKeyword("ENUM"))
+        {
+            error(t.location, "an Enum is declared at module level, outside any Sub or Function");
+            while (!at(TokenKind::EndOfFile) && !isEndOf("ENUM") && !isEndOf("SUB") &&
+                   !isEndOf("FUNCTION"))
+            {
+                next();
+            }
+            if (isEndOf("ENUM"))
+            {
+                next();
+                next();
+            }
+            return nullptr;
         }
         StmtPtr s = parseSimpleStatement();
         if (s == nullptr)
@@ -948,6 +982,100 @@ private:
         return s;
     }
 
+    // Const NAME [As type] = value, ...; the type may also come from a suffix,
+    // or, with neither, from the value (worked out by the semantic pass).
+    StmtPtr parseConst(Module *module, Procedure *procedure)
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Const;
+        s->location = next().location; // CONST
+        for (;;)
+        {
+            auto v = std::make_unique<Variable>();
+            v->isConst = true;
+            v->isModuleLevel = module != nullptr;
+            v->location = peek().location;
+            const char suffix = peek().suffix;
+            v->name = expectIdentifier("a constant name");
+            if (v->name.empty())
+            {
+                break;
+            }
+            v->type = typeFromSuffix(suffix);
+            if (acceptKeyword("AS"))
+            {
+                const Location typeAt = peek().location;
+                const Type declared = parseTypeName(&v->typeName);
+                if (v->type != Type::Error && declared != Type::Error && v->type != declared)
+                {
+                    error(typeAt, "'" + v->name + "' has a type suffix that contradicts 'As " +
+                                      typeName(declared) + "'");
+                }
+                v->type = declared;
+            }
+            if (!expectSymbol("="))
+            {
+                break;
+            }
+            s->constValues.push_back(parseExpression());
+            std::vector<std::unique_ptr<Variable>> one;
+            one.push_back(std::move(v));
+            flush(one, *s, module, procedure);
+            if (!acceptSymbol(","))
+            {
+                break;
+            }
+        }
+        return s;
+    }
+
+    // Enum Name [As Integer | Long], its members one per line, End Enum.
+    void parseEnum(Module &module)
+    {
+        auto def = std::make_unique<EnumDef>();
+        def->location = next().location; // ENUM
+        def->name = expectIdentifier("an Enum name");
+        if (acceptKeyword("AS"))
+        {
+            const Location typeAt = peek().location;
+            def->underlying = parseTypeName();
+            if (def->underlying != Type::Integer && def->underlying != Type::Long)
+            {
+                error(typeAt, "an Enum is based on Integer or Long");
+                def->underlying = Type::Integer;
+            }
+        }
+        expectEndOfStatement();
+        skipStatementEnds();
+        while (!at(TokenKind::EndOfFile) && !isEndOf("ENUM") && !isEndOf("SUB") &&
+               !isEndOf("FUNCTION") && !peek().isKeyword("SUB") && !peek().isKeyword("FUNCTION"))
+        {
+            if (!at(TokenKind::Identifier))
+            {
+                error(peek().location,
+                      "expected an Enum member name but found " + describe(peek()));
+                skipStatement();
+                skipStatementEnds();
+                continue;
+            }
+            EnumMember member;
+            member.location = peek().location;
+            member.name = next().text;
+            if (acceptSymbol("="))
+            {
+                member.value = parseExpression();
+            }
+            def->members.push_back(std::move(member));
+            expectEndOfStatement();
+            skipStatementEnds();
+        }
+        if (expectKeyword("END", "End Enum") && expectKeyword("ENUM", "Enum"))
+        {
+            expectEndOfStatement();
+        }
+        module.enums.push_back(std::move(def));
+    }
+
     StmtPtr parseDim(Module *module, Procedure *procedure)
     {
         auto s = std::make_unique<Stmt>();
@@ -973,7 +1101,8 @@ private:
             if (acceptKeyword("AS"))
             {
                 const Location typeAt = peek().location;
-                const Type declared = parseTypeName();
+                std::string enumName;
+                const Type declared = parseTypeName(&enumName);
                 // "As" types the names before it that have no suffix of their
                 // own; only the name written directly before it may not
                 // contradict it ("Dim n% As String").
@@ -984,6 +1113,7 @@ private:
                     if (p.type == Type::Error)
                     {
                         p.type = declared;
+                        p.typeName = enumName;
                     }
                     else if (adjacent && p.type != declared && declared != Type::Error)
                     {
@@ -1029,8 +1159,15 @@ private:
         }
     }
 
-    Type parseTypeName()
+    // A built-in type keyword, or an Enum's name (stored in *enumName for the
+    // semantic pass to resolve; without enumName, only built-in types).
+    Type parseTypeName(std::string *enumName = nullptr)
     {
+        if (enumName != nullptr && at(TokenKind::Identifier))
+        {
+            *enumName = next().text;
+            return Type::Enum;
+        }
         if (acceptKeyword("INTEGER"))
         {
             return Type::Integer;
@@ -1332,6 +1469,18 @@ private:
                 break;
         }
 
+        if (t.isKeyword("CTYPE"))
+        {
+            e->kind = ExprKind::Call;
+            e->text = "CType";
+            next();
+            expectSymbol("(");
+            e->args.push_back(parseExpression());
+            expectSymbol(",");
+            e->convertTo = parseTypeName(&e->convertToName);
+            expectSymbol(")");
+            return e;
+        }
         if (t.isKeyword("TRUE") || t.isKeyword("FALSE"))
         {
             e->kind = ExprKind::BooleanLiteral;
@@ -1371,6 +1520,8 @@ const char *ast::typeName(Type type)
             return "Long";
         case Type::Double:
             return "Double";
+        case Type::Enum:
+            return "Enum";
         case Type::String:
             return "String";
         case Type::Boolean:

@@ -1,0 +1,20 @@
+constants.bas:19:5: error: Enum Color has two members named 'Red'
+constants.bas:10:20: error: a constant's value must be known when compiling: use literals, other Consts, Enum members and operators
+constants.bas:11:28: error: this constant overflows an Integer
+constants.bas:12:15: error: division by zero in a constant
+constants.bas:13:27: error: cannot give an Integer Const a Long value (Option Strict)
+constants.bas:14:24: error: cannot give a String Const an Integer value (Option Strict)
+constants.bas:15:19: error: a constant's value must be known when compiling: use literals, other Consts, Enum members and operators
+constants.bas:20:12: error: an Enum member's value must be a whole number, not a Double
+constants.bas:33:9: error: cannot assign an Integer to a Color (Option Strict); use CType(value, Color) to convert
+constants.bas:34:9: error: cannot assign a Pet to a Color (Option Strict); use CType(value, Color) to convert
+constants.bas:35:13: error: cannot assign a Pet to a Color (Option Strict); use CType(value, Color) to convert
+constants.bas:37:11: error: argument 1 of 'Takes' must be a Color, not an Integer (Option Strict); use CType(value, Color) to convert
+constants.bas:38:9: error: 'Red' is not declared; Enum members are written with their Enum: Color.Red
+constants.bas:39:15: error: Enum Color has no member 'Purple'
+constants.bas:40:9: error: 'Color' is an Enum; use one of its members, as in Color.Red
+constants.bas:41:11: error: an Enum member cannot be assigned to
+constants.bas:43:10: error: operator '=' cannot combine a Color and a Pet
+constants.bas:44:9: error: unknown type 'Colour'
+constants.bas:45:9: error: CType cannot convert to Boolean
+constants.bas:50:5: error: 'LIMIT' is a Const and cannot be assigned to

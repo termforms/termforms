@@ -320,7 +320,9 @@ c = CType(n, Color)                   ' Integer to Color needs CType
   Or`). No function calls. It is worked out at compile time, and an
   overflow or division by zero there is a compile error.
 - Const follows Dim's scope rules: module level, or inside a procedure
-  with block scope. A Const cannot be assigned to.
+  with block scope. A Const cannot be assigned to. Module-level Consts and
+  Enums are worked out in source order, so each can use only those above
+  it.
 - `Enum Name [As Integer | As Long]`; Integer by default. Members count
   from 0, or from a `= value` (a constant expression), adding 1 each time;
   two members may have the same value. Enums are declared at module level.
@@ -328,7 +330,7 @@ c = CType(n, Color)                   ' Integer to Color needs CType
   VB.NET), so an Enum variable can hold any number of its underlying
   type.
 - A For loop may run over an Enum variable (`For c = Color.Red To
-  Color.Blue`).
+  Color.Blue`); its Step, if any, is a plain number.
 
 ## References and Types (Settled, 23 Oct 2026)
 

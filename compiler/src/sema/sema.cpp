@@ -6,8 +6,14 @@
 
 #include "sema/catalog.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <functional>
 #include <map>
+#include <optional>
 #include <set>
 
 namespace tf
@@ -44,6 +50,32 @@ const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
     return nullptr;
 }
 
+// A type as the checks see it: an Enum type is only complete with its
+// definition. Converts from a plain Type, so most code can ignore Enums.
+struct TypeInfo
+{
+    Type type;
+    const EnumDef *def = nullptr;
+
+    TypeInfo(Type t, const EnumDef *d = nullptr) : type(t), def(d) {}
+};
+
+TypeInfo infoOf(const Expr &e)
+{
+    return {e.type, e.enumDef};
+}
+
+TypeInfo infoOf(const Variable &v)
+{
+    return {v.type, v.enumDef};
+}
+
+// An Enum value as a number: its underlying Integer or Long.
+Type lowered(const TypeInfo &t)
+{
+    return t.type == Type::Enum && t.def != nullptr ? t.def->underlying : t.type;
+}
+
 class Checker
 {
 public:
@@ -58,9 +90,11 @@ public:
             moduleNames_[b.name] = "built-in function";
         }
         moduleNames_["Err"] = "built-in object";
+        registerEnums();
         registerControls();
         registerGlobals();
         registerProcedures();
+        evaluateModuleConstants();
         for (auto &proc : module_.procedures)
         {
             wireEvent(*proc);
@@ -167,7 +201,10 @@ private:
     {
         for (auto &v : module_.globals)
         {
-            if (v->type != Type::Error && claimModuleName(v->name, v->location, "variable"))
+            // A Const's type may still be unknown: its value decides it.
+            if (v->isConst ? claimModuleName(v->name, v->location, "Const")
+                           : v->type != Type::Error && resolveType(*v) &&
+                                 claimModuleName(v->name, v->location, "variable"))
             {
                 globals_[v->name] = v.get();
             }
@@ -182,6 +219,14 @@ private:
                 claimModuleName(proc->name, proc->location, proc->isFunction ? "Function" : "Sub"))
             {
                 procedures_[proc->name] = proc.get();
+            }
+            for (auto &param : proc->parameters)
+            {
+                resolveType(*param);
+            }
+            if (proc->result != nullptr)
+            {
+                resolveType(*proc->result);
             }
         }
     }
@@ -356,6 +401,9 @@ private:
             case StmtKind::Throw:
                 checkThrow(s);
                 break;
+            case StmtKind::Const:
+                checkLocalConst(s);
+                break;
             case StmtKind::ErrClear:
             case StmtKind::End:
                 break;
@@ -366,9 +414,9 @@ private:
 
     void declareLocal(Variable &v)
     {
-        if (v.type == Type::Error)
+        if (v.type == Type::Error || !resolveType(v))
         {
-            return; // already reported by the parser
+            return; // already reported
         }
         if (const Variable *existing = lookupLocal(v.name))
         {
@@ -427,8 +475,19 @@ private:
     void checkAssignment(Stmt &s)
     {
         Expr &target = *s.target;
-        const Type valueType = checkExpr(*s.value);
-        const Type targetType = checkExpr(target);
+        checkExpr(*s.value);
+        if (target.kind == ExprKind::Name)
+        {
+            const Variable *v = lookupLocal(target.text);
+            v = v != nullptr ? v : globals_.count(target.text) ? globals_[target.text] : nullptr;
+            if (v != nullptr && v->isConst)
+            {
+                diagnostics_.error(target.location,
+                                   "'" + target.text + "' is a Const and cannot be assigned to");
+                return;
+            }
+        }
+        checkExpr(target);
 
         if (target.kind == ExprKind::Name && target.control != nullptr)
         {
@@ -443,9 +502,14 @@ private:
                                                     "Err.Raise");
             return;
         }
+        if (target.kind == ExprKind::Constant)
+        {
+            diagnostics_.error(target.location, "an Enum member cannot be assigned to");
+            return;
+        }
         if (target.kind == ExprKind::Name || target.kind == ExprKind::Member)
         {
-            requireAssignable(targetType, valueType, s.value->location);
+            requireAssignable(infoOf(target), infoOf(*s.value), s.value->location);
             return;
         }
         if (target.kind == ExprKind::Call && target.procedure != nullptr)
@@ -457,17 +521,28 @@ private:
         diagnostics_.error(target.location, "this cannot be assigned to");
     }
 
-    // Option Strict: the same type, or a numeric widening.
-    static bool assignable(Type target, Type value)
+    // Option Strict: the same type, or a numeric widening. An Enum takes only
+    // its own values, and widens to its underlying type and beyond.
+    static bool assignable(const TypeInfo &target, const TypeInfo &value)
     {
-        if (target == Type::Error || value == Type::Error || target == value)
+        if (target.type == Type::Error || value.type == Type::Error)
         {
             return true;
         }
-        return isNumeric(target) && isNumeric(value) && widerNumeric(target, value) == target;
+        if (target.type == Type::Enum)
+        {
+            return value.type == Type::Enum && value.def == target.def;
+        }
+        const Type v = lowered(value);
+        if (target.type == v)
+        {
+            return true;
+        }
+        return isNumeric(target.type) && isNumeric(v) &&
+               widerNumeric(target.type, v) == target.type;
     }
 
-    void requireAssignable(Type target, Type value, Location where)
+    void requireAssignable(const TypeInfo &target, const TypeInfo &value, Location where)
     {
         if (!assignable(target, value))
         {
@@ -477,9 +552,17 @@ private:
         }
     }
 
-    // "; use CInt(...) to convert", or nothing when no conversion exists.
-    static std::string conversionHint(Type target, Type value)
+    // "; use CInt(value) to convert", or nothing when no conversion exists.
+    static std::string conversionHint(const TypeInfo &targetInfo, const TypeInfo &valueInfo)
     {
+        if (targetInfo.type == Type::Enum)
+        {
+            return isNumeric(lowered(valueInfo))
+                       ? "; use CType(value, " + targetInfo.def->name + ") to convert"
+                       : "";
+        }
+        const Type target = targetInfo.type;
+        const Type value = lowered(valueInfo);
         const char *convert = target == Type::Integer  ? "CInt"
                               : target == Type::Long   ? "CLng"
                               : target == Type::Double ? "CDbl"
@@ -593,26 +676,31 @@ private:
                 {
                     diagnostics_.error(arg.location, which + " is ByRef, so it must be a variable");
                 }
-                else if (arg.type != param.type)
+                else if (arg.type != param.type || arg.enumDef != param.enumDef)
                 {
-                    diagnostics_.error(arg.location, which + " is ByRef " + typeName(param.type) +
-                                                         ", so it must be " + article(param.type) +
-                                                         " variable, not " + article(arg.type));
+                    diagnostics_.error(arg.location, which + " is ByRef " + name(infoOf(param)) +
+                                                         ", so it must be " +
+                                                         article(infoOf(param)) +
+                                                         " variable, not " + article(infoOf(arg)));
                 }
                 continue;
             }
-            if (!assignable(param.type, arg.type))
+            if (!assignable(infoOf(param), infoOf(arg)))
             {
-                diagnostics_.error(arg.location, which + " must be " + article(param.type) +
-                                                     ", not " + article(arg.type) +
+                diagnostics_.error(arg.location, which + " must be " + article(infoOf(param)) +
+                                                     ", not " + article(infoOf(arg)) +
                                                      " (Option Strict)" +
-                                                     conversionHint(param.type, arg.type));
+                                                     conversionHint(infoOf(param), infoOf(arg)));
             }
         }
     }
 
     Type checkCallExpr(Expr &e)
     {
+        if (e.convertTo != Type::Error)
+        {
+            return checkCType(e);
+        }
         e.procedure = findProcedure(e.text);
         if (e.procedure == nullptr)
         {
@@ -641,6 +729,7 @@ private:
             return Type::Error;
         }
         checkArguments(*e.procedure, e.args, e.location);
+        e.enumDef = e.procedure->result->enumDef;
         return e.procedure->result->type;
     }
 
@@ -659,7 +748,7 @@ private:
                                                std::to_string(e.args.size()));
             return Type::Error;
         }
-        const Type t = e.args[0]->type;
+        const Type t = lowered(infoOf(*e.args[0])); // an Enum converts as its number
         if (t == Type::Error)
         {
             return Type::Error;
@@ -698,6 +787,582 @@ private:
                 break;
         }
         return Type::Error;
+    }
+
+    // -- Enums and constants -------------------------------------------------
+
+    void registerEnums()
+    {
+        for (auto &def : module_.enums)
+        {
+            if (!def->name.empty() && claimModuleName(def->name, def->location, "Enum"))
+            {
+                enums_[def->name] = def.get();
+            }
+            std::set<std::string> seen;
+            for (const EnumMember &m : def->members)
+            {
+                if (!seen.insert(m.name).second)
+                {
+                    diagnostics_.error(m.location, "Enum " + def->name +
+                                                       " has two members named '" + m.name + "'");
+                }
+            }
+        }
+    }
+
+    // Gives an "As <name>" variable its Enum; false (and an error) if there is
+    // no such type.
+    bool resolveType(Variable &v)
+    {
+        if (v.type != Type::Enum || v.enumDef != nullptr)
+        {
+            return true;
+        }
+        if (auto it = enums_.find(v.typeName); it != enums_.end())
+        {
+            v.enumDef = it->second;
+            return true;
+        }
+        unknownType(v.typeName, v.location);
+        v.type = Type::Error;
+        return false;
+    }
+
+    void unknownType(const std::string &name, Location where)
+    {
+        std::string message = "unknown type '" + name + "'";
+        for (const auto &[known, def] : enums_)
+        {
+            if (catalog::equalsIgnoringCase(known, name))
+            {
+                message += " (did you mean '" + known + "'? names are case-sensitive)";
+            }
+        }
+        diagnostics_.error(where, message);
+    }
+
+    // Module-level Enums and Consts, in source order, so each may use the
+    // ones before it.
+    void evaluateModuleConstants()
+    {
+        std::vector<std::pair<Location, std::function<void()>>> items;
+        for (auto &def : module_.enums)
+        {
+            EnumDef *d = def.get();
+            items.emplace_back(d->location, [this, d] { evaluateEnum(*d); });
+        }
+        for (auto &stmt : module_.moduleStatements)
+        {
+            if (stmt != nullptr && stmt->kind == StmtKind::Const)
+            {
+                Stmt *s = stmt.get();
+                items.emplace_back(s->location, [this, s] { evaluateConst(*s); });
+            }
+        }
+        std::stable_sort(items.begin(), items.end(),
+                         [](const auto &a, const auto &b) { return a.first.line < b.first.line; });
+        for (auto &item : items)
+        {
+            item.second();
+        }
+    }
+
+    void evaluateEnum(EnumDef &def)
+    {
+        const std::int64_t lo = def.underlying == Type::Long ? INT64_MIN : INT32_MIN;
+        const std::int64_t hi = def.underlying == Type::Long ? INT64_MAX : INT32_MAX;
+        std::int64_t next = 0;
+        bool nextValid = true;
+        for (EnumMember &m : def.members)
+        {
+            if (m.value != nullptr)
+            {
+                checkExpr(*m.value);
+                const auto value = fold(*m.value);
+                if (!value)
+                {
+                    notConstant(*m.value);
+                }
+                else if (value->type != Type::Integer && value->type != Type::Long &&
+                         !(value->type == Type::Enum && value->def == &def))
+                {
+                    diagnostics_.error(m.value->location,
+                                       "an Enum member's value must be a whole number, not " +
+                                           article(TypeInfo{value->type, value->def}));
+                }
+                else if (value->integer < lo || value->integer > hi)
+                {
+                    diagnostics_.error(m.value->location,
+                                       "value does not fit in the Enum's " +
+                                           std::string(typeName(def.underlying)));
+                }
+                else
+                {
+                    next = value->integer;
+                    nextValid = true;
+                }
+            }
+            else if (!nextValid)
+            {
+                diagnostics_.error(m.location, "'" + m.name + "' would be one more than the " +
+                                                   typeName(def.underlying) + " can hold");
+            }
+            m.resolved = next;
+            m.ready = true;
+            nextValid = next < hi;
+            next = nextValid ? next + 1 : next;
+        }
+    }
+
+    // Const NAME [As type] = value: works out each value now; the names are
+    // then constants, never variables.
+    void evaluateConst(Stmt &s)
+    {
+        for (std::size_t i = 0; i < s.declared.size() && i < s.constValues.size(); ++i)
+        {
+            Variable &v = *s.declared[i];
+            Expr &valueExpr = *s.constValues[i];
+            checkExpr(valueExpr);
+            const auto value = fold(valueExpr);
+            if (!value)
+            {
+                notConstant(valueExpr);
+                v.type = Type::Error;
+                continue;
+            }
+            if (v.type == Type::Error) // no As or suffix: the value decides
+            {
+                v.type = value->type;
+                v.enumDef = value->def;
+            }
+            else if (!resolveType(v))
+            {
+                continue;
+            }
+            const TypeInfo target{v.type, v.enumDef};
+            const TypeInfo got{value->type, value->def};
+            if (!assignable(target, got))
+            {
+                diagnostics_.error(valueExpr.location, "cannot give " + article(target) +
+                                                           " Const " + article(got) +
+                                                           " value (Option Strict)");
+                v.type = Type::Error;
+                continue;
+            }
+            v.constInteger = value->integer;
+            v.constReal = v.type == Type::Double && value->type != Type::Double
+                              ? static_cast<double>(value->integer)
+                              : value->real;
+            v.constText = value->text;
+            v.constReady = true;
+        }
+    }
+
+    void notConstant(const Expr &e)
+    {
+        if (!foldReported_)
+        {
+            diagnostics_.error(e.location, "a constant's value must be known when compiling: use "
+                                           "literals, other Consts, Enum members and operators");
+        }
+        foldReported_ = false;
+    }
+
+    // A value worked out at compile time.
+    struct Folded
+    {
+        Type type = Type::Error;
+        const EnumDef *def = nullptr;
+        std::int64_t integer = 0; // Integer, Long, Boolean, Enum
+        double real = 0;          // Double
+        std::string text;         // String
+    };
+
+    // Evaluates a checked constant expression with the runtime's rules
+    // (checked arithmetic, no Infinity), so a Const never differs from the
+    // same expression run as code. Nothing means it is not constant; an
+    // overflow is reported here (foldReported_) and also gives nothing.
+    std::optional<Folded> fold(const Expr &e)
+    {
+        Folded f;
+        f.type = e.type;
+        f.def = e.enumDef;
+        switch (e.kind)
+        {
+            case ExprKind::IntegerLiteral:
+            case ExprKind::BooleanLiteral:
+                f.integer = e.integer;
+                return f;
+            case ExprKind::DoubleLiteral:
+                f.real = e.real;
+                return f;
+            case ExprKind::StringLiteral:
+                f.text = e.text;
+                return f;
+            case ExprKind::Constant:
+                f.integer = e.integer;
+                f.real = e.real;
+                f.text = e.text;
+                return f;
+            case ExprKind::Unary:
+            {
+                const auto x = fold(*e.left);
+                if (!x)
+                {
+                    return std::nullopt;
+                }
+                if (e.text == "Not")
+                {
+                    f.integer = x->integer == 0 ? 1 : 0;
+                    return f;
+                }
+                if (e.type == Type::Double)
+                {
+                    f.real = -asReal(*x);
+                    return f;
+                }
+                return checkedInteger(e, x->integer == INT64_MIN ? 0 : -x->integer,
+                                      x->integer == INT64_MIN, f);
+            }
+            case ExprKind::Binary:
+                return foldBinary(e, f);
+            default:
+                return std::nullopt; // a variable, a call, a property: not constant
+        }
+    }
+
+    std::optional<Folded> foldBinary(const Expr &e, Folded f)
+    {
+        const auto l = fold(*e.left);
+        const auto r = l ? fold(*e.right) : std::nullopt;
+        if (!l || !r)
+        {
+            return std::nullopt;
+        }
+        const std::string &op = e.text;
+        if (op == "&" || (op == "+" && e.type == Type::String))
+        {
+            f.text = asText(*l) + asText(*r);
+            return f;
+        }
+        if (op == "And" || op == "Or")
+        {
+            f.integer = op == "And" ? (l->integer & r->integer) : (l->integer | r->integer);
+            return f;
+        }
+        if (e.type == Type::Boolean) // a comparison
+        {
+            int order = 0;
+            if (l->type == Type::String)
+            {
+                order = l->text.compare(r->text);
+            }
+            else if (l->type == Type::Double || r->type == Type::Double)
+            {
+                order = asReal(*l) < asReal(*r) ? -1 : asReal(*l) > asReal(*r) ? 1 : 0;
+            }
+            else
+            {
+                order = l->integer < r->integer ? -1 : l->integer > r->integer ? 1 : 0;
+            }
+            f.integer = op == "="    ? order == 0
+                        : op == "<>" ? order != 0
+                        : op == "<"  ? order < 0
+                        : op == ">"  ? order > 0
+                        : op == "<=" ? order <= 0
+                                     : order >= 0;
+            return f;
+        }
+        if (e.type == Type::Double)
+        {
+            const double a = asReal(*l);
+            const double b = asReal(*r);
+            if ((op == "/" || op == "Mod") && b == 0.0)
+            {
+                return foldError(e, "division by zero in a constant");
+            }
+            const double v = op == "+"   ? a + b
+                             : op == "-" ? a - b
+                             : op == "*" ? a * b
+                             : op == "/" ? a / b
+                             : op == "^" ? std::pow(a, b)
+                                         : std::fmod(a, b);
+            if (std::isnan(v))
+            {
+                return foldError(e, "a negative number to a fractional power in a constant");
+            }
+            if (!std::isfinite(v))
+            {
+                return foldError(e, "this constant is too large for a Double");
+            }
+            f.real = v;
+            return f;
+        }
+        // Integer and Long: exact 64-bit arithmetic with the runtime's
+        // overflow tests, then the result type's range.
+        const std::int64_t a = l->integer;
+        const std::int64_t b = r->integer;
+        if ((op == "\\" || op == "Mod") && b == 0)
+        {
+            return foldError(e, "division by zero in a constant");
+        }
+        std::int64_t v = 0;
+        bool over = false;
+        if (op == "+")
+        {
+            over = (b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b);
+            v = over ? 0 : a + b;
+        }
+        else if (op == "-")
+        {
+            over = (b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b);
+            v = over ? 0 : a - b;
+        }
+        else if (op == "*")
+        {
+            over = multiplyOverflows(a, b);
+            v = over ? 0 : a * b;
+        }
+        else if (op == "\\")
+        {
+            over = a == INT64_MIN && b == -1;
+            v = over ? 0 : a / b;
+        }
+        else // Mod: INT64_MIN Mod -1 is 0, and undefined in C
+        {
+            v = b == -1 ? 0 : a % b;
+        }
+        return checkedInteger(e, v, over, f);
+    }
+
+    static bool multiplyOverflows(std::int64_t a, std::int64_t b)
+    {
+        if (a > 0)
+        {
+            return (b > 0 && a > INT64_MAX / b) || (b < 0 && b < INT64_MIN / a);
+        }
+        if (a < 0)
+        {
+            return (b > 0 && a < INT64_MIN / b) || (b < 0 && b < INT64_MAX / a);
+        }
+        return false;
+    }
+
+    // Stores v as e's integer type, or reports the overflow.
+    std::optional<Folded> checkedInteger(const Expr &e, std::int64_t v, bool overflowed, Folded f)
+    {
+        const bool isLong =
+            e.type == Type::Long || (e.type == Type::Enum && e.enumDef->underlying == Type::Long);
+        if (overflowed || (!isLong && (v < INT32_MIN || v > INT32_MAX)))
+        {
+            return foldError(e, std::string("this constant overflows ") +
+                                    (isLong ? "a Long" : "an Integer"));
+        }
+        f.integer = v;
+        return f;
+    }
+
+    std::optional<Folded> foldError(const Expr &e, const std::string &message)
+    {
+        diagnostics_.error(e.location, message);
+        foldReported_ = true;
+        return std::nullopt;
+    }
+
+    static double asReal(const Folded &f)
+    {
+        return f.type == Type::Double ? f.real : static_cast<double>(f.integer);
+    }
+
+    // A constant as & would turn it into text at run time.
+    static std::string asText(const Folded &f)
+    {
+        switch (f.type)
+        {
+            case Type::String:
+                return f.text;
+            case Type::Boolean:
+                return f.integer != 0 ? "True" : "False";
+            case Type::Double:
+                return doubleText(f.real);
+            default:
+                return std::to_string(f.integer);
+        }
+    }
+
+    // The runtime's Double text (tf_str_from_f64): shortest digits that read
+    // back exactly; exponent form from 1E15 and below 0.0001.
+    static std::string doubleText(double value)
+    {
+        if (value == 0.0)
+        {
+            return "0";
+        }
+        char sci[40];
+        for (int precision = 1; precision <= 17; ++precision)
+        {
+            std::snprintf(sci, sizeof sci, "%.*e", precision - 1, value);
+            if (std::strtod(sci, nullptr) == value)
+            {
+                break;
+            }
+        }
+        std::string out;
+        const char *p = sci;
+        if (*p == '-')
+        {
+            out += '-';
+            ++p;
+        }
+        std::string digits;
+        for (; *p != 'e' && *p != 'E'; ++p)
+        {
+            if (*p != '.')
+            {
+                digits += *p;
+            }
+        }
+        const int exponent = static_cast<int>(std::strtol(p + 1, nullptr, 10));
+        while (digits.size() > 1 && digits.back() == '0')
+        {
+            digits.pop_back();
+        }
+        if (exponent < -4 || exponent >= 15)
+        {
+            out += digits[0];
+            if (digits.size() > 1)
+            {
+                out += "." + digits.substr(1);
+            }
+            char e[8];
+            std::snprintf(e, sizeof e, "E%c%02d", exponent < 0 ? '-' : '+',
+                          exponent < 0 ? -exponent : exponent);
+            return out + e;
+        }
+        if (exponent >= 0)
+        {
+            for (int i = 0; i <= exponent || i < static_cast<int>(digits.size()); ++i)
+            {
+                if (i == exponent + 1)
+                {
+                    out += '.';
+                }
+                out +=
+                    i < static_cast<int>(digits.size()) ? digits[static_cast<std::size_t>(i)] : '0';
+            }
+            return out;
+        }
+        return out + "0." + std::string(static_cast<std::size_t>(-exponent - 1), '0') + digits;
+    }
+
+    // A Name or Member that is a Const or an Enum member becomes its value.
+    static Type makeConstant(Expr &e, const Variable &v)
+    {
+        e.kind = ExprKind::Constant;
+        e.integer = v.constInteger;
+        e.real = v.constReal;
+        e.text = v.constText;
+        e.enumDef = v.enumDef;
+        e.left.reset();
+        return v.type;
+    }
+
+    // Color.Red
+    Type resolveEnumMember(Expr &e, const EnumDef &def)
+    {
+        for (const EnumMember &m : def.members)
+        {
+            if (m.name == e.text)
+            {
+                if (!m.ready)
+                {
+                    diagnostics_.error(e.location, "'" + def.name + "." + m.name +
+                                                       "' is used before its value is set");
+                    return Type::Error;
+                }
+                e.kind = ExprKind::Constant;
+                e.integer = m.resolved;
+                e.enumDef = &def;
+                e.left.reset();
+                return Type::Enum;
+            }
+        }
+        std::string message = "Enum " + def.name + " has no member '" + e.text + "'";
+        for (const EnumMember &m : def.members)
+        {
+            if (catalog::equalsIgnoringCase(m.name, e.text))
+            {
+                message += " (did you mean '" + m.name + "'? names are case-sensitive)";
+            }
+        }
+        diagnostics_.error(e.location, message);
+        return Type::Error;
+    }
+
+    // CType(value, type): to an Enum, CInt/CLng of the value given the Enum's
+    // type; to a built-in type, the matching conversion function.
+    Type checkCType(Expr &e)
+    {
+        Type target = e.convertTo;
+        const EnumDef *def = nullptr;
+        if (target == Type::Enum)
+        {
+            auto it = enums_.find(e.convertToName);
+            if (it == enums_.end())
+            {
+                unknownType(e.convertToName, e.location);
+                return Type::Error;
+            }
+            def = it->second;
+            target = def->underlying;
+        }
+        const Builtin conversion = target == Type::Integer  ? Builtin::CInt
+                                   : target == Type::Long   ? Builtin::CLng
+                                   : target == Type::Double ? Builtin::CDbl
+                                   : target == Type::String ? Builtin::CStr
+                                                            : Builtin::None;
+        if (conversion == Builtin::None)
+        {
+            for (auto &arg : e.args)
+            {
+                checkExpr(*arg);
+            }
+            diagnostics_.error(e.location,
+                               std::string("CType cannot convert to ") + typeName(e.convertTo));
+            return Type::Error;
+        }
+        for (const BuiltinInfo &b : kBuiltins)
+        {
+            if (b.id == conversion)
+            {
+                const Type t = checkBuiltin(e, b);
+                if (def == nullptr || t == Type::Error)
+                {
+                    return t;
+                }
+                e.enumDef = def;
+                return Type::Enum;
+            }
+        }
+        return Type::Error;
+    }
+
+    // Const inside a procedure: worked out, then in scope like a Dim.
+    void checkLocalConst(Stmt &s)
+    {
+        evaluateConst(s);
+        for (Variable *v : s.declared)
+        {
+            declareLocal(*v);
+        }
+    }
+
+    // "Integer", "Color".
+    static std::string name(const TypeInfo &info)
+    {
+        return info.type == Type::Enum && info.def != nullptr ? info.def->name
+                                                              : typeName(info.type);
     }
 
     // -- Errors ------------------------------------------------------------
@@ -794,31 +1459,38 @@ private:
     void checkFor(Stmt &s)
     {
         const Type varType = checkExpr(*s.target);
-        const bool numericVariable = s.target->variable != nullptr && isNumeric(varType);
-        if (varType != Type::Error && !numericVariable)
+        const TypeInfo var = infoOf(*s.target);
+        const bool loopable =
+            s.target->variable != nullptr && (isNumeric(varType) || varType == Type::Enum);
+        if (varType != Type::Error && !loopable)
         {
             diagnostics_.error(s.target->location, "the For loop variable must be a numeric "
-                                                   "variable (Integer, Long or Double)");
+                                                   "variable (Integer, Long or Double) or an "
+                                                   "Enum variable");
         }
-        auto requireFits = [&](Expr &e, const char *what) {
-            const Type t = checkExpr(e);
-            if (numericVariable && !assignable(varType, t))
+        // Start and end are the variable's type; over an Enum the Step is a
+        // plain number (For c = Color.Red To Color.Blue Step 2).
+        auto requireFits = [&](Expr &e, const char *what, const TypeInfo &want) {
+            checkExpr(e);
+            const TypeInfo got = infoOf(e);
+            if (loopable && !assignable(want, got))
             {
                 // Converting a fractional Step would round it (0.5 to 0, a
                 // loop that never ends): the variable's type is what to fix.
                 const std::string hint =
-                    isNumeric(t) ? std::string("; declare the loop variable As ") + typeName(t)
-                                 : conversionHint(varType, t);
+                    isNumeric(got.type) && isNumeric(want.type)
+                        ? std::string("; declare the loop variable As ") + typeName(got.type)
+                        : conversionHint(want, got);
                 diagnostics_.error(e.location, std::string("the ") + what + " of a For loop over " +
-                                                   article(varType) + " must be " +
-                                                   article(varType) + ", not " + article(t) + hint);
+                                                   article(var) + " must be " + article(want) +
+                                                   ", not " + article(got) + hint);
             }
         };
-        requireFits(*s.value, "start");
-        requireFits(*s.limit, "end");
+        requireFits(*s.value, "start", var);
+        requireFits(*s.limit, "end", var);
         if (s.step != nullptr)
         {
-            requireFits(*s.step, "Step");
+            requireFits(*s.step, "Step", varType == Type::Enum ? TypeInfo(lowered(var)) : var);
         }
         if (!s.nextName.empty() && s.nextName != s.target->text)
         {
@@ -895,7 +1567,8 @@ private:
             diagnostics_.error(s.location, "'Return' in a Function needs a value");
             return;
         }
-        requireAssignable(current_->result->type, checkExpr(*s.value), s.value->location);
+        checkExpr(*s.value);
+        requireAssignable(infoOf(*current_->result), infoOf(*s.value), s.value->location);
     }
 
     // -- Expressions -------------------------------------------------------
@@ -928,6 +1601,8 @@ private:
                 return Type::Long;
             case ExprKind::DoubleLiteral:
                 return Type::Double;
+            case ExprKind::Constant:
+                return e.type; // set when the Const or member was replaced
             case ExprKind::StringLiteral:
                 return Type::String;
             case ExprKind::BooleanLiteral:
@@ -963,9 +1638,23 @@ private:
             }
         }
 
+        if (v != nullptr && v->isConst)
+        {
+            if (!v->constReady)
+            {
+                if (v->type != Type::Error)
+                {
+                    diagnostics_.error(e.location,
+                                       "Const '" + e.text + "' is used before its value is set");
+                }
+                return Type::Error;
+            }
+            return makeConstant(e, *v);
+        }
         if (v != nullptr)
         {
             e.variable = v;
+            e.enumDef = v->enumDef;
             if (e.suffix != 0 && suffixType(e.suffix) != v->type)
             {
                 diagnostics_.error(e.location, "'" + e.text + e.suffix + "' does not match '" +
@@ -996,6 +1685,15 @@ private:
             diagnostics_.error(e.location, "Err is used through its properties, as in Err.Number");
             return Type::Error;
         }
+        if (auto it = enums_.find(e.text); it != enums_.end())
+        {
+            const EnumDef &def = *it->second;
+            diagnostics_.error(e.location, "'" + e.text + "' is an Enum; use one of its members" +
+                                               (def.members.empty() ? std::string()
+                                                                    : ", as in " + e.text + "." +
+                                                                          def.members[0].name));
+            return Type::Error;
+        }
         if (findBuiltin(e.text, e.suffix) != nullptr)
         {
             diagnostics_.error(e.location, "'" + e.text +
@@ -1003,6 +1701,22 @@ private:
                                                "argument: " +
                                                e.text + "(...)");
             return Type::Error;
+        }
+
+        // A bare Enum member: the usual slip for VB6 programmers.
+        for (const auto &[enumName, def] : enums_)
+        {
+            for (const EnumMember &m : def->members)
+            {
+                if (m.name == e.text)
+                {
+                    diagnostics_.error(e.location, "'" + e.text +
+                                                       "' is not declared; Enum members "
+                                                       "are written with their Enum: " +
+                                                       enumName + "." + m.name);
+                    return Type::Error;
+                }
+            }
         }
 
         std::string message = "'" + e.text + "' is not declared (add a Dim)";
@@ -1044,6 +1758,13 @@ private:
         {
             return resolveErrMember(e);
         }
+        if (object.kind == ExprKind::Name)
+        {
+            if (auto it = enums_.find(object.text); it != enums_.end())
+            {
+                return resolveEnumMember(e, *it->second);
+            }
+        }
         const Type objectType = checkExpr(object);
         if (objectType == Type::Error)
         {
@@ -1078,12 +1799,13 @@ private:
         }
         if (e.text == "-")
         {
-            if (!isNumeric(t))
+            const Type n = lowered(infoOf(*e.left)); // -Color.Red is a number
+            if (!isNumeric(n))
             {
                 diagnostics_.error(e.location, std::string("cannot negate ") + article(t));
                 return Type::Error;
             }
-            return t;
+            return n;
         }
         // Not
         if (t != Type::Boolean)
@@ -1098,13 +1820,23 @@ private:
     // always give a Double, as in VB.
     Type checkBinary(Expr &e)
     {
-        const Type l = checkExpr(*e.left);
-        const Type r = checkExpr(*e.right);
+        Type l = checkExpr(*e.left);
+        Type r = checkExpr(*e.right);
         if (l == Type::Error || r == Type::Error)
         {
             return Type::Error;
         }
         const std::string &op = e.text;
+        // An Enum takes part as its number; two different Enums are never
+        // compared, which is what keeping them distinct is for.
+        const bool comparison =
+            op == "=" || op == "<>" || op == "<" || op == ">" || op == "<=" || op == ">=";
+        if (comparison && l == Type::Enum && r == Type::Enum && e.left->enumDef != e.right->enumDef)
+        {
+            return operandError(e, l, r);
+        }
+        l = lowered(infoOf(*e.left));
+        r = lowered(infoOf(*e.right));
         const bool numeric = isNumeric(l) && isNumeric(r);
 
         if (op == "&")
@@ -1155,10 +1887,11 @@ private:
         return operandError(e, l, r);
     }
 
-    Type operandError(const Expr &e, Type l, Type r)
+    Type operandError(const Expr &e, Type, Type)
     {
-        diagnostics_.error(e.location, "operator '" + e.text + "' cannot combine " + article(l) +
-                                           " and " + article(r));
+        diagnostics_.error(e.location, "operator '" + e.text + "' cannot combine " +
+                                           article(infoOf(*e.left)) + " and " +
+                                           article(infoOf(*e.right)));
         return Type::Error;
     }
 
@@ -1201,9 +1934,16 @@ private:
         }
     }
 
-    static std::string article(Type t)
+    // "an Integer", "a Color" (an Enum by its name).
+    static std::string article(const TypeInfo &info)
     {
-        switch (t)
+        if (info.type == Type::Enum && info.def != nullptr)
+        {
+            const char c = info.def->name.empty() ? 'x' : info.def->name[0];
+            const bool vowel = std::string("AEIOUaeiou").find(c) != std::string::npos;
+            return (vowel ? "an " : "a ") + info.def->name;
+        }
+        switch (info.type)
         {
             case Type::Integer:
                 return "an Integer";
@@ -1234,7 +1974,9 @@ private:
     Procedure *current_ = nullptr;
     std::vector<std::map<std::string, Variable *>> scopes_;
     std::vector<const Stmt *> loops_;
-    int catchDepth_ = 0; // Catch blocks around the statement (for a bare Throw)
+    std::map<std::string, EnumDef *> enums_;
+    bool foldReported_ = false; // fold() has reported why a constant failed
+    int catchDepth_ = 0;        // Catch blocks around the statement (for a bare Throw)
     // For each Finally around the statement, how many loops were already
     // open when it began: those cannot be left from inside it.
     std::vector<std::size_t> finallyFloors_;

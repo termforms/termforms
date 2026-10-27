@@ -376,3 +376,44 @@ TEST_CASE("lexer: Try, Throw and When are reserved")
         CHECK(tf::isReservedKeyword(word));
     }
 }
+
+// -- Const and Enum (Phase 3 step 4) -----------------------------------------
+
+TEST_CASE("a Const's type comes from its value unless As or a suffix says otherwise")
+{
+    const std::string decl = "Const A = 1\nConst B = 3000000000\nConst C = 0.5\nConst D = \"x\"\n"
+                             "Const E As Long = 1\nConst F# = 2\n";
+    const std::string body = "    Dim i As Integer, n As Long, d As Double, s As String\n"
+                             "    i = A\n    n = B\n    d = C\n    s = D\n    n = E\n    d = F\n";
+    CHECK(check(inClick(decl, body)) == "");
+    // B is a Long because its value does not fit an Integer.
+    CHECK(check(inClick("Const B = 3000000000\n", "    Dim i As Integer\n    i = B\n")) ==
+          "10:9: cannot assign a Long to an Integer (Option Strict); use CInt(value) to "
+          "convert\n");
+}
+
+TEST_CASE("Enum members are qualified and an Enum is its own type")
+{
+    const std::string decl = "Enum Color\n    Red\n    Green\nEnd Enum\n";
+    CHECK(check(inClick(decl, "    Dim c As Color, i As Integer\n    c = Color.Green\n"
+                              "    i = c + 1\n    c = CType(i, Color)\n")) == "");
+    CHECK(check(inClick(decl, "    Dim c As Color\n    c = 1\n")) ==
+          "13:9: cannot assign an Integer to a Color (Option Strict); use CType(value, Color) "
+          "to convert\n");
+}
+
+TEST_CASE("an Enum is based on Integer or Long, and declared at module level")
+{
+    CHECK(check(kForm + "Enum E As String\n    A\nEnd Enum\n") ==
+          "7:11: an Enum is based on Integer or Long\n");
+    CHECK(check(inClick("", "    Enum E\n        A\n    End Enum\n")) ==
+          "8:5: an Enum is declared at module level, outside any Sub or Function\n");
+}
+
+TEST_CASE("lexer: Const, Enum and CType are reserved")
+{
+    for (const char *word : {"const", "ENUM", "CType"})
+    {
+        CHECK(tf::isReservedKeyword(word));
+    }
+}

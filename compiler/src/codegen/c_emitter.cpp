@@ -43,6 +43,7 @@
 
 #include "sema/catalog.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -146,12 +147,16 @@ private:
             out << '\n';
         }
 
-        if (!module_.globals.empty())
+        if (std::any_of(module_.globals.begin(), module_.globals.end(),
+                        [](const auto &v) { return !v->isConst; }))
         {
             out << "/* Module-level variables */\n";
             for (const auto &v : module_.globals)
             {
-                out << "static " << declaration(v->type, "g_" + v->name) << ";\n";
+                if (!v->isConst) // a Const's uses are its value: it needs no storage
+                {
+                    out << "static " << declaration(storage(*v), "g_" + v->name) << ";\n";
+                }
             }
             out << '\n';
         }
@@ -181,7 +186,7 @@ private:
     static std::string signature(const Procedure &proc)
     {
         std::string out = "static ";
-        out += proc.isFunction ? cType(proc.result->type) : "void";
+        out += proc.isFunction ? cType(storage(*proc.result)) : "void";
         if (out.back() != '*')
         {
             out += ' ';
@@ -195,7 +200,7 @@ private:
         {
             const Variable &p = *proc.parameters[i];
             out += (i == 0 ? "" : ", ") +
-                   declaration(p.type, std::string(p.byRef ? "*" : "") + "v_" + p.name);
+                   declaration(storage(p), std::string(p.byRef ? "*" : "") + "v_" + p.name);
         }
         return out + ")";
     }
@@ -215,15 +220,15 @@ private:
 
         for (const auto &v : proc.locals)
         {
-            if (v->type != Type::Error)
+            if (v->type != Type::Error && !v->isConst)
             {
-                out << "    " << declaration(v->type, names_.at(v.get())) << " = " << zero(v->type)
-                    << ";\n";
+                out << "    " << declaration(storage(*v), names_.at(v.get())) << " = "
+                    << zero(v->type) << ";\n";
             }
         }
         if (proc.isFunction)
         {
-            out << "    " << declaration(proc.result->type, "r_" + proc.name) << " = "
+            out << "    " << declaration(storage(*proc.result), "r_" + proc.name) << " = "
                 << zero(proc.result->type) << ";\n";
         }
         for (const auto &p : proc.parameters)
@@ -245,7 +250,7 @@ private:
         }
         for (const auto &v : proc.locals)
         {
-            if (v->type == Type::String)
+            if (v->type == Type::String && !v->isConst)
             {
                 cleanup_ += " tf_str_release(" + names_.at(v.get()) + ");";
             }
@@ -408,6 +413,8 @@ private:
             case StmtKind::Try:
                 emitTry(out, s, depth);
                 return;
+            case StmtKind::Const:
+                return; // worked out by the compiler; uses are replaced by the value
             default:
                 break;
         }
@@ -551,7 +558,7 @@ private:
     {
         const int id = enterLoop(s);
         const std::string var = variableValue(*s.target->variable);
-        const Type varType = s.target->variable->type;
+        const Type varType = storage(*s.target->variable);
         StatementScope scope;
         prepare(scope, {s.value.get(), s.limit.get(), s.step.get()});
 
@@ -718,16 +725,24 @@ private:
         }
         const bool negated = e.kind == ExprKind::Unary;
         const Expr &literal = negated ? *e.left : e;
-        if (literal.kind == ExprKind::DoubleLiteral)
+        if (isReal(literal))
         {
             return doubleLiteral(negated ? -literal.real : literal.real);
         }
         return integerLiteral(negated ? -literal.integer : literal.integer);
     }
 
+    // A number known when compiling: a literal, or a numeric Const or Enum member.
     static bool isLiteralNumber(const Expr &e)
     {
-        return e.kind == ExprKind::IntegerLiteral || e.kind == ExprKind::DoubleLiteral;
+        return e.kind == ExprKind::IntegerLiteral || e.kind == ExprKind::DoubleLiteral ||
+               (e.kind == ExprKind::Constant && e.type != Type::String && e.type != Type::Boolean);
+    }
+
+    static bool isReal(const Expr &literal)
+    {
+        return literal.kind == ExprKind::DoubleLiteral ||
+               (literal.kind == ExprKind::Constant && literal.type == Type::Double);
     }
 
     static bool isConstant(const Expr &e)
@@ -740,8 +755,7 @@ private:
     {
         const bool negated = e.kind == ExprKind::Unary;
         const Expr &literal = negated ? *e.left : e;
-        const bool negative =
-            literal.kind == ExprKind::DoubleLiteral ? literal.real < 0 : literal.integer < 0;
+        const bool negative = isReal(literal) ? literal.real < 0 : literal.integer < 0;
         return negated != negative && (literal.real != 0 || literal.integer != 0);
     }
 
@@ -957,7 +971,7 @@ private:
             return v;
         }
         const std::string temp = scope.newTemp();
-        scope.prelude.push_back(declaration(e.type, temp) + " = " + v.code + ";");
+        scope.prelude.push_back(declaration(storage(e), temp) + " = " + v.code + ";");
         if (v.owned)
         {
             scope.releases.push_back(temp);
@@ -999,9 +1013,10 @@ private:
                 switch (e.builtin)
                 {
                     case Builtin::CInt:
-                        return e.args[0]->type != Type::Integer;
+                        return storage(*e.args[0]) != Type::Integer;
                     case Builtin::CLng:
-                        return e.args[0]->type == Type::Double || e.args[0]->type == Type::String;
+                        return storage(*e.args[0]) == Type::Double ||
+                               storage(*e.args[0]) == Type::String;
                     case Builtin::CDbl:
                         return e.args[0]->type == Type::String;
                     case Builtin::Val:
@@ -1262,6 +1277,8 @@ private:
                 return {integerLiteral(e.integer), false};
             case ExprKind::DoubleLiteral:
                 return {doubleLiteral(e.real), false};
+            case ExprKind::Constant:
+                return {constantCode(e), false};
             case ExprKind::StringLiteral:
                 return {literal(e.text), false};
             case ExprKind::BooleanLiteral:
@@ -1272,7 +1289,7 @@ private:
                 const bool reachable = v.isModuleLevel || v.byRef || scope.passedByRef.count(&v);
                 if (scope.pendingCalls > 0 && reachable)
                 {
-                    return snapshot(v.type, variableValue(v), scope);
+                    return snapshot(storage(v), variableValue(v), scope);
                 }
                 return {variableValue(v), false};
             }
@@ -1311,7 +1328,7 @@ private:
         const Procedure &callee = *e.procedure;
         const std::string code = "p_" + callee.name + "(" + arguments(callee, e.args, scope) + ")";
         const std::string temp = scope.newTemp();
-        scope.prelude.push_back(declaration(callee.result->type, temp) + " = " + code + ";");
+        scope.prelude.push_back(declaration(storage(*callee.result), temp) + " = " + code + ";");
         if (callee.result->type == Type::String)
         {
             scope.releases.push_back(temp);
@@ -1376,19 +1393,21 @@ private:
     // The operand of &: Integers and Booleans become their text.
     Value asString(const Expr &e, StatementScope &scope)
     {
-        if (e.type == Type::Integer)
+        const Type t = storage(e); // an Enum is text as its number
+        if (t == Type::Integer)
         {
             return {"tf_str_from_i32(" + expr(e, scope).code + ")", true};
         }
-        if (e.type == Type::Long)
+        if (t == Type::Long)
         {
             return {"tf_str_from_i64(" + expr(e, scope).code + ")", true};
         }
-        if (e.type == Type::Double)
+        if (t == Type::Double)
         {
             return {"tf_str_from_f64(" + expr(e, scope).code + ")", true};
         }
-        if (e.kind == ExprKind::BooleanLiteral)
+        if (e.kind == ExprKind::BooleanLiteral ||
+            (e.kind == ExprKind::Constant && e.type == Type::Boolean))
         {
             return {literal(e.integer != 0 ? "True" : "False"), false};
         }
@@ -1408,7 +1427,7 @@ private:
     Value builtin(const Expr &e, StatementScope &scope)
     {
         const Expr &arg = *e.args[0];
-        const Type t = arg.type;
+        const Type t = storage(arg); // CType to an Enum and CInt of one convert numbers
         if (e.builtin == Builtin::CStr)
         {
             return asString(arg, scope);
@@ -1554,6 +1573,33 @@ private:
             text += ".0";
         }
         return text;
+    }
+
+    // The type a value is stored as in C: an Enum as its underlying type.
+    static Type storage(const Variable &v)
+    {
+        return v.type == Type::Enum && v.enumDef != nullptr ? v.enumDef->underlying : v.type;
+    }
+
+    static Type storage(const Expr &e)
+    {
+        return e.type == Type::Enum && e.enumDef != nullptr ? e.enumDef->underlying : e.type;
+    }
+
+    // A Const or Enum member's value as C.
+    std::string constantCode(const Expr &e)
+    {
+        switch (e.type)
+        {
+            case Type::String:
+                return literal(e.text);
+            case Type::Double:
+                return doubleLiteral(e.real);
+            case Type::Boolean:
+                return e.integer != 0 ? "1" : "0";
+            default:
+                return integerLiteral(e.integer);
+        }
     }
 
     static std::string cType(Type t)

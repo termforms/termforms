@@ -6,7 +6,7 @@ each phase; the full design lives in the project's design documents.
 Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
 language core step by step; so far: Sub and Function with parameters, the
-loops, Long and Double, and Try/Catch. `docs/REFERENCE.md` has every rule
+loops, Long and Double, Try/Catch, Const and Enum. `docs/REFERENCE.md` has every rule
 as decided, including the ones not built yet.
 
 ## Rules that differ from VB
@@ -58,6 +58,7 @@ End Sub
 | Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` `&` `#` `$` |
 | Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `Try ... Catch ... Finally`, `Throw`, `Err.Raise`, `Err.Clear`, `End` |
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
+| Constants | `Const` (module level or in a procedure), `Enum ... End Enum` (Integer or `As Long`), `CType(value, type)` |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -88,6 +89,32 @@ d = 2 ^ 10 + &HFF + 1.5E-3      ' 1024 + 255 + 0.0015
   error 13, Type mismatch); `Val("12abc")` is lenient and gives 12.
 - `^` binds tighter than unary minus: `-2 ^ 2` is -4.
 - For loops work over Long and Double variables too: `For d = 0 To 1 Step 0.25`.
+
+## Constants and Enums
+
+```vb
+Const MAX_ITEMS = 100               ' an Integer, from its value
+Const TITLE = "Orders " & MAX_ITEMS  ' worked out when compiling
+Const RATE As Double = 7            ' As (or a suffix) picks the type
+
+Enum Status
+    Open                            ' 0
+    Paid                            ' 1
+    Cancelled = 9
+End Enum
+
+Dim s As Status
+s = Status.Paid                     ' members are always written with the Enum
+If s = Status.Paid Then n = s + 1   ' a Status works as its number
+s = CType(n, Status)                ' a number becomes a Status only with CType
+```
+
+- A Const's value may use literals, other Consts above it, Enum members
+  and operators, but not variables or functions. An overflow there is a
+  compile error.
+- An Enum is its own type: a `Status` variable takes only Status values,
+  and Status and another Enum cannot be compared. As text an Enum value is
+  its number.
 
 ## Errors
 

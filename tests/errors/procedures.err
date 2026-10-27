@@ -8,7 +8,7 @@ procedures.bas:32:9: error: Sub 'Show' does not return a value; call it as a sta
 procedures.bas:33:5: error: cannot assign to Function 'NoArgs'; only its own body sets its result
 procedures.bas:34:9: error: no Sub or Function named 'area' (did you mean 'Area'? names are case-sensitive)
 procedures.bas:35:5: error: 'k' is a variable and cannot be called
-procedures.bas:36:9: error: the For loop variable must be a numeric variable (Integer, Long or Double)
+procedures.bas:36:9: error: the For loop variable must be a numeric variable (Integer, Long or Double) or an Enum variable
 procedures.bas:38:18: error: the end of a For loop over an Integer must be an Integer, not a String; use CInt(value) to convert
 procedures.bas:39:5: error: 'Next j' does not match 'For k'
 procedures.bas:40:14: error: a While condition must be Boolean, not Integer
