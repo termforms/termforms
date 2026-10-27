@@ -113,7 +113,7 @@ While cond  ...  End While     ' VB.NET spelling, same meaning
   innermost construct of that kind, even from inside other loops.
 - A Do loop tests at the top or the bottom, not both.
 
-### For semantics (Proposed)
+### For semantics (Settled, 27 Oct 2026)
 
 - The loop variable is an existing numeric variable; `Next i` must name it
   if a name is given.
@@ -127,11 +127,11 @@ While cond  ...  End While     ' VB.NET spelling, same meaning
 - A `Dim` inside a block (If, For, Do, While) is visible only inside that
   block. The same name may be reused in sibling blocks. An inner Dim may
   not hide a local or parameter of an enclosing block.
-- **Proposed:** a `Dim` inside a loop starts fresh (0, `""`, False) on every
+- **Settled, 27 Oct 2026:** a `Dim` inside a loop starts fresh (0, `""`, False) on every
   pass. VB.NET instead keeps the value from the previous pass, which
   surprises people.
 
-## Evaluation order (Proposed)
+## Evaluation order (Settled, 27 Oct 2026)
 
 - Expressions are evaluated strictly left to right, as in VB.NET, with the
   same result on every C compiler (C itself leaves the order unspecified).

@@ -52,9 +52,8 @@ authoritative for design rationale.
 - **Phase 3 (language core): in progress.** Step 1 done (27 Oct 2026):
   Sub/Function with ByVal/ByRef parameters, Return and name-assignment
   results, the three call syntaxes, For/Do/While loops, Exit, block scope.
-  Three rules are still *Proposed* in `docs/REFERENCE.md` (Jim has not
-  confirmed them): For semantics, a Dim inside a loop resetting each pass,
-  and strict left-to-right evaluation.
+  Jim settled (27 Oct 2026) the For semantics, a Dim inside a loop
+  resetting each pass, and strict left-to-right evaluation.
 - **Next:** Phase 3 step 2 (Long and Double), or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
