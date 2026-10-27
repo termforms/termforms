@@ -30,6 +30,7 @@
 
 #include "sema/catalog.hpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -656,7 +657,7 @@ private:
         {
             return doubleLiteral(negated ? -literal.real : literal.real);
         }
-        return std::to_string(negated ? -literal.integer : literal.integer);
+        return integerLiteral(negated ? -literal.integer : literal.integer);
     }
 
     static bool isLiteralNumber(const Expr &e)
@@ -848,7 +849,7 @@ private:
         switch (e.kind)
         {
             case ExprKind::IntegerLiteral:
-                return {std::to_string(e.integer), false};
+                return {integerLiteral(e.integer), false};
             case ExprKind::DoubleLiteral:
                 return {doubleLiteral(e.real), false};
             case ExprKind::StringLiteral:
@@ -1108,6 +1109,15 @@ private:
     static std::string opPrefix(Type t)
     {
         return t == Type::Double ? "tf_f64_" : t == Type::Long ? "tf_i64_" : "tf_i32_";
+    }
+
+    // A whole number in C. Outside the Integer range it is INT64_C(...):
+    // MSVC follows C89 and types a bare 3000000000 as a 32-bit unsigned
+    // long, so -3000000000 would silently become 1294967296.
+    static std::string integerLiteral(std::int64_t value)
+    {
+        const std::string digits = std::to_string(value);
+        return value >= INT32_MIN && value <= INT32_MAX ? digits : "INT64_C(" + digits + ")";
     }
 
     // A C double literal: the shortest digits that read back exactly, with

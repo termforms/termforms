@@ -38,7 +38,7 @@ static void p_Form_Load(void)
     double v_d = 0;
     tf_string *v_s = NULL;
 #line 20 "numbers.bas"
-    TF_LINE(20); v_n = 5000000000;
+    TF_LINE(20); v_n = INT64_C(5000000000);
 #line 21 "numbers.bas"
     TF_LINE(21); v_i = tf_i32_add(255, 15);
 #line 22 "numbers.bas"

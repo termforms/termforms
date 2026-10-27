@@ -103,7 +103,9 @@ int main(void)
 
     /* Long arithmetic at the edges of the range. */
     expect_long(tf_i64_add(INT64_MAX - 1, 1), INT64_MAX, "add to the top");
-    expect_long(tf_i64_mul(-3037000499, 3037000499), -9223372030926249001, "mul near the top");
+    /* INT64_C: MSVC types a bare literal above 2^31 as unsigned long. */
+    expect_long(tf_i64_mul(INT64_C(-3037000499), INT64_C(3037000499)),
+                INT64_C(-9223372030926249001), "mul near the top");
     expect_long(tf_i64_sub(INT64_MIN + 1, 1), INT64_MIN, "sub to the bottom");
 
     /* Text to numbers. CInt/CLng/CDbl want the whole text to be a number. */

@@ -51,7 +51,7 @@ Sub Form_Load()
         count = count + 1
     Next
     i = 0
-    For n = 3000000000 To 1 Step -1000000000
+    For n = 6000000000 To 1 Step -3000000000
         i = i + 1
     Next
     t6.Text = -2 ^ 2 & " " & 2 ^ 3 ^ 2 & " " & 2 ^ -1 & " " & 10 - 3 Mod 2 & " " & _
