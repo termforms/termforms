@@ -211,6 +211,49 @@ End Try
   second argument is the Source, where Throw's is the description.)
 - Out of memory ends the program even inside a Try: it cannot be caught.
 
+### Error numbers (Settled, 27 Oct 2026)
+
+TermForms is not VB-compatible, but error numbers are where VB habits and
+VB documentation pay off most, so the numbering follows VB6 where it can:
+
+- **Reuse VB6's number wherever the meaning is the same**, with VB6's
+  wording character for character (`Catch When Err.Number = 53` means File
+  not found, as it always has).
+- **Never give a VB6 number a different meaning.** Numbers for things
+  TermForms does not have (3 Return without GoSub, 20 Resume, 47-49 DLLs,
+  96-98 COM objects) stay unused.
+- **Ranges:** 1-899 the runtime (VB6's numbers, and VB6 also used 300-499
+  for control and object errors, which forms will need); 900-999 the
+  runtime's errors that VB6 has no number for; **1000 and up for programs'
+  own errors** (Throw, Err.Raise). A program may raise any number,
+  including the runtime's, for example to report "File not found" itself.
+- A number added to the runtime gets its text in one table
+  (`tf_error_text` in `runtime/src/core/tf_error.c`) and a row below.
+
+| Number | Text | Raised by | Since |
+| --- | --- | --- | --- |
+| 5 | Invalid procedure call or argument | an undefined power such as `(-8) ^ 0.5`; `Throw 0` | now |
+| 6 | Overflow | Integer and Long arithmetic, a Double too large, CInt/CLng out of range | now |
+| 7 | Out of memory | running out of memory (always fatal, never caught) | now |
+| 11 | Division by zero | `/`, `\`, `Mod` by zero | now |
+| 13 | Type mismatch | CInt/CLng/CDbl of text that is not a number | now |
+| 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
+| 9 | Subscript out of range | array index outside its bounds | arrays |
+| 10 | This array is fixed or temporarily locked | ReDim of a fixed array | arrays |
+| 91 | Object variable or With block variable not set | using a `Ref` that is Nothing | Types and Ref |
+| 457 | This key is already associated with an element of this collection | adding a Dictionary key twice | Dictionary |
+| 14 | Out of string space | a string longer than the runtime allows | strings |
+| 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
+| 380 | Invalid property value | a control property set out of range | forms |
+
+- **Not provided: 28 Out of stack space.** Portable C cannot detect
+  running out of stack, so recursion that goes too deep crashes the
+  program instead of raising an error.
+- **Open:** whether 14 (a string too long, today reported as 7 and fatal)
+  should be catchable; and named constants for these numbers
+  (`Catch When Err.Number = errFileNotFound`), which need `Const` or
+  `Enum`, not yet in the v1 plan.
+
 ### Errors (Proposed)
 
 - Catch takes no variable (VB.NET's `Catch ex As Exception` is an error):

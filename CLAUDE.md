@@ -64,6 +64,13 @@ authoritative for design rationale.
   Source/Line. Jim settled Err.Raise's form and out of memory being fatal;
   the other details are *Proposed* in `docs/REFERENCE.md` ("Errors
   (Proposed)") — confirm them with Jim.
+  Error numbers (27 Oct 2026, settled): VB6's number and exact text where
+  the meaning matches, never a VB6 number for something else; runtime
+  1-899 (VB6) and 900-999 (TermForms-only, e.g. 900 Terminal error);
+  programs from 1000. Texts live only in `tf_error_text`; raise sites pass
+  NULL. `docs/REFERENCE.md` "Error numbers" lists which numbers each
+  coming step adds (9, 10, 91, 457, 14, 52-76, 380). Open with Jim: should
+  14 (string too long) be catchable, and `Const`/`Enum` for named numbers.
 - **Next:** Phase 3 step 4 (arrays, Types and Ref, Dictionary), or Phase 4
   work; ask Jim.
 

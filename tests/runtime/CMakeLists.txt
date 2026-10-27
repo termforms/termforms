@@ -17,3 +17,10 @@ tf_set_warnings(test_numbers)
 
 add_test(NAME runtime.numbers COMMAND test_numbers)
 set_tests_properties(runtime.numbers PROPERTIES LABELS runtime)
+
+add_executable(test_errors test_errors.c)
+target_link_libraries(test_errors PRIVATE tfrt)
+tf_set_warnings(test_errors)
+
+add_test(NAME runtime.errors COMMAND test_errors)
+set_tests_properties(runtime.errors PROPERTIES LABELS runtime)

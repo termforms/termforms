@@ -76,14 +76,10 @@ static TF_NORETURN void report_and_exit(int32_t number, int32_t line, const char
     exit(1);
 }
 
-void tf_fatal_error(int number, const char *message)
-{
-    report_and_exit(number, tf_current_line, message);
-}
-
-/* VB's wording for the errors the runtime raises; others get VB's generic
-   text, as Err.Raise does for an application's own numbers. */
-static const char *standard_description(int32_t number)
+/* The one place error texts are written: VB6's wording, character for
+   character, for VB6's numbers. Add a number here when the runtime starts
+   raising it (and to the table in docs/REFERENCE.md). */
+const char *tf_error_text(int32_t number)
 {
     switch (number)
     {
@@ -97,9 +93,16 @@ static const char *standard_description(int32_t number)
             return "Division by zero";
         case TF_ERR_TYPE_MISMATCH:
             return "Type mismatch";
+        case TF_ERR_TERMINAL:
+            return "Terminal error";
         default:
             return "Application-defined or object-defined error";
     }
+}
+
+void tf_fatal_error(int number, const char *message)
+{
+    report_and_exit(number, tf_current_line, message != NULL ? message : tf_error_text(number));
 }
 
 /* Replaces Err; takes ownership of description and source. */
@@ -117,7 +120,7 @@ void tf_raise(int number, const char *message)
 {
     if (try_depth == 0)
     {
-        report_and_exit(number, tf_current_line, message);
+        report_and_exit(number, tf_current_line, message != NULL ? message : tf_error_text(number));
     }
     if (tf_error_pending)
     {
@@ -126,7 +129,8 @@ void tf_raise(int number, const char *message)
            first error is the one to report. */
         return;
     }
-    set_err(number, tf_str_from_utf8(message, (int32_t)strlen(message)), NULL);
+    const char *text = message != NULL ? message : tf_error_text(number);
+    set_err(number, tf_str_from_utf8(text, (int32_t)strlen(text)), NULL);
     tf_error_pending = 1;
 }
 
@@ -134,17 +138,16 @@ void tf_throw(int32_t number, const tf_string *source, const tf_string *descript
 {
     if (number == 0)
     {
-        tf_raise(TF_ERR_INVALID_ARGUMENT, standard_description(TF_ERR_INVALID_ARGUMENT));
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
         return;
     }
     if (tf_error_pending)
     {
         return;
     }
-    tf_string *text = description != NULL
-                          ? tf_str_ref((tf_string *)description)
-                          : tf_str_from_utf8(standard_description(number),
-                                             (int32_t)strlen(standard_description(number)));
+    const char *standard = tf_error_text(number);
+    tf_string *text = description != NULL ? tf_str_ref((tf_string *)description)
+                                          : tf_str_from_utf8(standard, (int32_t)strlen(standard));
     set_err(number, text, tf_str_ref((tf_string *)source));
     if (try_depth == 0)
     {
@@ -257,7 +260,7 @@ void *tf_xmalloc(size_t size)
     void *block = malloc(size == 0 ? 1 : size);
     if (block == NULL)
     {
-        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "Out of memory");
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, NULL);
     }
     return block;
 }
@@ -267,7 +270,7 @@ void *tf_xcalloc(size_t count, size_t size)
     void *block = calloc(count == 0 ? 1 : count, size == 0 ? 1 : size);
     if (block == NULL)
     {
-        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "Out of memory");
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, NULL);
     }
     return block;
 }
@@ -277,7 +280,7 @@ void *tf_xrealloc(void *block, size_t size)
     void *grown = realloc(block, size == 0 ? 1 : size);
     if (grown == NULL)
     {
-        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "Out of memory");
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, NULL);
     }
     return grown;
 }

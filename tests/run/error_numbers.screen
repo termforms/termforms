@@ -1,0 +1,12 @@
+
+
+  ┌─────────────────── Error numbers ────────────────────┐
+  │5 Invalid procedure call or argument (same)           │
+  │6 Overflow (same)                                     │
+  │7 Out of memory (same)                                │
+  │11 Division by zero (same)                            │
+  │13 Type mismatch (same)                               │
+  │1000 Application-defined or object-defined error      │
+  │                                                      │
+  │                                                      │
+  └──────────────────────────────────────────────────────┘

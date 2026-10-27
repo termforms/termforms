@@ -16,19 +16,19 @@
 
 static int32_t overflow32(void)
 {
-    tf_raise(TF_ERR_OVERFLOW, "Overflow");
+    tf_raise(TF_ERR_OVERFLOW, NULL);
     return 0;
 }
 
 static int64_t overflow64(void)
 {
-    tf_raise(TF_ERR_OVERFLOW, "Overflow");
+    tf_raise(TF_ERR_OVERFLOW, NULL);
     return 0;
 }
 
 static int division_by_zero(void)
 {
-    tf_raise(TF_ERR_DIVISION_BY_ZERO, "Division by zero");
+    tf_raise(TF_ERR_DIVISION_BY_ZERO, NULL);
     return 0;
 }
 

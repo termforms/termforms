@@ -23,15 +23,15 @@
 /* 2^52: from here up every Double is a whole number. */
 #define TF_F64_INTEGRAL 4503599627370496.0
 
-static double failed(int number, const char *message)
+static double failed(int number)
 {
-    tf_raise(number, message);
+    tf_raise(number, NULL);
     return 0.0;
 }
 
 static double finite(double result)
 {
-    return isfinite(result) ? result : failed(TF_ERR_OVERFLOW, "Overflow");
+    return isfinite(result) ? result : failed(TF_ERR_OVERFLOW);
 }
 
 double tf_f64_add(double a, double b)
@@ -53,7 +53,7 @@ double tf_f64_div(double a, double b)
 {
     if (b == 0.0)
     {
-        return failed(TF_ERR_DIVISION_BY_ZERO, "Division by zero");
+        return failed(TF_ERR_DIVISION_BY_ZERO);
     }
     return finite(a / b);
 }
@@ -62,7 +62,7 @@ double tf_f64_mod(double a, double b)
 {
     if (b == 0.0)
     {
-        return failed(TF_ERR_DIVISION_BY_ZERO, "Division by zero");
+        return failed(TF_ERR_DIVISION_BY_ZERO);
     }
     return fmod(a, b); /* exact; the sign follows a, as VB's Mod */
 }
@@ -73,11 +73,11 @@ double tf_f64_pow(double a, double b)
     if (isnan(result))
     {
         /* A negative number to a fractional power, as VB6 reports it. */
-        return failed(TF_ERR_INVALID_ARGUMENT, "Invalid procedure call or argument");
+        return failed(TF_ERR_INVALID_ARGUMENT);
     }
     if (a == 0.0 && b < 0.0)
     {
-        return failed(TF_ERR_DIVISION_BY_ZERO, "Division by zero");
+        return failed(TF_ERR_DIVISION_BY_ZERO);
     }
     return finite(result);
 }
@@ -123,7 +123,7 @@ int32_t tf_i32_from_f64(double value)
     const double r = round_half_even(value);
     if (r < -2147483648.0 || r > 2147483647.0)
     {
-        tf_raise(TF_ERR_OVERFLOW, "Overflow");
+        tf_raise(TF_ERR_OVERFLOW, NULL);
         return 0;
     }
     return (int32_t)r;
@@ -135,7 +135,7 @@ int64_t tf_i64_from_f64(double value)
     /* 2^63 is exactly representable; INT64_MAX is not, so compare with it. */
     if (r < -9223372036854775808.0 || r >= 9223372036854775808.0)
     {
-        tf_raise(TF_ERR_OVERFLOW, "Overflow");
+        tf_raise(TF_ERR_OVERFLOW, NULL);
         return 0;
     }
     return (int64_t)r;

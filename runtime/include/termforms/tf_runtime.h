@@ -59,13 +59,26 @@ TF_NORETURN void tf_end(int exit_code);
 /* Runtime errors                                                           */
 /* ------------------------------------------------------------------------ */
 
-/* Error numbers follow the VB convention where one exists. */
-#define TF_ERR_OVERFLOW 6
-#define TF_ERR_OUT_OF_MEMORY 7
-#define TF_ERR_DIVISION_BY_ZERO 11
-#define TF_ERR_INVALID_ARGUMENT 5
-#define TF_ERR_TYPE_MISMATCH 13
-#define TF_ERR_TERMINAL 1001
+/*
+ * Error numbers (policy of 27 Oct 2026, docs/REFERENCE.md "Error numbers"):
+ *   1-899     the runtime; VB6's number wherever the meaning is the same,
+ *             and never a VB6 number for something different
+ *   900-999   the runtime, errors VB6 has no number for
+ *   1000 up   programs' own errors (Throw, Err.Raise)
+ * tf_error_text gives each number's standard text, VB6's wording where VB6
+ * has the number.
+ */
+#define TF_ERR_INVALID_ARGUMENT 5  /* Invalid procedure call or argument */
+#define TF_ERR_OVERFLOW 6          /* Overflow */
+#define TF_ERR_OUT_OF_MEMORY 7     /* Out of memory (always fatal) */
+#define TF_ERR_DIVISION_BY_ZERO 11 /* Division by zero */
+#define TF_ERR_TYPE_MISMATCH 13    /* Type mismatch */
+#define TF_ERR_TERMINAL 900        /* Terminal error (always fatal) */
+#define TF_ERR_FIRST_USER 1000     /* the first number left to programs */
+
+/* The standard text for an error number (static); for a number with no
+   meaning of its own, VB's "Application-defined or object-defined error". */
+const char *tf_error_text(int32_t number);
 
 /*
  * The BASIC source line currently executing. Generated code updates it with
@@ -77,14 +90,16 @@ extern int32_t tf_current_line;
 /*
  * An error the program cannot handle (out of memory, the terminal lost):
  * restores the terminal, prints "file:line: runtime error N: message" to
- * stderr and exits with status 1, even inside a Try.
+ * stderr and exits with status 1, even inside a Try. A NULL message means
+ * the number's standard text.
  */
 TF_NORETURN void tf_fatal_error(int number, const char *message);
 
 /*
- * Errors a Try can catch. tf_raise records a runtime error (message is
- * borrowed); tf_throw is Throw and Err.Raise (a NULL description gives VB's
- * standard text for the number). Each sets Err and tf_error_pending and
+ * Errors a Try can catch. tf_raise records a runtime error; its message is
+ * borrowed, and NULL (the usual case) means the number's standard text, so
+ * the wording lives in one table. tf_throw is Throw and Err.Raise (a NULL
+ * description likewise gives the standard text). Each sets Err and tf_error_pending and
  * returns, so the caller must return a harmless value; generated code tests
  * tf_error_pending after the statement. With no Try active, nothing could
  * catch the error, and both report it and exit as tf_fatal_error does. While
