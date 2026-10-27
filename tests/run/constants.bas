@@ -32,6 +32,7 @@ Const BIGGER = 3000000000          ' too big for an Integer, so a Long
 Const THIRD = 1 / 3
 Const GREETING = "Answer=" & ANSWER & " third=" & THIRD
 Const ENABLED = ANSWER = 42 And Not False
+Const EXPONENTS = "" & 1.5E-7 & " " & 1E+20     ' Double text with exponents, made when compiling
 
 Enum Weekday
     Monday = 1
@@ -74,5 +75,6 @@ Sub Form_Load()
     t4.Text = s & " d=" & d
 
     n = Code.High - 1
-    t5.Text = n & " " & CType(n Mod 10, Code) & " " & CType("3", Weekday) & " " & -Weekday.Tuesday
+    t5.Text = n & " " & CType(n Mod 10, Code) & " " & CType("3", Weekday) & " " & -Weekday.Tuesday & _
+              " " & EXPONENTS
 End Sub

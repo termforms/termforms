@@ -1235,10 +1235,10 @@ private:
             {
                 out += "." + digits.substr(1);
             }
-            char e[8];
-            std::snprintf(e, sizeof e, "E%c%02d", exponent < 0 ? '-' : '+',
-                          exponent < 0 ? -exponent : exponent);
-            return out + e;
+            // "E+05": a sign and at least two digits, as the runtime writes it.
+            const std::string magnitude = std::to_string(exponent < 0 ? -exponent : exponent);
+            return out + "E" + (exponent < 0 ? '-' : '+') + (magnitude.size() < 2 ? "0" : "") +
+                   magnitude;
         }
         if (exponent >= 0)
         {
