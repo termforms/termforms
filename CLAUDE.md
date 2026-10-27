@@ -27,7 +27,9 @@ the full test suite and clang-format before every commit; CI must stay green.
 - Design handover (decisions, rationale): https://claude.ai/artifact/NEp5GCrSWX11gW6HrYtA1w
 - Project plan (phases, gates, risks): https://claude.ai/artifact/AmhbZ25CTKbrz1KUx6Jg79
 - Development environment (per platform): https://claude.ai/artifact/7YUAsw8DCV3PFHxGGDq151
-- In repo: `docs/LANGUAGE.md` (what works today), `docs/CODING_STANDARDS.md`,
+- In repo: `docs/REFERENCE.md` (the language as decided: every syntax and
+  semantics rule, marked Settled or Proposed; update it with each
+  decision), `docs/LANGUAGE.md` (what works today), `docs/CODING_STANDARDS.md`,
   `docs/LICENSING.md`, `toolchain.txt`.
 
 These are Claude Docs; they may not be readable from Claude Code. If this
@@ -92,6 +94,11 @@ authoritative for design rationale.
   passing it on ByRef is a compile error) — no copy is made; pass ByRef to
   modify. A `Ref` passed ByVal copies the reference: the callee can change
   the object's fields but not rebind the caller's variable.
+- **Procedures and loops (27 Oct 2026):** Functions return by assigning
+  to their name or with `Return` (bare name inside = result; `F()` = call).
+  Calls: `S a, b`, `S(a, b)`, `Call S(a, b)` all equivalent. While loops:
+  `Wend` and `End While` both accepted. `Dim` is block-scoped (VB.NET); no
+  hiding an enclosing local. Full rules: `docs/REFERENCE.md`.
 - **Events:** `Sub <Control>_<Event>` wired at compile time into dispatch
   (no reflection). `Form_Load` runs before the form shows.
 - **Forms:** fixed size per form (Width/Height include border), absolute
