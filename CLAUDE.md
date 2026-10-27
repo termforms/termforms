@@ -76,8 +76,8 @@ authoritative for design rationale.
   Step 4 done (27 Oct 2026): Const and Enum, CType; all their rules
   settled, including the details. Error details settled too (27 Oct
   2026), including **End inside a Try runs no Finally** (documented in
-  REFERENCE.md and LANGUAGE.md); still Proposed: Throw's default text,
-  no leaving a Finally, Catch order (REFERENCE.md "Errors (Proposed)").
+  REFERENCE.md and LANGUAGE.md), and the rest of the error rules. Nothing
+  in REFERENCE.md is Proposed at present.
 - **Next:** Phase 3 step 5 (arrays, Types and Ref, Dictionary), or Phase 4
   work; ask Jim.
 

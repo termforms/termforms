@@ -278,7 +278,7 @@ Finally
 End Try
 ```
 
-### Errors (Proposed)
+### Errors: Throw, Finally and Catch order (Settled, 27 Oct 2026)
 
 - `Throw number` alone uses VB's standard text for the number ("Division
   by zero", ...) or "Application-defined or object-defined error";
