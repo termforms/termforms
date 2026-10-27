@@ -133,10 +133,17 @@ While cond  ...  End While     ' VB.NET spelling, same meaning
 
 ## Evaluation order (Proposed)
 
-- Function calls in an expression run first, left to right, then the rest
-  of the expression. This makes results identical on every C compiler. It
-  matters only when a Function changes a variable used elsewhere in the
-  same expression; avoid writing code that depends on it.
+- Expressions are evaluated strictly left to right, as in VB.NET, with the
+  same result on every C compiler (C itself leaves the order unspecified).
+  A Function that changes a variable does not change a value already read
+  from it earlier in the same expression:
+
+```vb
+calls = 0
+x = calls + Counted() + calls   ' 0 + 1 + 1 = 2, where Counted adds 1 to calls
+```
+
+- And/Or evaluate both sides (no short-circuit), as in VB6.
 
 ## Errors (Settled, 23 Oct 2026)
 

@@ -159,6 +159,11 @@ jobs:
       - name: Build
         run: cmake --build --preset ci-asan
       - name: Test
+        # TF_SANITIZE instruments tfc and the runtime tests; TFC_CC also
+        # instruments the programs the run tests compile, which is where
+        # reference-counting mistakes in generated code would show.
+        env:
+          TFC_CC: cc -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
         run: ctest --preset ci-asan
 
   format:

@@ -7,4 +7,4 @@ semantic.bas:19:9: error: cannot assign an Integer to a String (Option Strict); 
 semantic.bas:20:5: error: 'undeclared' is not declared (add a Dim)
 semantic.bas:21:7: error: TextBox has no property 'Txt'
 semantic.bas:22:8: error: an If condition must be Boolean, not String
-semantic.bas:23:5: error: no Sub named 'Main'
+semantic.bas:23:5: error: no Sub or Function named 'Main'

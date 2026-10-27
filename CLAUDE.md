@@ -36,7 +36,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (26 Oct 2026, Phase 2 closed)
+## Status (27 Oct 2026, Phase 3 step 1 done)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -49,8 +49,13 @@ authoritative for design rationale.
   4. Resize behaviour: re-centring, and the "Please resize" overlay.
   5. Can Visual Studio debug zig-built (MinGW ABI, DWARF) programs? Needs
      VS on the ThinkPad. If not, Windows debug builds use MSVC (`--cc cl`).
-- **Next: Phase 3 (language core) and Phase 4 (TUI runtime)**, interleaved.
-  Ask Jim which to start with; suggested first steps are in "Next work".
+- **Phase 3 (language core): in progress.** Step 1 done (27 Oct 2026):
+  Sub/Function with ByVal/ByRef parameters, Return and name-assignment
+  results, the three call syntaxes, For/Do/While loops, Exit, block scope.
+  Three rules are still *Proposed* in `docs/REFERENCE.md` (Jim has not
+  confirmed them): For semantics, a Dim inside a loop resetting each pass,
+  and strict left-to-right evaluation.
+- **Next:** Phase 3 step 2 (Long and Double), or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -164,10 +169,27 @@ Key mechanisms:
   (`TF_DEFAULT_RUNTIME_DIR`); `--runtime` / `$TERMFORMS_RUNTIME` override.
   The `tfrt` CMake target exists for warnings coverage and runtime tests.
 - **String ownership in generated code:** values are borrowed (variables,
-  literals, property reads) or owned (+1: concat, conversions). Owned
-  values read once are parked in `t1..tn` and released on the same C line;
-  assignment hands owned values over (`tf_str_assign`), borrowed ones via
-  `tf_str_ref`. NULL is "". Literals are cached and immortal.
+  literals, property reads) or owned (+1: concat, conversions, Function
+  results). Owned values read once are parked in `t1..tn` and released on
+  the same C line; assignment hands owned values over (`tf_str_assign`),
+  borrowed ones via `tf_str_ref`. NULL is "". Literals are cached and
+  immortal — so a test of string lifetimes must build its strings at run
+  time (`"ab" & "c"`), or freeing bugs cannot show.
+- **Procedures in C:** ByRef parameters are pointers (`(*v_x)`); a ByVal
+  String parameter is retained on entry and released at End Sub (so the
+  caller changing the source variable cannot free it). A Function's result
+  is `r_<Name>`. Exit Sub/Return `goto done` when there is cleanup, else
+  `return`. Block-scoped locals all live for the whole call (C names
+  `v_x`, `v_x_2` for a second block's `x`); a Dim inside a loop resets
+  them. Loops are `for (;;)`; Exit from an outer loop is `goto exit_<n>`.
+  Never emit a C `switch` (Select Case must lower to if/else), or `break`
+  for Exit would hit the switch.
+- **Evaluation order:** strictly left to right on every C compiler. Each
+  Function call in an expression is hoisted into a temporary in order; a
+  read that a later call in the same statement could change (module
+  variable, ByRef parameter, local passed ByRef in that statement,
+  property) is snapshotted first (`StatementScope::pendingCalls`).
+  `prepare()` must run on a statement's expressions before `expr()`.
 - **Headless mode:** `TERMFORMS_HEADLESS='keys{TAB}{ENTER}'` replaces the
   terminal with a key script and dumps the final screen to stdout;
   `TERMFORMS_HEADLESS_SIZE=60x14`. Runtime errors print
@@ -210,8 +232,8 @@ git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' ':!:tests/golden/**
   caused `ld: tapi error ... arm64e.x1`; Xcode was removed). Homebrew cmake,
   ninja, pipx clang-format. The pinned zig 0.16.0 is the pipx `ziglang`
   package, run as `python-zig` (`--cc "python-zig cc -target ..."`); plain
-  `zig` on PATH is Homebrew's 0.17.0 and must not be used for builds. Terminals: iTerm2 (verified),
-  Terminal.app, Ghostty.
+  `zig` on PATH is Homebrew's 0.17.0 and must not be used for builds.
+  Terminals: iTerm2 (verified), Terminal.app, Ghostty.
 - **Linux server, x86-64**: deployment target over SSH; runs static musl
   binaries, nothing installed.
 - **Lenovo ThinkPad, Windows 11 x64**: Windows testing; no dev tools yet.
@@ -222,7 +244,9 @@ git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' ':!:tests/golden/**
 (run tests use the same compiler via `TFC_CC`; Windows uses
 `ilammy/msvc-dev-cmd` so tfc can call `cl`); zig cc run tests on all three
 OSes; cross build on macOS → static x86-64 musl binary, uploaded and run on
-Ubuntu; ASan+UBSan on Linux (with LeakSanitizer) and macOS; clang-format.
+Ubuntu; ASan+UBSan on Linux (with LeakSanitizer) and macOS — `TF_SANITIZE`
+instruments tfc and the runtime tests, and `TFC_CC` with `-fsanitize`
+instruments the programs the run tests build; clang-format.
 Runner images pinned (ubuntu-24.04, macos-15, windows-2025).
 
 Lessons from getting CI green: MSVC flags unreachable code after an
@@ -233,8 +257,9 @@ buffer is reused by the next call (copy what you keep).
 
 ## Known limitations of the slice (intentional, to be replaced)
 
-- One source file, one form; no Sub/Function parameters, no Function, no
-  loops (For/Do/While), no Long/Double, no arrays, no Types.
+- One source file, one form; no Long/Double, no arrays, no Types, no
+  Select Case, no `For i As Integer = ...` inline declaration, no
+  `Dim x As Integer = 5` initialisers.
 - Controls: TextBox and CommandButton only; no Label, menus, MsgBox.
 - Ctrl+Q closes the form (placeholder until menus/End/close semantics).
 - Runtime errors terminate (Try/Catch arrives in Phase 3).
@@ -246,8 +271,7 @@ buffer is reused by the next call (copy what you keep).
 ## Next work (suggested order — confirm with Jim)
 
 Phase 3, language core:
-1. Loops (For/Next, Do/Loop, While), Exit, Function with return values,
-   parameters (ByVal default, `ByRef` opt-in), local scope rules.
+1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
 2. Long and Double (+ `/`, CInt/CLng/CDbl, Str$/Val), Option Strict
    conversions.
 3. Try/Catch/Finally lowering (status checks + goto), Err, Throw.
@@ -260,4 +284,6 @@ menus (F10, Alt+letter); MsgBox/InputBox and a modal form stack; overlay
 layer; edit-buffer TextBox; SGR mouse; Unicode width tables (+ notice file).
 
 Each step: unit tests for rules/messages, golden C for codegen shape, run
-tests for behaviour; update `docs/LANGUAGE.md`.
+tests for behaviour; update `docs/LANGUAGE.md` and `docs/REFERENCE.md`.
+Generated C must compile clean with `-Wall -Wextra -Wpedantic -Werror`
+(check the golden `.c` files by hand when codegen changes).

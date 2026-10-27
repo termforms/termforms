@@ -4,19 +4,35 @@
 //
 // Grammar of this version (keywords upper case, EOS = end of statement):
 //
-//   module     := { formBlock | sub | dim EOS }
+//   module     := { formBlock | sub | function | dim EOS }
 //   formBlock  := BEGIN Form name EOS { setting | control } END EOS
 //   control    := BEGIN type name EOS { setting } END EOS
 //   setting    := name '=' ['-'] literal EOS
-//   sub        := SUB name ['(' ')'] EOS block END SUB EOS
-//   statement  := dim | if | CALL name ['(' ')'] | END
-//               | target '=' expr | name ['(' ')']
+//   sub        := SUB name [params] EOS block END SUB EOS
+//   function   := FUNCTION name [params] [AS type] EOS block END FUNCTION EOS
+//   params     := '(' [param { ',' param }] ')'
+//   param      := [BYVAL | BYREF] name [AS type]
+//   statement  := dim | if | for | do | while | EXIT what | RETURN [expr]
+//               | CALL name ['(' [args] ')'] | END
+//               | target '=' expr | name [args] | name '(' [args] ')'
 //   dim        := DIM name [AS type] { ',' name [AS type] }
 //   if         := IF expr THEN EOS block { ELSEIF expr THEN EOS block }
 //                 [ELSE EOS block] END IF
 //               | IF expr THEN statement [ELSE statement]   (single line)
+//   for        := FOR name '=' expr TO expr [STEP expr] EOS block NEXT [name]
+//   do         := DO [(WHILE | UNTIL) expr] EOS block LOOP [(WHILE | UNTIL) expr]
+//   while      := WHILE expr EOS block (WEND | END WHILE)
+//   args       := expr { ',' expr }
 //   expr       := or-expression, with VB precedence from lowest to highest:
 //                 Or, And, Not, comparisons, &, + -, \, * /, unary -
+//   primary    := literal | name ['(' [args] ')'] | name '.' property | '(' expr ')'
+//
+// A block ends at a keyword that closes a construct (Next, Loop, Wend,
+// Else, ElseIf, End If/Sub/Function/While) if some construct still open
+// around it can take that closer; the construct then checks that the closer
+// is its own. A closer nothing open can take ("Loop" without "Do") is
+// reported and skipped. Either way one misplaced closer produces one error
+// instead of derailing the rest of the file.
 
 #include "parser/parser.hpp"
 
@@ -50,9 +66,9 @@ public:
             {
                 parseFormBlock(module);
             }
-            else if (peek().isKeyword("SUB"))
+            else if (peek().isKeyword("SUB") || peek().isKeyword("FUNCTION"))
             {
-                module.procedures.push_back(parseSub());
+                module.procedures.push_back(parseProcedure());
             }
             else if (peek().isKeyword("DIM"))
             {
@@ -61,7 +77,7 @@ public:
             }
             else
             {
-                error(peek().location, "statements must be inside a Sub");
+                error(peek().location, "statements must be inside a Sub or Function");
                 skipStatement();
             }
             skipStatementEnds();
@@ -310,36 +326,126 @@ private:
 
     // -- Procedures --------------------------------------------------------
 
-    std::unique_ptr<Procedure> parseSub()
+    std::unique_ptr<Procedure> parseProcedure()
     {
         auto proc = std::make_unique<Procedure>();
-        proc->location = next().location; // SUB
-        proc->name = expectIdentifier("a Sub name");
+        proc->isFunction = peek().isKeyword("FUNCTION");
+        const char *kind = proc->isFunction ? "Function" : "Sub";
+        proc->location = next().location; // SUB or FUNCTION
+
+        const char suffix = peek().suffix;
+        const Location nameAt = peek().location;
+        proc->name = expectIdentifier(proc->isFunction ? "a Function name" : "a Sub name");
+        if (suffix != 0 && !proc->isFunction)
+        {
+            error(nameAt, "a Sub returns no value, so its name cannot have a type suffix");
+        }
         if (acceptSymbol("("))
         {
-            if (!peek().isSymbol(")"))
-            {
-                error(peek().location, "Sub parameters are not supported yet");
-                while (!at(TokenKind::EndOfStatement) && !peek().isSymbol(")"))
-                {
-                    next();
-                }
-            }
+            parseParameters(*proc);
             expectSymbol(")");
+        }
+
+        if (proc->isFunction)
+        {
+            auto result = std::make_unique<Variable>();
+            result->name = proc->name;
+            result->location = nameAt;
+            result->isResult = true;
+            result->type = typeFromSuffix(suffix);
+            parseOptionalAs(*result, "Function '" + proc->name + "'");
+            proc->result = std::move(result);
+        }
+        else if (peek().isKeyword("AS"))
+        {
+            error(peek().location, "a Sub returns no value; use a Function to return one");
+            while (!at(TokenKind::EndOfStatement) && !at(TokenKind::EndOfFile))
+            {
+                next();
+            }
         }
         expectEndOfStatement();
 
         currentProcedure_ = proc.get();
-        proc->body = parseBlock([](const Parser &p) { return p.isEndOf("SUB"); });
+        proc->body = parseBlock();
         currentProcedure_ = nullptr;
 
         proc->endLocation = peek().location;
-        if (expectKeyword("END", "End Sub"))
+        const char *closer = proc->isFunction ? "FUNCTION" : "SUB";
+        if (isEndOf(proc->isFunction ? "SUB" : "FUNCTION"))
         {
-            expectKeyword("SUB", "Sub");
+            error(peek().location, std::string("a ") + kind + " ends with 'End " + kind + "'");
+            next();
+            next();
         }
-        expectEndOfStatement();
+        else if (expectKeyword("END", proc->isFunction ? "End Function" : "End Sub") &&
+                 expectKeyword(closer, kind))
+        {
+            expectEndOfStatement();
+        }
         return proc;
+    }
+
+    void parseParameters(Procedure &proc)
+    {
+        if (peek().isSymbol(")"))
+        {
+            return;
+        }
+        for (;;)
+        {
+            auto p = std::make_unique<Variable>();
+            p->isParameter = true;
+            if (acceptKeyword("BYREF"))
+            {
+                p->byRef = true;
+            }
+            else
+            {
+                acceptKeyword("BYVAL"); // the default, accepted for clarity
+            }
+            p->location = peek().location;
+            const char suffix = peek().suffix;
+            p->name = expectIdentifier("a parameter name");
+            if (p->name.empty())
+            {
+                while (!at(TokenKind::EndOfStatement) && !peek().isSymbol(")"))
+                {
+                    next();
+                }
+                return;
+            }
+            p->type = typeFromSuffix(suffix);
+            parseOptionalAs(*p, "parameter '" + p->name + "'");
+            proc.parameters.push_back(std::move(p));
+            if (!acceptSymbol(","))
+            {
+                return;
+            }
+        }
+    }
+
+    // "[As type]" after a parameter or Function name, which has no Variant
+    // to fall back on: the type comes from the suffix or from As.
+    void parseOptionalAs(Variable &v, const std::string &what)
+    {
+        if (acceptKeyword("AS"))
+        {
+            const Location typeAt = peek().location;
+            const Type declared = parseTypeName();
+            if (v.type != Type::Error && declared != Type::Error && v.type != declared)
+            {
+                error(typeAt, "'" + v.name + "' has a type suffix that contradicts 'As " +
+                                  typeName(declared) + "'");
+            }
+            v.type = declared;
+            return;
+        }
+        if (v.type == Type::Error)
+        {
+            error(v.location, what + " needs a type: add 'As Integer', 'As String' or "
+                                     "'As Boolean'");
+        }
     }
 
     // True at "End <keyword>".
@@ -348,16 +454,37 @@ private:
         return peek().isKeyword("END") && peek(1).isKeyword(keyword);
     }
 
-    template <typename Stop> Block parseBlock(Stop stop)
+    // True at a keyword that closes some enclosing construct.
+    bool atBlockCloser() const
     {
+        const Token &t = peek();
+        return t.isKeyword("NEXT") || t.isKeyword("LOOP") || t.isKeyword("WEND") ||
+               t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || t.isKeyword("SUB") ||
+               t.isKeyword("FUNCTION") || isEndOf("IF") || isEndOf("SUB") || isEndOf("FUNCTION") ||
+               isEndOf("WHILE");
+    }
+
+    // The body of a construct opened with `opener` ("FOR", "DO", "WHILE",
+    // "IF"; empty for a procedure body).
+    Block parseBlock(const char *opener = "")
+    {
+        open_.push_back(opener);
         Block block;
         skipStatementEnds();
-        while (!at(TokenKind::EndOfFile) && !stop(*this))
+        while (!at(TokenKind::EndOfFile))
         {
-            // Stray block ends belong to an outer construct the user got wrong.
-            if (peek().isKeyword("SUB") || isEndOf("SUB"))
+            if (atBlockCloser())
             {
-                break;
+                const char *wants = openerFor();
+                if (wants == nullptr || isOpen(wants))
+                {
+                    break;
+                }
+                error(peek().location,
+                      "'" + closerText() + "' without '" + displayName(wants) + "'");
+                skipStatement();
+                skipStatementEnds();
+                continue;
             }
             if (StmtPtr s = parseStatement())
             {
@@ -365,7 +492,60 @@ private:
             }
             skipStatementEnds();
         }
+        open_.pop_back();
         return block;
+    }
+
+    // The construct the closer at the current token belongs to, or null for
+    // the end (or start) of a procedure, which always ends the block.
+    const char *openerFor() const
+    {
+        const Token &t = peek();
+        if (t.isKeyword("NEXT"))
+        {
+            return "FOR";
+        }
+        if (t.isKeyword("LOOP"))
+        {
+            return "DO";
+        }
+        if (t.isKeyword("WEND") || isEndOf("WHILE"))
+        {
+            return "WHILE";
+        }
+        if (t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || isEndOf("IF"))
+        {
+            return "IF";
+        }
+        return nullptr;
+    }
+
+    // "WHILE" -> "While", for messages.
+    static std::string displayName(std::string_view keyword)
+    {
+        std::string name(keyword);
+        for (std::size_t i = 1; i < name.size(); ++i)
+        {
+            name[i] = static_cast<char>(name[i] - 'A' + 'a');
+        }
+        return name;
+    }
+
+    bool isOpen(std::string_view opener) const
+    {
+        for (const char *o : open_)
+        {
+            if (opener == o)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::string closerText() const
+    {
+        return peek().isKeyword("END") ? "End " + peek(1).spelling : peek().spelling;
     }
 
     // -- Statements --------------------------------------------------------
@@ -384,38 +564,287 @@ private:
         {
             return parseIf();
         }
-        if (t.isKeyword("CALL"))
+        if (t.isKeyword("FOR"))
         {
-            next();
-            StmtPtr s = parseCall(peek().location);
-            expectEndOfStatement();
-            return s;
+            return parseFor();
         }
-        if (t.isKeyword("END") &&
-            (peek(1).kind == TokenKind::EndOfStatement || peek(1).kind == TokenKind::EndOfFile))
+        if (t.isKeyword("DO"))
+        {
+            return parseDo();
+        }
+        if (t.isKeyword("WHILE"))
+        {
+            return parseWhile();
+        }
+        StmtPtr s = parseSimpleStatement();
+        if (s == nullptr)
+        {
+            skipStatement();
+            return nullptr;
+        }
+        expectEndOfStatement();
+        return s;
+    }
+
+    // A statement that fits on one line, so it may also follow Then or Else
+    // in a single-line If. Returns null after reporting an error.
+    StmtPtr parseSimpleStatement()
+    {
+        const Token &t = peek();
+
+        if (t.isKeyword("END") && atStatementEnd(1))
         {
             auto s = std::make_unique<Stmt>();
             s->kind = StmtKind::End;
             s->location = next().location;
-            expectEndOfStatement();
+            return s;
+        }
+        if (t.isKeyword("CALL"))
+        {
+            next();
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::Call;
+            s->location = peek().location;
+            s->callee = expectIdentifier("a Sub name");
+            if (acceptSymbol("("))
+            {
+                parseArguments(s->args);
+                expectSymbol(")");
+            }
+            return s;
+        }
+        if (t.isKeyword("EXIT"))
+        {
+            return parseExit();
+        }
+        if (t.isKeyword("RETURN"))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::Return;
+            s->location = next().location;
+            if (!atStatementEnd())
+            {
+                s->value = parseExpression();
+            }
             return s;
         }
         if (t.kind == TokenKind::Identifier)
         {
-            // "name = ..." or "name.Prop = ..." is an assignment; a bare name
-            // (optionally with "()") is a call.
+            // "name = ..." or "name.Prop = ..." is an assignment; anything
+            // else starting with a name is a call.
             if (peek(1).isSymbol("=") || peek(1).isSymbol("."))
             {
-                return parseAssignment();
+                auto s = std::make_unique<Stmt>();
+                s->kind = StmtKind::Assign;
+                s->location = peek().location;
+                s->target = parsePrimary();
+                expectSymbol("=");
+                s->value = parseExpression();
+                return s;
             }
-            StmtPtr s = parseCall(t.location);
-            expectEndOfStatement();
+            return parseCallStatement();
+        }
+        if (t.isKeyword("DIM") || t.isKeyword("IF") || t.isKeyword("FOR") || t.isKeyword("DO") ||
+            t.isKeyword("WHILE"))
+        {
+            error(t.location, "'" + t.spelling + "' cannot follow 'Then' or 'Else' on one line");
+            return nullptr;
+        }
+        error(t.location, "expected a statement but found " + describe(t));
+        return nullptr;
+    }
+
+    // End of statement, or Else ending the Then part of a single-line If.
+    bool atStatementEnd(std::size_t ahead = 0) const
+    {
+        const Token &t = peek(ahead);
+        return t.kind == TokenKind::EndOfStatement || t.kind == TokenKind::EndOfFile ||
+               t.isKeyword("ELSE");
+    }
+
+    // "name", "name a, b", "name(a, b)". Parentheses around the whole list
+    // are only grouping here, so "Show(a, b)" and "Show a, b" are the same
+    // call; unlike VB6 they never turn a ByRef argument into a ByVal one.
+    StmtPtr parseCallStatement()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Call;
+        s->location = peek().location;
+        s->callee = next().text;
+        if (atStatementEnd())
+        {
             return s;
         }
+        if (peek().isSymbol("(") && parenthesisedToEnd())
+        {
+            next();
+            parseArguments(s->args);
+            expectSymbol(")");
+            return s;
+        }
+        parseArguments(s->args);
+        return s;
+    }
 
-        error(t.location, "expected a statement but found " + describe(t));
-        skipStatement();
+    // At '(': does its matching ')' end the statement? Distinguishes
+    // "Show(a, b)" from "Show (a + 1) * 2, b".
+    bool parenthesisedToEnd() const
+    {
+        int depth = 0;
+        for (std::size_t ahead = 0;; ++ahead)
+        {
+            const Token &t = peek(ahead);
+            if (t.kind == TokenKind::EndOfStatement || t.kind == TokenKind::EndOfFile)
+            {
+                return false;
+            }
+            if (t.isSymbol("("))
+            {
+                ++depth;
+            }
+            else if (t.isSymbol(")") && --depth == 0)
+            {
+                return atStatementEnd(ahead + 1);
+            }
+        }
+    }
+
+    // Comma-separated expressions; an empty list when at ')'.
+    void parseArguments(std::vector<ExprPtr> &args)
+    {
+        if (peek().isSymbol(")"))
+        {
+            return;
+        }
+        do
+        {
+            args.push_back(parseExpression());
+        } while (acceptSymbol(","));
+    }
+
+    StmtPtr parseExit()
+    {
+        static const std::pair<const char *, const char *> kTargets[] = {{"FOR", "For"},
+                                                                         {"DO", "Do"},
+                                                                         {"WHILE", "While"},
+                                                                         {"SUB", "Sub"},
+                                                                         {"FUNCTION", "Function"}};
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Exit;
+        s->location = next().location; // EXIT
+        for (const auto &[keyword, name] : kTargets)
+        {
+            if (acceptKeyword(keyword))
+            {
+                s->exitWhat = name;
+                return s;
+            }
+        }
+        error(peek().location, "expected 'For', 'Do', 'While', 'Sub' or 'Function' after 'Exit'");
         return nullptr;
+    }
+
+    StmtPtr parseFor()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::For;
+        s->location = next().location; // FOR
+
+        auto var = std::make_unique<Expr>();
+        var->kind = ExprKind::Name;
+        var->location = peek().location;
+        var->suffix = peek().suffix;
+        var->text = expectIdentifier("a loop variable");
+        s->target = std::move(var);
+        expectSymbol("=");
+        s->value = parseExpression();
+        expectKeyword("TO", "To");
+        s->limit = parseExpression();
+        if (acceptKeyword("STEP"))
+        {
+            s->step = parseExpression();
+        }
+        expectEndOfStatement();
+
+        s->body = parseBlock("FOR");
+
+        s->nextLocation = peek().location;
+        if (expectKeyword("NEXT", "Next"))
+        {
+            if (at(TokenKind::Identifier))
+            {
+                s->nextName = next().text;
+            }
+            expectEndOfStatement();
+        }
+        return s;
+    }
+
+    StmtPtr parseDo()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Do;
+        s->location = next().location; // DO
+        if (peek().isKeyword("WHILE") || peek().isKeyword("UNTIL"))
+        {
+            s->until = next().isKeyword("UNTIL");
+            s->testAtTop = true;
+            s->condition = parseExpression();
+        }
+        expectEndOfStatement();
+
+        s->body = parseBlock("DO");
+
+        s->loopLocation = peek().location;
+        if (!expectKeyword("LOOP", "Loop"))
+        {
+            return s; // the closer belongs to an outer construct
+        }
+        if (peek().isKeyword("WHILE") || peek().isKeyword("UNTIL"))
+        {
+            const Token &test = next();
+            if (s->testAtTop)
+            {
+                error(test.location, "a Do loop tests its condition at the top or at the "
+                                     "bottom, not both");
+                parseExpression();
+            }
+            else
+            {
+                s->until = test.isKeyword("UNTIL");
+                s->condition = parseExpression();
+            }
+        }
+        expectEndOfStatement();
+        return s;
+    }
+
+    // While ... Wend (VB-DOS) and While ... End While (VB.NET) are the same
+    // loop: a Do While with the test at the top.
+    StmtPtr parseWhile()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Do;
+        s->isWhile = true;
+        s->testAtTop = true;
+        s->location = next().location; // WHILE
+        s->condition = parseExpression();
+        expectEndOfStatement();
+
+        s->body = parseBlock("WHILE");
+
+        s->loopLocation = peek().location;
+        if (isEndOf("WHILE"))
+        {
+            next();
+            next();
+            expectEndOfStatement();
+        }
+        else if (expectKeyword("WEND", "Wend' or 'End While"))
+        {
+            expectEndOfStatement();
+        }
+        return s;
     }
 
     StmtPtr parseDim(Module *module, Procedure *procedure)
@@ -552,21 +981,18 @@ private:
         // Single-line form: "If x Then stmt [Else stmt]".
         if (!at(TokenKind::EndOfStatement))
         {
-            first.body.push_back(parseInlineStatement());
+            first.body.push_back(parseSimpleStatement());
             s->arms.push_back(std::move(first));
             if (acceptKeyword("ELSE"))
             {
                 s->hasElse = true;
-                s->elseBody.push_back(parseInlineStatement());
+                s->elseBody.push_back(parseSimpleStatement());
             }
             expectEndOfStatement();
             return s;
         }
 
-        auto armEnds = [](const Parser &p) {
-            return p.peek().isKeyword("ELSEIF") || p.peek().isKeyword("ELSE") || p.isEndOf("IF");
-        };
-        first.body = parseBlock(armEnds);
+        first.body = parseBlock("IF");
         s->arms.push_back(std::move(first));
 
         while (peek().isKeyword("ELSEIF"))
@@ -576,87 +1002,19 @@ private:
             arm.condition = parseExpression();
             expectKeyword("THEN", "Then");
             expectEndOfStatement();
-            arm.body = parseBlock(armEnds);
+            arm.body = parseBlock("IF");
             s->arms.push_back(std::move(arm));
         }
         if (acceptKeyword("ELSE"))
         {
             s->hasElse = true;
             expectEndOfStatement();
-            s->elseBody = parseBlock([](const Parser &p) { return p.isEndOf("IF"); });
+            s->elseBody = parseBlock("IF");
         }
-        if (expectKeyword("END", "End If"))
+        if (expectKeyword("END", "End If") && expectKeyword("IF", "If"))
         {
-            expectKeyword("IF", "If");
+            expectEndOfStatement();
         }
-        expectEndOfStatement();
-        return s;
-    }
-
-    // A statement on the same line as Then/Else: no Dim, no block If.
-    StmtPtr parseInlineStatement()
-    {
-        if (peek().isKeyword("END") &&
-            (peek(1).kind == TokenKind::EndOfStatement || peek(1).isKeyword("ELSE")))
-        {
-            auto s = std::make_unique<Stmt>();
-            s->kind = StmtKind::End;
-            s->location = next().location;
-            return s;
-        }
-        if (peek().isKeyword("CALL"))
-        {
-            next();
-            return parseCall(peek().location);
-        }
-        if (at(TokenKind::Identifier))
-        {
-            if (peek(1).isSymbol("=") || peek(1).isSymbol("."))
-            {
-                return parseAssignmentNoEnd();
-            }
-            return parseCall(peek().location);
-        }
-        error(peek().location, "expected a statement after 'Then' or 'Else'");
-        return nullptr;
-    }
-
-    StmtPtr parseCall(Location where)
-    {
-        auto s = std::make_unique<Stmt>();
-        s->kind = StmtKind::Call;
-        s->location = where;
-        s->callee = expectIdentifier("a Sub name");
-        if (acceptSymbol("("))
-        {
-            if (!peek().isSymbol(")"))
-            {
-                error(peek().location, "arguments are not supported yet");
-                while (!at(TokenKind::EndOfStatement) && !peek().isSymbol(")"))
-                {
-                    next();
-                }
-            }
-            expectSymbol(")");
-        }
-        return s;
-    }
-
-    StmtPtr parseAssignment()
-    {
-        StmtPtr s = parseAssignmentNoEnd();
-        expectEndOfStatement();
-        return s;
-    }
-
-    StmtPtr parseAssignmentNoEnd()
-    {
-        auto s = std::make_unique<Stmt>();
-        s->kind = StmtKind::Assign;
-        s->location = peek().location;
-        s->target = parsePrimary();
-        expectSymbol("=");
-        s->value = parseExpression();
         return s;
     }
 
@@ -804,6 +1162,13 @@ private:
                 e->kind = ExprKind::Name;
                 e->suffix = t.suffix;
                 e->text = next().text;
+                if (acceptSymbol("("))
+                {
+                    e->kind = ExprKind::Call;
+                    parseArguments(e->args);
+                    expectSymbol(")");
+                    return e;
+                }
                 if (acceptSymbol("."))
                 {
                     auto member = std::make_unique<Expr>();
@@ -843,6 +1208,7 @@ private:
     std::size_t pos_ = 0;
     int lastErrorLine_ = 0;
     Procedure *currentProcedure_ = nullptr;
+    std::vector<const char *> open_; // constructs around the current block
 };
 
 } // namespace

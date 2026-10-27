@@ -16,12 +16,12 @@ namespace
 
 // Reserved words, upper case. Some are not used by the parser yet but are
 // reserved now so programs written today keep compiling as the language grows.
-constexpr std::array<std::string_view, 37> kKeywords = {
-    "AND",     "AS",   "BEGIN",    "BOOLEAN", "BYVAL",   "CALL",   "CASE",   "CATCH",
-    "DIM",     "DO",   "DOUBLE",   "ELSE",    "ELSEIF",  "END",    "EXIT",   "FALSE",
-    "FINALLY", "FOR",  "FUNCTION", "IF",      "INTEGER", "LONG",   "LOOP",   "MOD",
-    "NEXT",    "NOT",  "OPTION",   "OR",      "REM",     "RETURN", "SELECT", "STRING",
-    "SUB",     "THEN", "TO",       "TRUE",    "WHILE"};
+constexpr std::array<std::string_view, 41> kKeywords = {
+    "AND",    "AS",       "BEGIN",  "BOOLEAN", "BYREF",  "BYVAL", "CALL",   "CASE",  "CATCH",
+    "DIM",    "DO",       "DOUBLE", "ELSE",    "ELSEIF", "END",   "EXIT",   "FALSE", "FINALLY",
+    "FOR",    "FUNCTION", "IF",     "INTEGER", "LONG",   "LOOP",  "MOD",    "NEXT",  "NOT",
+    "OPTION", "OR",       "REM",    "RETURN",  "SELECT", "STEP",  "STRING", "SUB",   "THEN",
+    "TO",     "TRUE",     "UNTIL",  "WEND",    "WHILE"};
 
 std::string toUpper(std::string_view text)
 {

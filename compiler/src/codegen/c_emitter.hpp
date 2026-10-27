@@ -7,7 +7,9 @@
 //   * every BASIC statement becomes one C line, preceded by a #line
 //     directive, so gdb, lldb and Visual Studio show and step BASIC lines;
 //   * names are mangled predictably: c_<control>, g_<module variable>,
-//     v_<local variable>, p_<Sub>, s_<n> for string literals;
+//     v_<local variable or parameter> (v_<name>_2 for a second block-scoped
+//     variable of the same name), r_<Function> for a Function's result,
+//     p_<Sub or Function>, s_<n> for string literals;
 //   * string temporaries are released on the same line that creates them.
 
 #pragma once

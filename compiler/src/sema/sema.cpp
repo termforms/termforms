@@ -146,7 +146,8 @@ private:
     {
         for (auto &proc : module_.procedures)
         {
-            if (!proc->name.empty() && claimModuleName(proc->name, proc->location, "Sub"))
+            if (!proc->name.empty() &&
+                claimModuleName(proc->name, proc->location, proc->isFunction ? "Function" : "Sub"))
             {
                 procedures_[proc->name] = proc.get();
             }
@@ -205,6 +206,17 @@ private:
         }
         if (const catalog::Event *event = catalog::findEvent(*type, eventName))
         {
+            // The runtime calls handlers with no arguments and ignores results.
+            if (proc.isFunction)
+            {
+                diagnostics_.error(proc.location, "event handler '" + proc.name +
+                                                      "' must be a Sub, not a Function");
+            }
+            else if (!proc.parameters.empty())
+            {
+                diagnostics_.error(proc.location,
+                                   "event handler '" + proc.name + "' takes no parameters");
+            }
             proc.eventControl = control;
             proc.event = event->kind;
             return;
@@ -224,20 +236,38 @@ private:
 
     // -- Procedure bodies --------------------------------------------------
 
+    // Scope rules (VB.NET): parameters and the procedure's own Dims share
+    // the outermost scope; each If arm and loop body opens a new one. A name
+    // may be reused in sibling blocks but never hides one still in scope.
     void checkProcedure(Procedure &proc)
     {
-        locals_.clear();
-        checkBlock(proc.body);
+        current_ = &proc;
+        scopes_.assign(1, {});
+        loops_.clear();
+        for (auto &p : proc.parameters)
+        {
+            declareLocal(*p);
+        }
+        checkBlock(proc.body, false);
+        current_ = nullptr;
     }
 
-    void checkBlock(Block &block)
+    void checkBlock(Block &block, bool newScope = true)
     {
+        if (newScope)
+        {
+            scopes_.emplace_back();
+        }
         for (auto &stmt : block)
         {
             if (stmt != nullptr)
             {
                 checkStatement(*stmt);
             }
+        }
+        if (newScope)
+        {
+            scopes_.pop_back();
         }
     }
 
@@ -246,6 +276,7 @@ private:
         switch (s.kind)
         {
             case StmtKind::Dim:
+                s.insideLoop = !loops_.empty();
                 for (Variable *v : s.declared)
                 {
                     declareLocal(*v);
@@ -257,24 +288,40 @@ private:
             case StmtKind::If:
                 for (IfArm &arm : s.arms)
                 {
-                    const Type t = checkExpr(*arm.condition);
-                    if (t != Type::Boolean && t != Type::Error)
-                    {
-                        diagnostics_.error(arm.condition->location,
-                                           std::string("an If condition must be Boolean, not ") +
-                                               typeName(t));
-                    }
+                    requireBoolean(*arm.condition, "an If condition");
                     checkBlock(arm.body);
                 }
                 checkBlock(s.elseBody);
                 break;
             case StmtKind::Call:
-                checkCall(s);
+                checkCallStatement(s);
+                break;
+            case StmtKind::For:
+                checkFor(s);
+                break;
+            case StmtKind::Do:
+                if (s.condition != nullptr)
+                {
+                    requireBoolean(*s.condition, s.isWhile ? "a While condition"
+                                                 : s.until ? "an Until condition"
+                                                           : "a While condition");
+                }
+                loops_.push_back(&s);
+                checkBlock(s.body);
+                loops_.pop_back();
+                break;
+            case StmtKind::Exit:
+                checkExit(s);
+                break;
+            case StmtKind::Return:
+                checkReturn(s);
                 break;
             case StmtKind::End:
                 break;
         }
     }
+
+    const char *procedureKind() const { return current_->isFunction ? "Function" : "Sub"; }
 
     void declareLocal(Variable &v)
     {
@@ -282,9 +329,18 @@ private:
         {
             return; // already reported by the parser
         }
-        if (locals_.count(v.name) != 0)
+        if (const Variable *existing = lookupLocal(v.name))
         {
-            diagnostics_.error(v.location, "'" + v.name + "' is already declared in this Sub");
+            diagnostics_.error(v.location, "'" + v.name + "' is already declared " +
+                                               (existing->isParameter ? "as a parameter " : "") +
+                                               "in this " + procedureKind());
+            return;
+        }
+        if (current_->isFunction && v.name == current_->name)
+        {
+            diagnostics_.error(v.location, "'" + v.name +
+                                               "' is the name of this Function; assign to it "
+                                               "to set the result");
             return;
         }
         if (controls_.count(v.name) != 0)
@@ -292,31 +348,52 @@ private:
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a control");
             return;
         }
-        locals_[v.name] = &v;
+        scopes_.back()[v.name] = &v;
+    }
+
+    Variable *lookupLocal(const std::string &name) const
+    {
+        for (auto scope = scopes_.rbegin(); scope != scopes_.rend(); ++scope)
+        {
+            if (auto it = scope->find(name); it != scope->end())
+            {
+                return it->second;
+            }
+        }
+        return nullptr;
+    }
+
+    void requireBoolean(Expr &condition, const char *what)
+    {
+        const Type t = checkExpr(condition);
+        if (t != Type::Boolean && t != Type::Error)
+        {
+            diagnostics_.error(condition.location,
+                               std::string(what) + " must be Boolean, not " + typeName(t));
+        }
     }
 
     void checkAssignment(Stmt &s)
     {
         Expr &target = *s.target;
         const Type valueType = checkExpr(*s.value);
+        const Type targetType = checkExpr(target);
 
-        if (target.kind == ExprKind::Name)
+        if (target.kind == ExprKind::Name && target.control != nullptr)
         {
-            const Type targetType = checkExpr(target);
-            if (target.control != nullptr)
-            {
-                diagnostics_.error(target.location,
-                                   "cannot assign to the control '" + target.text +
-                                       "' itself; assign to one of its properties");
-                return;
-            }
+            diagnostics_.error(target.location, "cannot assign to the control '" + target.text +
+                                                    "' itself; assign to one of its properties");
+            return;
+        }
+        if (target.kind == ExprKind::Name || target.kind == ExprKind::Member)
+        {
             requireAssignable(targetType, valueType, s.value->location);
             return;
         }
-        if (target.kind == ExprKind::Member)
+        if (target.kind == ExprKind::Call && target.procedure != nullptr)
         {
-            const Type targetType = checkExpr(target);
-            requireAssignable(targetType, valueType, s.value->location);
+            diagnostics_.error(target.location, "cannot assign to Function '" + target.text +
+                                                    "'; only its own body sets its result");
             return;
         }
         diagnostics_.error(target.location, "this cannot be assigned to");
@@ -337,28 +414,208 @@ private:
         diagnostics_.error(where, message);
     }
 
-    void checkCall(Stmt &s)
+    // -- Calls -------------------------------------------------------------
+
+    Procedure *findProcedure(const std::string &name)
+    {
+        auto it = procedures_.find(name);
+        return it == procedures_.end() ? nullptr : it->second;
+    }
+
+    // "no Sub or Function named 'x'", with a hint when only the case differs
+    // or when the name is something that cannot be called.
+    void unknownCallee(const std::string &name, Location where)
+    {
+        if (lookupLocal(name) != nullptr || globals_.count(name) != 0)
+        {
+            diagnostics_.error(where, "'" + name + "' is a variable and cannot be called");
+            return;
+        }
+        std::string message = "no Sub or Function named '" + name + "'";
+        for (const auto &[known, proc] : procedures_)
+        {
+            if (catalog::equalsIgnoringCase(known, name))
+            {
+                message += " (did you mean '" + known + "'? names are case-sensitive)";
+                break;
+            }
+        }
+        diagnostics_.error(where, message);
+    }
+
+    void checkCallStatement(Stmt &s)
     {
         if (s.callee.empty())
         {
             return;
         }
-        auto it = procedures_.find(s.callee);
-        if (it != procedures_.end())
+        s.procedure = findProcedure(s.callee);
+        if (s.procedure == nullptr)
         {
-            s.procedure = it->second;
+            unknownCallee(s.callee, s.location);
+            for (auto &arg : s.args)
+            {
+                checkExpr(*arg);
+            }
             return;
         }
-        std::string message = "no Sub named '" + s.callee + "'";
-        for (const auto &[name, proc] : procedures_)
+        checkArguments(*s.procedure, s.args, s.location);
+    }
+
+    // Arity and types. ByVal arguments follow the assignment rules; a ByRef
+    // argument must be a variable of exactly the parameter's type, because
+    // the callee writes through it.
+    void checkArguments(const Procedure &callee, std::vector<ExprPtr> &args, Location where)
+    {
+        for (auto &arg : args)
         {
-            if (catalog::equalsIgnoringCase(name, s.callee))
+            checkExpr(*arg);
+        }
+        const std::size_t want = callee.parameters.size();
+        if (args.size() != want)
+        {
+            diagnostics_.error(where, "'" + callee.name + "' takes " + std::to_string(want) +
+                                          (want == 1 ? " argument" : " arguments") + ", not " +
+                                          std::to_string(args.size()));
+            return;
+        }
+        for (std::size_t i = 0; i < want; ++i)
+        {
+            const Variable &param = *callee.parameters[i];
+            const Expr &arg = *args[i];
+            if (param.type == Type::Error || arg.type == Type::Error)
             {
-                message += " (did you mean '" + name + "'? names are case-sensitive)";
-                break;
+                continue;
+            }
+            const std::string which =
+                "argument " + std::to_string(i + 1) + " of '" + callee.name + "'";
+            if (param.byRef)
+            {
+                if (arg.kind != ExprKind::Name || arg.variable == nullptr)
+                {
+                    diagnostics_.error(arg.location, which + " is ByRef, so it must be a variable");
+                }
+                else if (arg.type != param.type)
+                {
+                    diagnostics_.error(arg.location, which + " is ByRef " + typeName(param.type) +
+                                                         ", so it must be " + article(param.type) +
+                                                         " variable, not " + article(arg.type));
+                }
+                continue;
+            }
+            if (arg.type != param.type)
+            {
+                diagnostics_.error(arg.location, which + " must be " + article(param.type) +
+                                                     ", not " + article(arg.type) +
+                                                     " (Option Strict)");
             }
         }
-        diagnostics_.error(s.location, message);
+    }
+
+    Type checkCallExpr(Expr &e)
+    {
+        e.procedure = findProcedure(e.text);
+        if (e.procedure == nullptr)
+        {
+            unknownCallee(e.text, e.location);
+            for (auto &arg : e.args)
+            {
+                checkExpr(*arg);
+            }
+            return Type::Error;
+        }
+        if (!e.procedure->isFunction)
+        {
+            diagnostics_.error(e.location, "Sub '" + e.text +
+                                               "' does not return a value; call it as a "
+                                               "statement, or make it a Function");
+            return Type::Error;
+        }
+        checkArguments(*e.procedure, e.args, e.location);
+        return e.procedure->result->type;
+    }
+
+    // -- Loops and leaving them --------------------------------------------
+
+    void checkFor(Stmt &s)
+    {
+        const Type varType = checkExpr(*s.target);
+        if (varType != Type::Error && (s.target->variable == nullptr || varType != Type::Integer))
+        {
+            diagnostics_.error(s.target->location, "the For loop variable must be an Integer "
+                                                   "variable");
+        }
+        auto requireInteger = [this](Expr &e, const char *what) {
+            const Type t = checkExpr(e);
+            if (t != Type::Integer && t != Type::Error)
+            {
+                diagnostics_.error(e.location, std::string("the ") + what +
+                                                   " of a For loop must be an Integer, not " +
+                                                   article(t));
+            }
+        };
+        requireInteger(*s.value, "start");
+        requireInteger(*s.limit, "end");
+        if (s.step != nullptr)
+        {
+            requireInteger(*s.step, "Step");
+        }
+        if (!s.nextName.empty() && s.nextName != s.target->text)
+        {
+            diagnostics_.error(s.nextLocation, "'Next " + s.nextName + "' does not match 'For " +
+                                                   s.target->text + "'");
+        }
+        loops_.push_back(&s);
+        checkBlock(s.body);
+        loops_.pop_back();
+    }
+
+    void checkExit(Stmt &s)
+    {
+        if (s.exitWhat == "Sub" || s.exitWhat == "Function")
+        {
+            if (s.exitWhat != procedureKind())
+            {
+                diagnostics_.error(s.location, "'Exit " + s.exitWhat + "' cannot be used in a " +
+                                                   procedureKind() + "; use 'Exit " +
+                                                   procedureKind() + "'");
+            }
+            return;
+        }
+        for (auto loop = loops_.rbegin(); loop != loops_.rend(); ++loop)
+        {
+            const Stmt &l = **loop;
+            const bool matches = s.exitWhat == "For"  ? l.kind == StmtKind::For
+                                 : s.exitWhat == "Do" ? l.kind == StmtKind::Do && !l.isWhile
+                                                      : l.kind == StmtKind::Do && l.isWhile;
+            if (matches)
+            {
+                s.exitLoop = &l;
+                return;
+            }
+        }
+        diagnostics_.error(s.location,
+                           "'Exit " + s.exitWhat + "' is not inside a " + s.exitWhat + " loop");
+    }
+
+    void checkReturn(Stmt &s)
+    {
+        if (!current_->isFunction)
+        {
+            if (s.value != nullptr)
+            {
+                checkExpr(*s.value);
+                diagnostics_.error(s.value->location, "a Sub cannot return a value; make it a "
+                                                      "Function");
+            }
+            return;
+        }
+        if (s.value == nullptr)
+        {
+            diagnostics_.error(s.location, "'Return' in a Function needs a value");
+            return;
+        }
+        requireAssignable(current_->result->type, checkExpr(*s.value), s.value->location);
     }
 
     // -- Expressions -------------------------------------------------------
@@ -389,6 +646,8 @@ private:
                 return resolveName(e);
             case ExprKind::Member:
                 return resolveMember(e);
+            case ExprKind::Call:
+                return checkCallExpr(e);
             case ExprKind::Unary:
                 return checkUnary(e);
             case ExprKind::Binary:
@@ -397,16 +656,21 @@ private:
         return Type::Error;
     }
 
+    // Lookup order: locals and parameters, the current Function's result,
+    // module variables, Functions, controls.
     Type resolveName(Expr &e)
     {
-        Variable *v = nullptr;
-        if (auto it = locals_.find(e.text); it != locals_.end())
+        Variable *v = current_ != nullptr ? lookupLocal(e.text) : nullptr;
+        if (v == nullptr && current_ != nullptr && current_->isFunction && e.text == current_->name)
         {
-            v = it->second;
+            v = current_->result.get();
         }
-        else if (auto g = globals_.find(e.text); g != globals_.end())
+        if (v == nullptr)
         {
-            v = g->second;
+            if (auto g = globals_.find(e.text); g != globals_.end())
+            {
+                v = g->second;
+            }
         }
 
         if (v != nullptr)
@@ -420,6 +684,17 @@ private:
             }
             return v->type;
         }
+        if (Procedure *proc = findProcedure(e.text))
+        {
+            // A bare Function name is a call with no arguments, as in VB.
+            if (!proc->isFunction || !proc->parameters.empty())
+            {
+                return checkCallExpr(e); // reports what is wrong with the call
+            }
+            e.kind = ExprKind::Call;
+            e.procedure = proc;
+            return proc->result->type;
+        }
         if (auto c = controls_.find(e.text); c != controls_.end())
         {
             e.control = c->second;
@@ -427,12 +702,15 @@ private:
         }
 
         std::string message = "'" + e.text + "' is not declared (add a Dim)";
-        for (const auto &[name, var] : locals_)
+        for (const auto &scope : scopes_)
         {
-            if (catalog::equalsIgnoringCase(name, e.text))
+            for (const auto &[name, var] : scope)
             {
-                message = "'" + e.text + "' is not declared; did you mean '" + name +
-                          "'? (names are case-sensitive)";
+                if (catalog::equalsIgnoringCase(name, e.text))
+                {
+                    message = "'" + e.text + "' is not declared; did you mean '" + name +
+                              "'? (names are case-sensitive)";
+                }
             }
         }
         for (const auto &[name, var] : globals_)
@@ -581,7 +859,14 @@ private:
 
     void checkEntryPoint()
     {
-        if (module_.form == nullptr && procedures_.count("Main") == 0)
+        if (const Procedure *main = findProcedure("Main"))
+        {
+            if (main->isFunction || !main->parameters.empty())
+            {
+                diagnostics_.error(main->location, "Main must be a Sub with no parameters");
+            }
+        }
+        else if (module_.form == nullptr)
         {
             diagnostics_.error({1, 1}, "nothing to run: add a form (Begin Form ... End) or a "
                                        "Sub Main");
@@ -628,7 +913,12 @@ private:
     std::map<std::string, ControlDef *> controls_;   // includes the form
     std::map<std::string, Variable *> globals_;
     std::map<std::string, Procedure *> procedures_;
-    std::map<std::string, Variable *> locals_; // current Sub, declared so far
+
+    // The procedure being checked: its scopes, innermost last, and the
+    // loops around the current statement, innermost last.
+    Procedure *current_ = nullptr;
+    std::vector<std::map<std::string, Variable *>> scopes_;
+    std::vector<const Stmt *> loops_;
 };
 
 } // namespace

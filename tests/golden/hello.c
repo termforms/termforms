@@ -18,7 +18,7 @@ static tf_string *s_3;
 static tf_string *s_4;
 static tf_string *s_5;
 
-/* Subs */
+/* Subs and Functions */
 static void p_cmdGreet_Click(void);
 
 #line 27 "hello.bas"
@@ -28,7 +28,7 @@ static void p_cmdGreet_Click(void)
 #line 29 "hello.bas"
     TF_LINE(29); tf_str_assign(&v_who, tf_str_ref(tf_get_str(c_txtName, TF_PROP_TEXT)));
 #line 30 "hello.bas"
-    TF_LINE(30); if ((tf_str_compare(v_who, NULL) == 0))
+    TF_LINE(30); if (tf_str_compare(v_who, NULL) == 0)
     {
 #line 30 "hello.bas"
         TF_LINE(30); tf_str_assign(&v_who, tf_str_ref(tf_str_literal(&s_0, "world", 5)));

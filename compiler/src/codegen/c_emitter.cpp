@@ -4,15 +4,34 @@
 //
 // String ownership in generated code (see tf_runtime.h for the runtime side):
 // an expression either borrows a string (a variable, a literal, a property
-// read) or owns one (+1, the result of & or a conversion). An owned value
-// that is only read is parked in a temporary and released at the end of the
-// statement; an owned value being stored is handed over without a copy.
+// read) or owns one (+1, the result of &, a conversion or a Function). An
+// owned value that is only read is parked in a temporary and released at the
+// end of the statement; an owned value being stored is handed over without a
+// copy.
+//
+// Evaluation order is left to right, as in VB.NET, whatever C compiler
+// builds the program (C leaves the order of operands unspecified). Each
+// Function call in an expression is made ahead of the statement, in order,
+// into its own temporary. A value read before such a call, which the call
+// could change (a module variable, a ByRef parameter, a local passed ByRef
+// in the same statement, a control property), is copied into a temporary
+// first. That copy also keeps a String alive if the call reassigns the
+// variable it came from.
+//
+// Procedures: parameters are C parameters (ByRef ones are pointers). A
+// ByVal String parameter takes its own reference on entry, so the callee
+// may assign to it, and the caller may change the variable it came from,
+// without either freeing the other's string. Locals in nested blocks share
+// storage that lasts the whole call; a Dim inside a loop resets its
+// variables each time it runs. Leaving early (Exit Sub, Return) jumps to the
+// cleanup at End Sub when there are strings to release.
 
 #include "codegen/c_emitter.hpp"
 
 #include "sema/catalog.hpp"
 
 #include <map>
+#include <set>
 #include <sstream>
 #include <vector>
 
@@ -35,8 +54,16 @@ struct Value
 // Per-statement scratch: temporaries and the code that fills them.
 struct StatementScope
 {
-    std::vector<std::string> prelude; // "tf_string *t1 = ...;"
-    std::vector<std::string> temps;   // names to release afterwards
+    std::vector<std::string> prelude;  // "tf_string *t1 = ...;", run first
+    std::vector<std::string> releases; // string temporaries to release afterwards
+    int temps = 0;                     // temporaries so far, for t1, t2, ...
+
+    // Function calls in the statement not yet made, and locals the
+    // statement passes ByRef to a Function (so a call may change them).
+    int pendingCalls = 0;
+    std::set<const Variable *> passedByRef;
+
+    std::string newTemp() { return "t" + std::to_string(++temps); }
 };
 
 class Emitter
@@ -104,51 +131,116 @@ private:
 
         if (!module_.procedures.empty())
         {
-            out << "/* Subs */\n";
+            out << "/* Subs and Functions */\n";
             for (const auto &proc : module_.procedures)
             {
-                out << "static void p_" << proc->name << "(void);\n";
+                out << signature(*proc) << ";\n";
             }
             out << '\n';
         }
     }
 
+    // "static int32_t p_Area(int32_t v_w, int32_t v_h)"
+    static std::string signature(const Procedure &proc)
+    {
+        std::string out = "static ";
+        out += proc.isFunction ? cType(proc.result->type) : "void";
+        if (out.back() != '*')
+        {
+            out += ' ';
+        }
+        out += "p_" + proc.name + "(";
+        if (proc.parameters.empty())
+        {
+            out += "void";
+        }
+        for (std::size_t i = 0; i < proc.parameters.size(); ++i)
+        {
+            const Variable &p = *proc.parameters[i];
+            out += (i == 0 ? "" : ", ") +
+                   declaration(p.type, std::string(p.byRef ? "*" : "") + "v_" + p.name);
+        }
+        return out + ")";
+    }
+
     void emitProcedure(std::ostringstream &out, const Procedure &proc)
     {
+        current_ = &proc;
+        assignLocalNames(proc);
+        loopIds_.clear();
+        loopLabels_.clear();
+        loopCount_ = 0;
+
         line(out, proc.location);
-        out << "static void p_" << proc.name << "(void)\n{\n";
+        out << signature(proc) << "\n{\n";
 
         for (const auto &v : proc.locals)
         {
             if (v->type != Type::Error)
             {
-                out << "    " << declaration(v->type, "v_" + v->name) << " = "
-                    << (v->type == Type::String ? "NULL" : "0") << ";\n";
+                out << "    " << declaration(v->type, names_.at(v.get())) << " = " << zero(v->type)
+                    << ";\n";
             }
         }
+        if (proc.isFunction)
+        {
+            out << "    " << declaration(proc.result->type, "r_" + proc.name) << " = "
+                << zero(proc.result->type) << ";\n";
+        }
+        for (const auto &p : proc.parameters)
+        {
+            if (p->type == Type::String && !p->byRef)
+            {
+                out << "    tf_str_retain(v_" << p->name << ");\n";
+            }
+        }
+
+        // The cleanup at End Sub: strings to release, then the result.
+        cleanup_.clear();
+        for (const auto &p : proc.parameters)
+        {
+            if (p->type == Type::String && !p->byRef)
+            {
+                cleanup_ += " tf_str_release(v_" + p->name + ");";
+            }
+        }
+        for (const auto &v : proc.locals)
+        {
+            if (v->type == Type::String)
+            {
+                cleanup_ += " tf_str_release(" + names_.at(v.get()) + ");";
+            }
+        }
+        usesCleanupLabel_ = false;
 
         emitBlock(out, proc.body, 1);
 
-        // Locals' strings are released when the Sub ends.
-        bool hasStrings = false;
-        for (const auto &v : proc.locals)
-        {
-            hasStrings = hasStrings || v->type == Type::String;
-        }
-        if (hasStrings)
+        const std::string result = proc.isFunction ? " return r_" + proc.name + ";" : "";
+        if (!cleanup_.empty() || !result.empty())
         {
             line(out, proc.endLocation);
-            out << "   ";
-            for (const auto &v : proc.locals)
-            {
-                if (v->type == Type::String)
-                {
-                    out << " tf_str_release(v_" << v->name << ");";
-                }
-            }
-            out << '\n';
+            out << (usesCleanupLabel_ ? "done:" : "   ") << cleanup_ << result << '\n';
         }
         out << "}\n\n";
+        current_ = nullptr;
+    }
+
+    // v_<name> for each parameter and local; a block-scoped name used again
+    // in a later block of the same procedure gets v_<name>_2, _3, ...
+    void assignLocalNames(const Procedure &proc)
+    {
+        names_.clear();
+        std::map<std::string, int> uses;
+        for (const auto &p : proc.parameters)
+        {
+            names_[p.get()] = "v_" + p->name;
+            uses[p->name] = 1;
+        }
+        for (const auto &v : proc.locals)
+        {
+            const int n = ++uses[v->name];
+            names_[v.get()] = "v_" + v->name + (n == 1 ? "" : "_" + std::to_string(n));
+        }
     }
 
     void emitMain(std::ostringstream &out)
@@ -241,25 +333,57 @@ private:
 
     void emitStatement(std::ostringstream &out, const Stmt &s, int depth)
     {
-        if (s.kind == StmtKind::Dim)
+        switch (s.kind)
         {
-            return; // locals are declared at the top of the Sub
-        }
-        if (s.kind == StmtKind::If)
-        {
-            emitIf(out, s, 0, depth);
-            return;
+            case StmtKind::Dim:
+                // Locals are declared at the top of the procedure; inside a
+                // loop each pass starts them afresh.
+                if (s.insideLoop)
+                {
+                    std::string code;
+                    for (const Variable *v : s.declared)
+                    {
+                        code +=
+                            (code.empty() ? "" : " ") +
+                            (v->type == Type::String ? "tf_str_assign(&" + names_.at(v) + ", NULL);"
+                                                     : names_.at(v) + " = 0;");
+                    }
+                    emitLine(out, s.location, depth, code);
+                }
+                return;
+            case StmtKind::If:
+                emitIf(out, s, 0, depth);
+                return;
+            case StmtKind::For:
+                emitFor(out, s, depth);
+                return;
+            case StmtKind::Do:
+                emitDo(out, s, depth);
+                return;
+            default:
+                break;
         }
 
         StatementScope scope;
+        prepare(scope, {s.value.get()});
+        for (const auto &arg : s.args)
+        {
+            prepare(scope, {arg.get()});
+        }
         std::string code;
         switch (s.kind)
         {
             case StmtKind::Assign:
-                code = assignment(s, scope);
+                code = wrap(scope, assignment(s, scope));
                 break;
             case StmtKind::Call:
-                code = "p_" + s.callee + "();";
+                code = wrap(scope, callStatement(s, scope));
+                break;
+            case StmtKind::Exit:
+                code = s.exitLoop != nullptr ? exitLoop(*s.exitLoop) : leaveProcedure();
+                break;
+            case StmtKind::Return:
+                code = returnStatement(s, scope);
                 break;
             case StmtKind::End:
                 code = "tf_end(0);";
@@ -267,9 +391,14 @@ private:
             default:
                 break;
         }
+        emitLine(out, s.location, depth, code);
+    }
 
-        line(out, s.location);
-        out << indent(depth) << "TF_LINE(" << s.location.line << "); " << wrap(scope, code) << '\n';
+    // One BASIC statement: its #line, TF_LINE and C code on one line.
+    void emitLine(std::ostringstream &out, Location where, int depth, const std::string &code)
+    {
+        line(out, where);
+        out << indent(depth) << "TF_LINE(" << where.line << "); " << code << '\n';
     }
 
     // Emits arm `index` of an If (and, through else, the arms after it).
@@ -277,10 +406,11 @@ private:
     {
         const IfArm &arm = s.arms[index];
         StatementScope scope;
-        const std::string condition = expr(*arm.condition, scope).code;
+        prepare(scope, {arm.condition.get()});
+        const std::string condition = unparenthesised(expr(*arm.condition, scope).code);
 
         line(out, arm.condition->location);
-        if (scope.temps.empty())
+        if (scope.prelude.empty())
         {
             out << indent(depth) << "TF_LINE(" << arm.condition->location.line << "); if ("
                 << condition << ")\n";
@@ -288,23 +418,42 @@ private:
             return;
         }
 
-        // A condition with string temporaries: evaluate, release, then branch.
-        out << indent(depth) << "{ TF_LINE(" << arm.condition->location.line << ");";
-        for (const std::string &p : scope.prelude)
-        {
-            out << ' ' << p;
-        }
+        // A condition with temporaries: evaluate, release, then branch.
         // Kept on one line: a second line would be attributed to the next
         // BASIC line by the debugger.
         const std::string cond = "cond_" + std::to_string(arm.condition->location.line);
-        out << " const int " << cond << " = (" << condition << ");";
-        for (const std::string &t : scope.temps)
-        {
-            out << " tf_str_release(" << t << ");";
-        }
-        out << " if (" << cond << ")\n";
+        out << indent(depth) << "{ TF_LINE(" << arm.condition->location.line << ");"
+            << evaluate(scope, cond, condition) << " if (" << cond << ")\n";
         emitArmBodies(out, s, index, depth);
         out << indent(depth) << "}\n";
+    }
+
+    // Drops one pair of parentheses around a whole condition, so "If a = b"
+    // gives "if (a == b)": compilers warn about "if ((a == b))".
+    static std::string unparenthesised(const std::string &code)
+    {
+        if (code.size() < 2 || code.front() != '(' || code.back() != ')')
+        {
+            return code;
+        }
+        int depth = 0;
+        for (std::size_t i = 0; i + 1 < code.size(); ++i)
+        {
+            depth += code[i] == '(' ? 1 : code[i] == ')' ? -1 : 0;
+            if (depth == 0)
+            {
+                return code; // the first '(' closes before the end: "(a) & (b)"
+            }
+        }
+        return code.substr(1, code.size() - 2);
+    }
+
+    // " prelude; const int cond = (condition); releases;" for a condition
+    // that needs temporaries.
+    static std::string evaluate(const StatementScope &scope, const std::string &name,
+                                const std::string &condition)
+    {
+        return withTemporaries(scope, "const int " + name + " = (" + condition + ");");
     }
 
     void emitArmBodies(std::ostringstream &out, const Stmt &s, std::size_t index, int depth)
@@ -327,6 +476,185 @@ private:
         }
     }
 
+    // -- Loops -------------------------------------------------------------
+
+    // For v = start To limit [Step step], with VB semantics: limit and step
+    // are evaluated once, before the first pass; the loop runs while v <=
+    // limit (v >= limit for a negative step); Next adds step with the usual
+    // overflow check, so a loop that ends at the largest Integer overflows,
+    // as in VB.
+    void emitFor(std::ostringstream &out, const Stmt &s, int depth)
+    {
+        const int id = enterLoop(s);
+        const std::string var = variableValue(*s.target->variable);
+        StatementScope scope;
+        prepare(scope, {s.value.get(), s.limit.get(), s.step.get()});
+
+        // Literal limits and steps are used directly; anything else is
+        // evaluated once into to_<id> / step_<id>, after the start value.
+        const bool limitConst = isConstant(*s.limit);
+        const bool stepConst = s.step == nullptr || isConstant(*s.step);
+        std::string code;
+        std::string start = forOperand(*s.value, scope);
+        if (!isConstant(*s.value) && (!limitConst || !stepConst))
+        {
+            code += "const int32_t from_" + std::to_string(id) + " = " + start + "; ";
+            start = "from_" + std::to_string(id);
+        }
+        std::string limit = forOperand(*s.limit, scope);
+        if (!limitConst)
+        {
+            code += "const int32_t to_" + std::to_string(id) + " = " + limit + "; ";
+            limit = "to_" + std::to_string(id);
+        }
+        std::string step = s.step == nullptr ? "1" : forOperand(*s.step, scope);
+        if (!stepConst)
+        {
+            code += "const int32_t step_" + std::to_string(id) + " = " + step + "; ";
+            step = "step_" + std::to_string(id);
+        }
+        code += var + " = " + start + ";";
+
+        // Temporaries need a block of their own; the loop goes inside it.
+        const bool braced = !scope.prelude.empty();
+        line(out, s.location);
+        out << indent(depth) << (braced ? "{ " : "") << "TF_LINE(" << s.location.line << ");"
+            << withTemporaries(scope, code) << '\n';
+
+        const int inner = depth + (braced ? 1 : 0);
+        std::string test;
+        if (stepConst)
+        {
+            const bool down = s.step != nullptr && constantValue(*s.step) < 0;
+            test = var + (down ? " < " : " > ") + limit;
+        }
+        else
+        {
+            test = step + " >= 0 ? " + var + " > " + limit + " : " + var + " < " + limit;
+        }
+        out << indent(inner) << "for (;;)\n" << indent(inner) << "{\n";
+        emitLine(out, s.location, inner + 1, "if (" + test + ") break;");
+        emitBlock(out, s.body, inner + 1);
+        emitLine(out, s.nextLocation, inner + 1, var + " = tf_i32_add(" + var + ", " + step + ");");
+        out << indent(inner) << "}\n";
+        leaveLoop(out, s, inner);
+        if (braced)
+        {
+            out << indent(depth) << "}\n";
+        }
+    }
+
+    // Do [While|Until c] ... Loop [While|Until c], and While ... Wend.
+    void emitDo(std::ostringstream &out, const Stmt &s, int depth)
+    {
+        enterLoop(s);
+        line(out, s.location);
+        out << indent(depth) << "for (;;)\n" << indent(depth) << "{\n";
+        if (s.testAtTop)
+        {
+            emitLoopTest(out, s, s.location, depth + 1);
+        }
+        emitBlock(out, s.body, depth + 1);
+        if (s.condition != nullptr && !s.testAtTop)
+        {
+            emitLoopTest(out, s, s.loopLocation, depth + 1);
+        }
+        out << indent(depth) << "}\n";
+        leaveLoop(out, s, depth);
+    }
+
+    // "if (!(cond)) break;" for While, "if (cond) break;" for Until.
+    void emitLoopTest(std::ostringstream &out, const Stmt &s, Location where, int depth)
+    {
+        StatementScope scope;
+        prepare(scope, {s.condition.get()});
+        const std::string condition = unparenthesised(expr(*s.condition, scope).code);
+        if (scope.prelude.empty())
+        {
+            emitLine(out, where, depth,
+                     std::string("if (") + (s.until ? "" : "!") + "(" + condition + ")) break;");
+            return;
+        }
+        const std::string cond = "cond_" + std::to_string(where.line);
+        line(out, where);
+        out << indent(depth) << "{ TF_LINE(" << where.line << ");"
+            << evaluate(scope, cond, condition) << " if (" << (s.until ? "" : "!") << cond
+            << ") break; }\n";
+    }
+
+    int enterLoop(const Stmt &s)
+    {
+        loopIds_[&s] = ++loopCount_;
+        loopStack_.push_back(&s);
+        return loopCount_;
+    }
+
+    // Closes a loop: the label an Exit from an inner loop jumps to, if any.
+    void leaveLoop(std::ostringstream &out, const Stmt &s, int depth)
+    {
+        loopStack_.pop_back();
+        if (loopLabels_.count(&s) != 0)
+        {
+            out << indent(depth) << "exit_" << loopIds_.at(&s) << ":;\n";
+        }
+    }
+
+    // Exit For / Do / While: break out of the innermost C loop, or jump past
+    // an outer one.
+    std::string exitLoop(const Stmt &loop)
+    {
+        if (!loopStack_.empty() && loopStack_.back() == &loop)
+        {
+            return "break;";
+        }
+        loopLabels_.insert(&loop);
+        return "goto exit_" + std::to_string(loopIds_.at(&loop)) + ";";
+    }
+
+    // Exit Sub / Exit Function / Return without a value.
+    std::string leaveProcedure()
+    {
+        if (!cleanup_.empty())
+        {
+            usesCleanupLabel_ = true;
+            return "goto done;";
+        }
+        return current_->isFunction ? "return r_" + current_->name + ";" : "return;";
+    }
+
+    std::string returnStatement(const Stmt &s, StatementScope &scope)
+    {
+        if (s.value == nullptr)
+        {
+            return leaveProcedure();
+        }
+        const std::string result = "r_" + current_->name;
+        const Value v = expr(*s.value, scope);
+        const std::string store = current_->result->type == Type::String
+                                      ? "tf_str_assign(&" + result + ", " + ownedCode(v) + ");"
+                                      : result + " = " + v.code + ";";
+        return wrap(scope, store) + " " + leaveProcedure();
+    }
+
+    // A For bound: a literal (possibly negated) is written as a plain number.
+    std::string forOperand(const Expr &e, StatementScope &scope)
+    {
+        return isConstant(e) ? std::to_string(constantValue(e)) : expr(e, scope).code;
+    }
+
+    static bool isConstant(const Expr &e)
+    {
+        return e.kind == ExprKind::IntegerLiteral || (e.kind == ExprKind::Unary && e.text == "-" &&
+                                                      e.left->kind == ExprKind::IntegerLiteral);
+    }
+
+    static std::int64_t constantValue(const Expr &e)
+    {
+        return e.kind == ExprKind::IntegerLiteral ? e.integer : -e.left->integer;
+    }
+
+    // -- Assignments and calls ---------------------------------------------
+
     std::string assignment(const Stmt &s, StatementScope &scope)
     {
         const Expr &target = *s.target;
@@ -346,39 +674,148 @@ private:
                    expr(*s.value, scope).code + ");";
         }
 
-        const std::string name = variableName(*target.variable);
+        const Variable &var = *target.variable;
         const Value v = expr(*s.value, scope);
         if (target.type == Type::String)
         {
-            // Hand over an owned value; take a reference to a borrowed one.
-            const std::string owned = v.owned ? v.code : "tf_str_ref(" + v.code + ")";
-            return "tf_str_assign(&" + name + ", " + owned + ");";
+            return "tf_str_assign(" + variableAddress(var) + ", " + ownedCode(v) + ");";
         }
-        return name + " = " + v.code + ";";
+        return variableValue(var) + " = " + v.code + ";";
+    }
+
+    // Hand over an owned value; take a reference to a borrowed one.
+    static std::string ownedCode(const Value &v)
+    {
+        return v.owned ? v.code : "tf_str_ref(" + v.code + ")";
+    }
+
+    // A call used as a statement; a Function's result is discarded.
+    std::string callStatement(const Stmt &s, StatementScope &scope)
+    {
+        const Procedure &callee = *s.procedure;
+        const std::string call = "p_" + callee.name + "(" + arguments(callee, s.args, scope) + ")";
+        if (!callee.isFunction)
+        {
+            return call + ";";
+        }
+        if (callee.result->type == Type::String)
+        {
+            return "tf_str_release(" + call + ");";
+        }
+        return "(void)" + call + ";";
+    }
+
+    // ByRef arguments pass the variable's address; ByVal Strings are
+    // borrowed for the duration of the call (the callee takes its own
+    // reference).
+    std::string arguments(const Procedure &callee, const std::vector<ExprPtr> &args,
+                          StatementScope &scope)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < args.size(); ++i)
+        {
+            const Variable &param = *callee.parameters[i];
+            std::string code;
+            if (param.byRef)
+            {
+                code = variableAddress(*args[i]->variable);
+            }
+            else if (param.type == Type::String)
+            {
+                code = borrowed(expr(*args[i], scope), scope).code;
+            }
+            else
+            {
+                code = expr(*args[i], scope).code;
+            }
+            out += (i == 0 ? "" : ", ") + code;
+        }
+        return out;
     }
 
     // Wraps a statement with its temporaries: { prelude; code; releases; }
     static std::string wrap(const StatementScope &scope, const std::string &code)
     {
-        if (scope.temps.empty())
+        if (scope.prelude.empty())
         {
             return code;
         }
-        std::string out = "{";
+        return "{" + withTemporaries(scope, code) + " }";
+    }
+
+    // " prelude... code releases..." with no braces around it.
+    static std::string withTemporaries(const StatementScope &scope, const std::string &code)
+    {
+        std::string out;
         for (const std::string &p : scope.prelude)
         {
             out += ' ' + p;
         }
         out += ' ' + code;
-        for (const std::string &t : scope.temps)
+        for (const std::string &t : scope.releases)
         {
             out += " tf_str_release(" + t + ");";
         }
-        out += " }";
         return out;
     }
 
     // -- Expressions -------------------------------------------------------
+
+    // Records the Function calls the statement's expressions will make, in
+    // the order they are evaluated. Must be called before expr() on them.
+    static void prepare(StatementScope &scope, std::initializer_list<const Expr *> exprs)
+    {
+        for (const Expr *e : exprs)
+        {
+            if (e != nullptr)
+            {
+                countCalls(*e, scope);
+            }
+        }
+    }
+
+    static void countCalls(const Expr &e, StatementScope &scope)
+    {
+        if (e.kind == ExprKind::Call)
+        {
+            ++scope.pendingCalls;
+            for (std::size_t i = 0; i < e.args.size(); ++i)
+            {
+                if (e.procedure->parameters[i]->byRef && e.args[i]->variable != nullptr)
+                {
+                    scope.passedByRef.insert(e.args[i]->variable);
+                }
+            }
+        }
+        for (const auto &arg : e.args)
+        {
+            countCalls(*arg, scope);
+        }
+        if (e.left != nullptr)
+        {
+            countCalls(*e.left, scope);
+        }
+        if (e.right != nullptr)
+        {
+            countCalls(*e.right, scope);
+        }
+    }
+
+    // A read that a later call in the statement could change is copied now.
+    static Value snapshot(Type type, const std::string &code, StatementScope &scope)
+    {
+        const std::string temp = scope.newTemp();
+        if (type == Type::String)
+        {
+            scope.prelude.push_back("tf_string *" + temp + " = tf_str_ref(" + code + ");");
+            scope.releases.push_back(temp);
+        }
+        else
+        {
+            scope.prelude.push_back(declaration(type, temp) + " = " + code + ";");
+        }
+        return {temp, false};
+    }
 
     Value expr(const Expr &e, StatementScope &scope)
     {
@@ -391,9 +828,23 @@ private:
             case ExprKind::BooleanLiteral:
                 return {e.integer != 0 ? "1" : "0", false};
             case ExprKind::Name:
-                return {variableName(*e.variable), false};
+            {
+                const Variable &v = *e.variable;
+                const bool reachable = v.isModuleLevel || v.byRef || scope.passedByRef.count(&v);
+                if (scope.pendingCalls > 0 && reachable)
+                {
+                    return snapshot(v.type, variableValue(v), scope);
+                }
+                return {variableValue(v), false};
+            }
             case ExprKind::Member:
+                if (scope.pendingCalls > 0)
+                {
+                    return snapshot(e.type, member(e).code, scope);
+                }
                 return member(e);
+            case ExprKind::Call:
+                return call(e, scope);
             case ExprKind::Unary:
             {
                 const std::string operand = expr(*e.left, scope).code;
@@ -407,6 +858,23 @@ private:
                 return binary(e, scope);
         }
         return {"0", false};
+    }
+
+    // A Function call, evaluated into a temporary ahead of the statement.
+    Value call(const Expr &e, StatementScope &scope)
+    {
+        // This call's own arguments are evaluated before it runs, so they
+        // need no protection from it; only from calls after it.
+        --scope.pendingCalls;
+        const Procedure &callee = *e.procedure;
+        const std::string code = "p_" + callee.name + "(" + arguments(callee, e.args, scope) + ")";
+        const std::string temp = scope.newTemp();
+        scope.prelude.push_back(declaration(callee.result->type, temp) + " = " + code + ";");
+        if (callee.result->type == Type::String)
+        {
+            scope.releases.push_back(temp);
+        }
+        return {temp, false};
     }
 
     Value member(const Expr &e)
@@ -481,15 +949,15 @@ private:
     }
 
     // Parks an owned value in a temporary so it can be read and released.
-    Value borrowed(const Value &v, StatementScope &scope)
+    static Value borrowed(const Value &v, StatementScope &scope)
     {
         if (!v.owned)
         {
             return v;
         }
-        const std::string name = "t" + std::to_string(scope.temps.size() + 1);
+        const std::string name = scope.newTemp();
         scope.prelude.push_back("tf_string *" + name + " = " + v.code + ";");
-        scope.temps.push_back(name);
+        scope.releases.push_back(name);
         return {name, false};
     }
 
@@ -516,24 +984,52 @@ private:
 
     // -- Names, literals, layout -------------------------------------------
 
-    static std::string variableName(const Variable &v)
+    std::string variableName(const Variable &v) const
     {
-        return (v.isModuleLevel ? "g_" : "v_") + v.name;
+        if (v.isModuleLevel)
+        {
+            return "g_" + v.name;
+        }
+        if (v.isResult)
+        {
+            return "r_" + v.name;
+        }
+        return names_.at(&v);
+    }
+
+    // The variable as a C lvalue/rvalue: ByRef parameters are dereferenced.
+    std::string variableValue(const Variable &v) const
+    {
+        return v.byRef ? "(*" + variableName(v) + ")" : variableName(v);
+    }
+
+    // The variable's address, for passing it ByRef or assigning a string.
+    std::string variableAddress(const Variable &v) const
+    {
+        return v.byRef ? variableName(v) : "&" + variableName(v);
+    }
+
+    static std::string cType(Type t)
+    {
+        switch (t)
+        {
+            case Type::String:
+                return "tf_string *";
+            case Type::Boolean:
+                return "int";
+            default:
+                return "int32_t";
+        }
     }
 
     // "int32_t v_count", "tf_string *v_name", "int v_done" (Boolean).
     static std::string declaration(Type t, const std::string &name)
     {
-        switch (t)
-        {
-            case Type::String:
-                return "tf_string *" + name;
-            case Type::Boolean:
-                return "int " + name;
-            default:
-                return "int32_t " + name;
-        }
+        const std::string type = cType(t);
+        return type + (type.back() == '*' ? "" : " ") + name;
     }
+
+    static const char *zero(Type t) { return t == Type::String ? "NULL" : "0"; }
 
     // A borrowed reference to a literal, created on first use. The empty
     // string is NULL, so "" needs no literal at all.
@@ -595,6 +1091,16 @@ private:
     const EmitOptions &options_;
     std::vector<std::string> literals_;
     std::map<std::string, std::size_t> literalIndex_;
+
+    // State for the procedure being emitted.
+    const Procedure *current_ = nullptr;
+    std::map<const Variable *, std::string> names_; // parameters and locals
+    std::string cleanup_;                           // releases at End Sub
+    bool usesCleanupLabel_ = false;
+    std::vector<const Stmt *> loopStack_; // innermost last
+    std::map<const Stmt *, int> loopIds_; // numbering for exit_<n>, to_<n>
+    std::set<const Stmt *> loopLabels_;   // loops an Exit jumps past
+    int loopCount_ = 0;
 };
 
 } // namespace

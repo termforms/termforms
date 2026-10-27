@@ -43,12 +43,14 @@ enum class ExprKind
     BooleanLiteral,
     Name,   // a variable, control or form
     Member, // object.Property
+    Call,   // Function(args); a bare parameterless Function name becomes one too
     Unary,
     Binary
 };
 
 struct Variable; // defined below
 struct ControlDef;
+struct Procedure;
 
 struct Expr
 {
@@ -62,12 +64,14 @@ struct Expr
     std::string text;
     char suffix = 0; // type suffix written on a Name, or 0
 
-    std::unique_ptr<Expr> left;  // Unary operand, Binary left, Member object
-    std::unique_ptr<Expr> right; // Binary right
+    std::unique_ptr<Expr> left;              // Unary operand, Binary left, Member object
+    std::unique_ptr<Expr> right;             // Binary right
+    std::vector<std::unique_ptr<Expr>> args; // Call arguments (text is the callee)
 
-    // Resolved by the semantic pass (Name only).
-    Variable *variable = nullptr;
-    ControlDef *control = nullptr;
+    // Resolved by the semantic pass.
+    Variable *variable = nullptr;   // Name
+    ControlDef *control = nullptr;  // Name
+    Procedure *procedure = nullptr; // Call
 };
 
 using ExprPtr = std::unique_ptr<Expr>;
@@ -82,14 +86,16 @@ enum class StmtKind
     Assign,
     If,
     Call,
-    End // the End statement: terminate the program
+    For,
+    Do,     // Do/Loop in all its forms, and While ... Wend / End While
+    Exit,   // Exit For / Do / While / Sub / Function
+    Return, // Return [value]: leaves the Sub or Function
+    End     // the End statement: terminate the program
 };
 
 struct Stmt;
 using StmtPtr = std::unique_ptr<Stmt>;
 using Block = std::vector<StmtPtr>;
-
-struct Procedure;
 
 // One "ElseIf cond Then" (or the first "If cond Then") arm.
 struct IfArm
@@ -105,8 +111,10 @@ struct Stmt
 
     // Dim: the variables it declares (owned by the procedure or module).
     std::vector<Variable *> declared;
+    bool insideLoop = false; // set by the semantic pass: re-initialised each pass
 
-    // Assign
+    // Assign: target = value. For: target is the loop variable, value the
+    // start. Return: value is the result, or null.
     ExprPtr target;
     ExprPtr value;
 
@@ -115,9 +123,32 @@ struct Stmt
     Block elseBody;
     bool hasElse = false;
 
-    // Call
+    // Call: callee(args)
     std::string callee;
+    std::vector<ExprPtr> args;
     Procedure *procedure = nullptr; // resolved
+
+    // For: For target = value To limit [Step step] ... Next [nextName]
+    ExprPtr limit;
+    ExprPtr step; // null when there is no Step
+    std::string nextName;
+    Location nextLocation;
+
+    // Do: the loop condition, if any, tested before or after the body.
+    // A While ... Wend loop is a Do with a test at the top and isWhile set.
+    ExprPtr condition;
+    bool testAtTop = false;
+    bool until = false; // Until cond: leave when it is True
+    bool isWhile = false;
+    Location loopLocation; // the Loop / Wend / End While line
+
+    // For and Do bodies.
+    Block body;
+
+    // Exit: which construct it leaves ("For", "Do", "While", "Sub",
+    // "Function"), and for loops the loop statement, resolved.
+    std::string exitWhat;
+    const Stmt *exitLoop = nullptr;
 };
 
 // ---------------------------------------------------------------------------
@@ -130,6 +161,9 @@ struct Variable
     Type type = Type::Error;
     Location location;
     bool isModuleLevel = false;
+    bool isParameter = false;
+    bool byRef = false;    // parameters only
+    bool isResult = false; // the value a Function returns, named after it
 };
 
 // A property setting inside a Begin ... End block.
@@ -162,8 +196,13 @@ struct Procedure
 {
     std::string name;
     Location location;
-    Location endLocation; // the End Sub line
+    Location endLocation; // the End Sub / End Function line
+    bool isFunction = false;
+    std::vector<std::unique_ptr<Variable>> parameters;
+    std::unique_ptr<Variable> result; // Functions only; its type is the return type
     Block body;
+    // Every Dim in the body, at any depth. Storage lasts for the whole call;
+    // block scope is a compile-time rule only.
     std::vector<std::unique_ptr<Variable>> locals;
 
     // Event wiring, resolved by the semantic pass.
