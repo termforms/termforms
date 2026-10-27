@@ -702,3 +702,16 @@ TEST_CASE("MsgBox and InputBox, and VB's named constants")
     CHECK(check(inClick("", body)) == "");
     CHECK(check(inClick("", "    Dim vbOK As Integer\n")) != "");
 }
+
+// -- Forms and events (Phase 4 step 5) ---------------------------------------------
+
+TEST_CASE("form statements, Me, and events with arguments")
+{
+    const std::string form = "Begin Form f\n    Begin TextBox t\n    End\nEnd\n";
+    CHECK(check(form + "Sub Form_Unload(ByRef Cancel As Integer)\n    Cancel = 1\nEnd Sub\n"
+                       "Sub t_KeyPress(ByRef KeyAscii As Integer)\n    If KeyAscii = vbKeyA "
+                       "Then Me.Hide\nEnd Sub\nSub t_KeyDown(ByRef KeyCode As Integer, Shift As "
+                       "Integer)\n    If Shift = vbCtrlMask Then Unload Me\nEnd Sub\n"
+                       "Sub t_GotFocus()\n    Load f\n    f.Show vbModal\nEnd Sub\n") == "");
+    CHECK(check(form + "Sub t_KeyPress(KeyAscii As Integer)\nEnd Sub\n") != "");
+}

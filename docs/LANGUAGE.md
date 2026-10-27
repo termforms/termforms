@@ -68,6 +68,7 @@ End Sub
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
 | Controls | Label, TextBox, CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
+| Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`; events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
 | System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |

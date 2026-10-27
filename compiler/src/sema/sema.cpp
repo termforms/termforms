@@ -89,7 +89,9 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Time", Builtin::Time, true},
                                      {"Timer", Builtin::Timer, false},
                                      {"MsgBox", Builtin::MsgBox, false},
-                                     {"InputBox", Builtin::InputBox, true}};
+                                     {"InputBox", Builtin::InputBox, true},
+                                     {"Load", Builtin::FormLoad, false},
+                                     {"Unload", Builtin::FormUnload, false}};
 
 // VB's named constants (settled with Jim, 28 Oct 2026): built-in Consts.
 // vbNewLine is LF, as TermForms writes lines (VB's is CR LF).
@@ -132,6 +134,72 @@ constexpr NamedConstant kNamedConstants[] = {
     {"vbNewLine", 0, "\n"},
     {"vbTab", 0, "\t"},
     {"vbNullString", 0, ""},
+    // KeyDown's codes and Shift's bits (as VB's).
+    {"vbKeyBack", 8, nullptr},
+    {"vbKeyTab", 9, nullptr},
+    {"vbKeyReturn", 13, nullptr},
+    {"vbKeyEscape", 27, nullptr},
+    {"vbKeySpace", 32, nullptr},
+    {"vbKeyPageUp", 33, nullptr},
+    {"vbKeyPageDown", 34, nullptr},
+    {"vbKeyEnd", 35, nullptr},
+    {"vbKeyHome", 36, nullptr},
+    {"vbKeyLeft", 37, nullptr},
+    {"vbKeyUp", 38, nullptr},
+    {"vbKeyRight", 39, nullptr},
+    {"vbKeyDown", 40, nullptr},
+    {"vbKeyDelete", 46, nullptr},
+    {"vbShiftMask", 1, nullptr},
+    {"vbCtrlMask", 2, nullptr},
+    {"vbAltMask", 4, nullptr},
+    {"vbKey0", 48, nullptr},
+    {"vbKey1", 49, nullptr},
+    {"vbKey2", 50, nullptr},
+    {"vbKey3", 51, nullptr},
+    {"vbKey4", 52, nullptr},
+    {"vbKey5", 53, nullptr},
+    {"vbKey6", 54, nullptr},
+    {"vbKey7", 55, nullptr},
+    {"vbKey8", 56, nullptr},
+    {"vbKey9", 57, nullptr},
+    {"vbKeyA", 65, nullptr},
+    {"vbKeyB", 66, nullptr},
+    {"vbKeyC", 67, nullptr},
+    {"vbKeyD", 68, nullptr},
+    {"vbKeyE", 69, nullptr},
+    {"vbKeyF", 70, nullptr},
+    {"vbKeyG", 71, nullptr},
+    {"vbKeyH", 72, nullptr},
+    {"vbKeyI", 73, nullptr},
+    {"vbKeyJ", 74, nullptr},
+    {"vbKeyK", 75, nullptr},
+    {"vbKeyL", 76, nullptr},
+    {"vbKeyM", 77, nullptr},
+    {"vbKeyN", 78, nullptr},
+    {"vbKeyO", 79, nullptr},
+    {"vbKeyP", 80, nullptr},
+    {"vbKeyQ", 81, nullptr},
+    {"vbKeyR", 82, nullptr},
+    {"vbKeyS", 83, nullptr},
+    {"vbKeyT", 84, nullptr},
+    {"vbKeyU", 85, nullptr},
+    {"vbKeyV", 86, nullptr},
+    {"vbKeyW", 87, nullptr},
+    {"vbKeyX", 88, nullptr},
+    {"vbKeyY", 89, nullptr},
+    {"vbKeyZ", 90, nullptr},
+    {"vbKeyF1", 112, nullptr},
+    {"vbKeyF2", 113, nullptr},
+    {"vbKeyF3", 114, nullptr},
+    {"vbKeyF4", 115, nullptr},
+    {"vbKeyF5", 116, nullptr},
+    {"vbKeyF6", 117, nullptr},
+    {"vbKeyF7", 118, nullptr},
+    {"vbKeyF8", 119, nullptr},
+    {"vbKeyF9", 120, nullptr},
+    {"vbKeyF10", 121, nullptr},
+    {"vbKeyF11", 122, nullptr},
+    {"vbKeyF12", 123, nullptr},
 };
 
 // A named constant as a Const variable, made once; null if name is not one.
@@ -666,6 +734,25 @@ private:
 
     // -- Event wiring ------------------------------------------------------
 
+    // Does the handler take exactly the event's arguments: each an Integer,
+    // ByRef where the event lets it be changed (R), ByVal otherwise (I)?
+    static bool handlerFits(const Procedure &proc, const char *params)
+    {
+        if (proc.parameters.size() != std::strlen(params))
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < proc.parameters.size(); ++i)
+        {
+            const Variable &p = *proc.parameters[i];
+            if (p.type != Type::Integer || p.rank != 0 || p.byRef != (params[i] == 'R'))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     void wireEvent(Procedure &proc)
     {
         const std::size_t underscore = proc.name.rfind('_');
@@ -716,16 +803,21 @@ private:
         }
         if (const catalog::Event *event = catalog::findEvent(*type, eventName))
         {
-            // The runtime calls handlers with no arguments and ignores results.
+            // The runtime calls the handler with the event's arguments (an R
+            // one ByRef, so what the handler sets reaches the runtime).
             if (proc.isFunction)
             {
                 diagnostics_.error(proc.location, "event handler '" + proc.name +
                                                       "' must be a Sub, not a Function");
             }
-            else if (!proc.parameters.empty())
+            else if (!handlerFits(proc, event->params))
             {
-                diagnostics_.error(proc.location,
-                                   "event handler '" + proc.name + "' takes no parameters");
+                diagnostics_.error(
+                    proc.location,
+                    std::string(*event->params == '\0'
+                                    ? "event handler '" + proc.name + "' takes no parameters"
+                                    : "event handler '" + proc.name + "' must be Sub " + proc.name +
+                                          event->signature));
             }
             proc.eventControl = control;
             proc.event = event->kind;
@@ -2470,6 +2562,29 @@ private:
             listMethod(s, *member, args);
             return;
         }
+        // frmX.Show [vbModal], frmX.Hide (and Me.Show, Me.Hide).
+        if (member->left != nullptr &&
+            (member->left->kind == ExprKind::Name &&
+             (member->left->text == "Me" || (controls_.count(member->left->text) != 0 &&
+                                             controls_.at(member->left->text)->isForm))) &&
+            (member->text == "Show" || member->text == "Hide"))
+        {
+            auto call = std::make_unique<Expr>();
+            call->kind = ExprKind::Call;
+            call->builtin = member->text == "Show" ? Builtin::FormShow : Builtin::FormHide;
+            call->text = member->text;
+            call->location = member->location;
+            call->args.push_back(std::move(member->left));
+            for (auto &arg : args)
+            {
+                call->args.push_back(std::move(arg));
+            }
+            s.kind = StmtKind::Library;
+            s.args.clear();
+            s.args.push_back(std::move(call));
+            checkExpr(*s.args[0]);
+            return;
+        }
         if (member->left != nullptr && member->left->control != nullptr)
         {
             diagnostics_.error(member->location, "a " + member->left->control->typeName +
@@ -3385,12 +3500,15 @@ private:
                 continue;
             }
             checkExpr(arg);
-            if (want == 'C')
+            if (want == 'C' || want == 'F')
             {
-                if (arg.type != Type::Error &&
-                    (arg.control == nullptr || arg.control->typeName != "ListBox"))
+                const bool fits =
+                    arg.control != nullptr &&
+                    (want == 'F' ? arg.control->isForm : arg.control->typeName == "ListBox");
+                if (arg.type != Type::Error && !fits)
                 {
-                    diagnostics_.error(arg.location, "'" + name + "' is for a ListBox");
+                    diagnostics_.error(arg.location, "'" + name + "' is for " +
+                                                         (want == 'F' ? "a form" : "a ListBox"));
                     ok = false;
                 }
                 ok = ok && arg.type != Type::Error;
@@ -3849,6 +3967,17 @@ private:
     // module variables, Functions, controls.
     Type resolveName(Expr &e)
     {
+        if (e.text == "Me" && e.control == nullptr)
+        {
+            if (module_->form == nullptr)
+            {
+                diagnostics_.error(e.location, "Me is the form of a form's module, and this "
+                                               "module has no form");
+                return Type::Error;
+            }
+            e.control = module_->form.get();
+            return Type::Control;
+        }
         // Checked before and resolved to something it cannot be looked up as
         // again by its bare name (frmMain.t3 made t3; Utils.count made count):
         // it stays what it is.
@@ -4253,8 +4382,9 @@ private:
 
     // -- Whole program -----------------------------------------------------
 
-    // The program starts at its form, or (with no form) at Sub Main: one
-    // of either in the whole program. Several forms come with Phase 4.
+    // The program starts at a form or at Sub Main (one at most), so it needs
+    // one of them; which, the project's Startup says, else Sub Main if there
+    // is one, else the first form (see codegen).
     void checkEntryPoint()
     {
         const ControlDef *form = nullptr;
@@ -4263,10 +4393,16 @@ private:
         {
             if (const ControlDef *f = modules_[i]->form.get())
             {
-                if (form != nullptr)
+                // Several forms, each in its own module; their names are the
+                // whole program's (frmX.Show from anywhere).
+                for (std::size_t j = 0; j < i; ++j)
                 {
-                    diagnostics_.error(f->location, "a program has one form in this version (" +
-                                                        form->name + " is the other)");
+                    if (modules_[j]->form != nullptr && modules_[j]->form->name == f->name)
+                    {
+                        diagnostics_.error(f->location, "two forms are called " + f->name +
+                                                            " (the other is in " +
+                                                            modules_[j]->name + ")");
+                    }
                 }
                 form = form != nullptr ? form : f;
             }

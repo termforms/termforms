@@ -18,14 +18,15 @@ namespace
 
 // Reserved words, upper case. Some are not used by the parser yet but are
 // reserved now so programs written today keep compiling as the language grows.
-constexpr std::array<std::string_view, 63> kKeywords = {
-    "AND",   "AS",      "BEGIN",  "BOOLEAN", "BYREF", "BYTE",     "BYVAL",   "CALL",     "CASE",
-    "CATCH", "CONST",   "CTYPE",  "DIM",     "DO",    "DOUBLE",   "EACH",    "ELSE",     "ELSEIF",
-    "END",   "ENUM",    "ERASE",  "EXIT",    "FALSE", "FINALLY",  "FOR",     "FUNCTION", "IF",
-    "IN",    "INTEGER", "IS",     "ISNOT",   "LONG",  "LOOP",     "MOD",     "NEW",      "NEXT",
-    "NOT",   "NOTHING", "OF",     "OPTION",  "OR",    "PRESERVE", "PRIVATE", "PUBLIC",   "REDIM",
-    "REF",   "REM",     "RETURN", "SELECT",  "STEP",  "STRING",   "SUB",     "THEN",     "THROW",
-    "TO",    "TRUE",    "TRY",    "TYPE",    "UNTIL", "WEND",     "WHEN",    "WHILE",    "WITH"};
+constexpr std::array<std::string_view, 64> kKeywords = {
+    "AND",    "AS",       "BEGIN",    "BOOLEAN", "BYREF",   "BYTE",  "BYVAL",   "CALL",
+    "CASE",   "CATCH",    "CONST",    "CTYPE",   "DIM",     "DO",    "DOUBLE",  "EACH",
+    "ELSE",   "ELSEIF",   "END",      "ENUM",    "ERASE",   "EXIT",  "FALSE",   "FINALLY",
+    "FOR",    "FUNCTION", "IF",       "IN",      "INTEGER", "IS",    "ISNOT",   "LONG",
+    "LOOP",   "ME",       "MOD",      "NEW",     "NEXT",    "NOT",   "NOTHING", "OF",
+    "OPTION", "OR",       "PRESERVE", "PRIVATE", "PUBLIC",  "REDIM", "REF",     "REM",
+    "RETURN", "SELECT",   "STEP",     "STRING",  "SUB",     "THEN",  "THROW",   "TO",
+    "TRUE",   "TRY",      "TYPE",     "UNTIL",   "WEND",    "WHEN",  "WHILE",   "WITH"};
 
 std::string toUpper(std::string_view text)
 {

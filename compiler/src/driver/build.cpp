@@ -266,7 +266,7 @@ static bool checkProjectKinds(const driver::Project &project, const std::string 
                               const std::vector<ast::Module> &modules, std::ostream &err)
 {
     bool ok = true;
-    const ast::Module *formModule = nullptr;
+    std::vector<std::string> forms;
     bool hasMain = false;
     for (std::size_t i = 0; i < modules.size(); ++i)
     {
@@ -280,7 +280,10 @@ static bool checkProjectKinds(const driver::Project &project, const std::string 
                 << "\n";
             ok = false;
         }
-        formModule = hasForm ? &modules[i] : formModule;
+        if (hasForm)
+        {
+            forms.push_back(modules[i].form->name);
+        }
         for (const auto &proc : modules[i].procedures)
         {
             hasMain = hasMain || proc->name == "Main";
@@ -290,14 +293,13 @@ static bool checkProjectKinds(const driver::Project &project, const std::string 
     {
         const std::string &s = project.startup;
         const bool sayMain = s == "Sub Main" || s == "Main";
-        const bool matches = sayMain ? (hasMain && formModule == nullptr)
-                                     : formModule != nullptr && formModule->form->name == s;
+        const bool matches =
+            sayMain ? hasMain : std::find(forms.begin(), forms.end(), s) != forms.end();
         if (!matches)
         {
             err << projectPath << ":" << project.startupLine << ": error: Startup=" << s
-                << " is not where the program starts: "
-                << (formModule != nullptr ? "it starts at its form, " + formModule->form->name
-                                          : std::string("it starts at Sub Main"))
+                << (sayMain ? ": the program has no Sub Main"
+                            : ": the program has no form called " + s)
                 << "\n";
             ok = false;
         }
@@ -432,6 +434,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     EmitOptions options;
     options.sourcePath = input;
     options.sourcePaths = inputs;
+    options.startup = project.startup;
     options.version = kVersion;
     const std::string cSource =
         emitC(std::vector<const ast::Module *>(program.begin(), program.end()), options);

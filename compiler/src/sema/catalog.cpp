@@ -32,37 +32,44 @@ const std::vector<ControlType> &types()
     };
     const Property caption{"Caption", Type::String, "TF_PROP_CAPTION"};
     const Event click{"Click", EventKind::Click, "TF_EVENT_CLICK"};
+    // What every control that can take the focus raises besides its own.
+    auto focusEvents = [](std::vector<Event> own) {
+        for (const Event &e : {Event{"GotFocus", EventKind::GotFocus, "TF_EVENT_GOTFOCUS"},
+                               Event{"LostFocus", EventKind::LostFocus, "TF_EVENT_LOSTFOCUS"},
+                               Event{"KeyPress", EventKind::KeyPress, "TF_EVENT_KEYPRESS", "R",
+                                     "(ByRef KeyAscii As Integer)"},
+                               Event{"KeyDown", EventKind::KeyDown, "TF_EVENT_KEYDOWN", "RI",
+                                     "(ByRef KeyCode As Integer, Shift As Integer)"}})
+        {
+            own.push_back(e);
+        }
+        return own;
+    };
     static const std::vector<ControlType> kTypes = {
         {"Form",
          "TF_CTL_FORM",
          {caption,
           {"Width", Type::Integer, "TF_PROP_WIDTH"},
           {"Height", Type::Integer, "TF_PROP_HEIGHT"}},
-         {{"Load", EventKind::Load, nullptr}}},
-        {"TextBox",
-         "TF_CTL_TEXTBOX",
-         placed({{"Text", Type::String, "TF_PROP_TEXT"}}),
-         {{"Change", EventKind::Change, "TF_EVENT_CHANGE"}}},
-        {"CommandButton",
-         "TF_CTL_COMMANDBUTTON",
+         {{"Load", EventKind::Load, "TF_EVENT_LOAD"},
+          {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
+          {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}}},
+        {"TextBox", "TF_CTL_TEXTBOX", placed({{"Text", Type::String, "TF_PROP_TEXT"}}),
+         focusEvents({{"Change", EventKind::Change, "TF_EVENT_CHANGE"}})},
+        {"CommandButton", "TF_CTL_COMMANDBUTTON",
          placed({caption,
                  {"Default", Type::Boolean, "TF_PROP_DEFAULT"},
                  {"Cancel", Type::Boolean, "TF_PROP_CANCEL"}}),
-         {click}},
+         focusEvents({click})},
         {"Label", "TF_CTL_LABEL", placed({caption}), {click}},
-        {"CheckBox",
-         "TF_CTL_CHECKBOX",
-         placed({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}),
-         {click}},
-        {"OptionButton",
-         "TF_CTL_OPTIONBUTTON",
-         placed({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}),
-         {click}},
+        {"CheckBox", "TF_CTL_CHECKBOX",
+         placed({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}), focusEvents({click})},
+        {"OptionButton", "TF_CTL_OPTIONBUTTON",
+         placed({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}), focusEvents({click})},
         {"Frame", "TF_CTL_FRAME", placed({caption}), {}},
         // AddItem, RemoveItem, Clear, List(i) and Selected(i) are library
         // routines (ast.hpp's kStringFunctions), checked in sema.
-        {"ListBox",
-         "TF_CTL_LISTBOX",
+        {"ListBox", "TF_CTL_LISTBOX",
          placed({{"Text", Type::String, "TF_PROP_TEXT"},
                  {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
                  {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
@@ -70,7 +77,7 @@ const std::vector<ControlType> &types()
                  {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
                  {"SelCount", Type::Integer, "TF_PROP_SELCOUNT", true},
                  {"TopIndex", Type::Integer, "TF_PROP_TOPINDEX"}}),
-         {click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}}},
+         focusEvents({click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}})},
         // Never shown: it raises its Timer event every Interval ms.
         {"Timer",
          "TF_CTL_TIMER",

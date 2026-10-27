@@ -220,6 +220,6 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 8 "types.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
-    p_Form_Load();
+    tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);
 }

@@ -27,6 +27,9 @@ struct EmitOptions
     std::string sourcePath; // as written in #line directives
     // With several modules: each file's path, indexed as Location::file.
     std::vector<std::string> sourcePaths;
+    // A project's Startup= (a form's name or "Sub Main"); empty: Sub Main if
+    // there is one, else the first form.
+    std::string startup;
     std::string version; // compiler version, for the header comment
 };
 

@@ -861,7 +861,7 @@ private:
             }
             return parseCallStatement();
         }
-        if (t.isSymbol(".")) // .Name = ... or .Add k, v inside a With
+        if (t.isSymbol(".") || t.isKeyword("ME")) // .Name = ... in a With; Me.Caption = ...
         {
             return parseAssignOrMethod();
         }
@@ -2154,6 +2154,13 @@ private:
             e->kind = ExprKind::Nothing;
             next();
             return e;
+        }
+        if (t.isKeyword("ME")) // the form of this form's module
+        {
+            e->kind = ExprKind::Name;
+            e->text = "Me";
+            next();
+            return parsePostfix(std::move(e));
         }
         if (t.isKeyword("CTYPE"))
         {

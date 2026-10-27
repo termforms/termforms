@@ -146,6 +146,11 @@ enum class Builtin
     // Dialogs (step 4.4).
     MsgBox,
     InputBox,
+    // Forms (step 4.5): args[0] is the form.
+    FormShow,
+    FormHide,
+    FormLoad,
+    FormUnload,
     Count, // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
@@ -160,7 +165,8 @@ enum class Builtin
 // The library functions' signatures (strings, files), for checking and for
 // C; statements such as Open are made into calls of these too. Each parameter
 // S (a String), I (an Integer), L (a Long), Y (a Boolean), A (a whole String
-// array), B (a whole Byte array with one dimension) or C (a ListBox); the first
+// array), B (a whole Byte array with one dimension), C (a ListBox) or F (a
+// form); the first
 // `required` must be given and the rest default to `defaults` (S: text, I:
 // a number), except that InStr's optional parameter comes first
 // (InStr([start,] s, find)). fails: a bad argument can raise an error.
@@ -237,6 +243,10 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},
     {Builtin::Timer, "", 0, {}, Type::Double, "tf_timer", false},
     {Builtin::MsgBox, "SIS", 1, {nullptr, "0", ""}, Type::Integer, "tf_msgbox", false},
+    {Builtin::FormShow, "FI", 1, {nullptr, "0"}, Type::Void, "tf_form_show", true},
+    {Builtin::FormHide, "F", 1, {}, Type::Void, "tf_form_hide", false},
+    {Builtin::FormLoad, "F", 1, {}, Type::Void, "tf_form_load", true},
+    {Builtin::FormUnload, "F", 1, {}, Type::Void, "tf_form_unload", true},
     {Builtin::InputBox, "SSS", 1, {nullptr, "", ""}, Type::String, "tf_inputbox", false},
 };
 
@@ -544,7 +554,13 @@ enum class EventKind
     Change,
     DblClick,
     Timer,
-    Load
+    Load,
+    Unload,
+    Activate,
+    GotFocus,
+    LostFocus,
+    KeyPress,
+    KeyDown
 };
 
 struct Procedure

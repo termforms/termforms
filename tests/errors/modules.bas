@@ -1,7 +1,7 @@
 ' Errors test: several modules (see modules.with): a name Public in two
 ' other modules used unqualified, a Private name used from outside, a
-' module with no such name, a variable named like a module, and a second
-' form; the messages name each file.
+' module with no such name, and a variable named like a module; the
+' messages name each file. (A second form is allowed now: two.bas has one.)
 Begin Form f
     Begin CommandButton b
     End

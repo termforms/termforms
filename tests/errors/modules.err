@@ -3,4 +3,3 @@ modules.bas:12:9: error: 'Shared' is Public in the modules one and two; write on
 modules.bas:13:13: error: 'Secret' is Private to the module one
 modules.bas:14:13: error: the module one has no 'Missing'
 modules.bas:15:13: error: 'count' is Private to the module two
-modules/two.bas:2:1: error: a program has one form in this version (f is the other)

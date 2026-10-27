@@ -41,13 +41,16 @@ struct tf_control
     int enabled;
     int visible;
     tf_handler handlers[TF_EVENT_COUNT];
+    tf_ref_handler ref_handlers[TF_EVENT_COUNT]; /* Unload, KeyPress */
+    tf_key_handler key_handler;                  /* KeyDown */
 
     /* Form only: children in tab order, and the focused child's index. */
     tf_control **children;
     int child_count;
     int child_capacity;
     int focus;
-    int closed;    /* its loop ends: closed by the user, a button, or Unload */
+    int loaded;    /* its Load event has run (and no Unload since) */
+    int is_dialog; /* a MsgBox or InputBox */
     int escapable; /* a dialog: may Ctrl+F4 close it (it has a Cancel answer)? */
 
     /* TextBox only: cursor as a byte offset into text, and the index of the
@@ -148,12 +151,41 @@ void tf_control_on(tf_control *control, tf_event event, tf_handler handler)
     control->handlers[event] = handler;
 }
 
+void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handler)
+{
+    control->ref_handlers[event] = handler;
+}
+
+void tf_control_on_key(tf_control *control, tf_key_handler handler)
+{
+    control->key_handler = handler;
+}
+
 static void fire(tf_control *control, tf_event event)
 {
     if (control->handlers[event] != NULL)
     {
         control->handlers[event]();
         /* An error a Try's Finally let through, with no Catch left. */
+        tf_check_uncaught();
+    }
+}
+
+/* Events with arguments (Unload, KeyPress; KeyDown). */
+static void fire_ref(tf_control *control, tf_event event, int32_t *value)
+{
+    if (control->ref_handlers[event] != NULL)
+    {
+        control->ref_handlers[event](value);
+        tf_check_uncaught();
+    }
+}
+
+static void fire_key(tf_control *control, int32_t *code, int32_t shift)
+{
+    if (control->key_handler != NULL)
+    {
+        control->key_handler(code, shift);
         tf_check_uncaught();
     }
 }
@@ -1104,6 +1136,25 @@ static int tab_stop(const tf_control *form, int index)
     return 1;
 }
 
+/* Moves the focus to child index, firing LostFocus and GotFocus. */
+static void set_focus(tf_control *form, int index)
+{
+    if (index == form->focus)
+    {
+        return;
+    }
+    const int was = form->focus;
+    form->focus = index;
+    if (was >= 0 && was < form->child_count)
+    {
+        fire(form->children[was], TF_EVENT_LOSTFOCUS);
+    }
+    if (index >= 0 && form->focus == index)
+    {
+        fire(form->children[index], TF_EVENT_GOTFOCUS);
+    }
+}
+
 static void move_focus(tf_control *form, int step)
 {
     if (form->child_count == 0)
@@ -1116,7 +1167,7 @@ static void move_focus(tf_control *form, int step)
         index = (index + step + form->child_count) % form->child_count;
         if (tab_stop(form, index))
         {
-            form->focus = index;
+            set_focus(form, index);
             return;
         }
     }
@@ -1134,7 +1185,7 @@ static void move_in_group(tf_control *form, int step)
         tf_control *c = form->children[index];
         if (c->type == TF_CTL_OPTIONBUTTON && c->parent == from->parent && focusable(c))
         {
-            form->focus = index;
+            set_focus(form, index);
             select_option(c);
             return;
         }
@@ -1172,15 +1223,15 @@ static int access(tf_control *form, uint32_t letter)
         switch (c->type)
         {
             case TF_CTL_COMMANDBUTTON:
-                form->focus = i;
+                set_focus(form, i);
                 fire(c, TF_EVENT_CLICK);
                 return 1;
             case TF_CTL_CHECKBOX:
-                form->focus = i;
+                set_focus(form, i);
                 toggle(c);
                 return 1;
             case TF_CTL_OPTIONBUTTON:
-                form->focus = i;
+                set_focus(form, i);
                 select_option(c);
                 return 1;
             case TF_CTL_LABEL:
@@ -1189,7 +1240,7 @@ static int access(tf_control *form, uint32_t letter)
                 {
                     if (focusable(form->children[j]))
                     {
-                        form->focus = j;
+                        set_focus(form, j);
                         return 1;
                     }
                 }
@@ -1516,6 +1567,88 @@ static void wait_scripted(int64_t ms)
     virtual_now = until;
 }
 
+/* VB's KeyCode and Shift for a key (vbKeyA ..., vbShiftMask 1, vbCtrlMask
+   2, vbAltMask 4); 0 for one VB has no code for. */
+static int32_t key_code(tf_key key, int32_t *shift)
+{
+    *shift = ((key.mods & TF_MOD_SHIFT) ? 1 : 0) | ((key.mods & TF_MOD_CTRL) ? 2 : 0) |
+             ((key.mods & TF_MOD_ALT) ? 4 : 0);
+    switch (key.kind)
+    {
+        case TF_KEY_CHAR:
+        case TF_KEY_CTRL:
+        case TF_KEY_ALT:
+        {
+            *shift |= key.kind == TF_KEY_CTRL ? 2 : key.kind == TF_KEY_ALT ? 4 : 0;
+            const uint32_t c = key.ch;
+            if (c >= 'a' && c <= 'z')
+            {
+                return (int32_t)(c - 'a' + 'A');
+            }
+            if (c >= 'A' && c <= 'Z')
+            {
+                *shift |= 1;
+                return (int32_t)c;
+            }
+            return c < 0x80 ? (int32_t)c : 0;
+        }
+        case TF_KEY_ENTER:
+            return 13;
+        case TF_KEY_TAB:
+            return 9;
+        case TF_KEY_BACKTAB:
+            *shift |= 1;
+            return 9;
+        case TF_KEY_BACKSPACE:
+            return 8;
+        case TF_KEY_ESC:
+            return 27;
+        case TF_KEY_DELETE:
+            return 46;
+        case TF_KEY_LEFT:
+            return 37;
+        case TF_KEY_UP:
+            return 38;
+        case TF_KEY_RIGHT:
+            return 39;
+        case TF_KEY_DOWN:
+            return 40;
+        case TF_KEY_HOME:
+            return 36;
+        case TF_KEY_END:
+            return 35;
+        case TF_KEY_PGUP:
+            return 33;
+        case TF_KEY_PGDN:
+            return 34;
+        case TF_KEY_F:
+            return 111 + (int32_t)key.ch; /* vbKeyF1 is 112 */
+        default:
+            return 0;
+    }
+}
+
+/* The KeyPress character of a key (Enter 13, Backspace 8, Esc 27, Ctrl+A 1,
+   a character its code point), or -1 for a key that has none. */
+static int32_t key_ascii(tf_key key)
+{
+    switch (key.kind)
+    {
+        case TF_KEY_CHAR:
+            return (int32_t)key.ch;
+        case TF_KEY_ENTER:
+            return 13;
+        case TF_KEY_BACKSPACE:
+            return 8;
+        case TF_KEY_ESC:
+            return 27;
+        case TF_KEY_CTRL:
+            return key.ch >= 'a' && key.ch <= 'z' ? (int32_t)(key.ch - 'a' + 1) : -1;
+        default:
+            return -1;
+    }
+}
+
 /* One key for the form. Returns 1 if the form is to close. */
 static int form_key(tf_control *form, tf_key key)
 {
@@ -1526,6 +1659,36 @@ static int form_key(tf_control *form, tf_key key)
     if (form->focus < 0 || !focusable(form->children[form->focus]))
     {
         move_focus(form, 1); /* the focused control was hidden or disabled */
+    }
+    /* KeyDown, then KeyPress, to the focused control first: either may
+       discard the key (set it to 0), and KeyPress may change a character. */
+    if (form->focus >= 0)
+    {
+        tf_control *c = form->children[form->focus];
+        int32_t shift = 0;
+        int32_t code = key_code(key, &shift);
+        if (code != 0 && c->key_handler != NULL)
+        {
+            fire_key(c, &code, shift);
+            if (code == 0)
+            {
+                return 0;
+            }
+        }
+        int32_t ascii = key_ascii(key);
+        if (ascii >= 0 && c->ref_handlers[TF_EVENT_KEYPRESS] != NULL)
+        {
+            const int32_t was = ascii;
+            fire_ref(c, TF_EVENT_KEYPRESS, &ascii);
+            if (ascii == 0)
+            {
+                return 0;
+            }
+            if (key.kind == TF_KEY_CHAR && ascii != was && ascii >= 32)
+            {
+                key.ch = (uint32_t)ascii;
+            }
+        }
     }
     if (key.kind == TF_KEY_TAB || key.kind == TF_KEY_BACKTAB)
     {
@@ -1555,8 +1718,6 @@ static int form_key(tf_control *form, tf_key key)
 /* ------------------------------------------------------------------------ */
 /* Showing the form                                                         */
 /* ------------------------------------------------------------------------ */
-
-static tf_control *running_form = NULL; /* the form tf_form_run is showing */
 
 static void parse_size(const char *text, int *cols, int *rows)
 {
@@ -1594,8 +1755,9 @@ static void ui_resume(void)
 }
 
 static int ui_is_open = 0;
-static int ending = 0; /* the key script ran out: every loop ends */
-static int dumped = 0; /* the headless screen was dumped when the script ended */
+static tf_control *last_closed = NULL; /* the last form shown, once none is */
+static int ending = 0;                 /* the key script ran out: every loop ends */
+static int dumped = 0;                 /* the headless screen was dumped when the script ended */
 
 /* Registered as the shutdown hook: runs on normal close, End, or an error. */
 static void ui_shutdown(void)
@@ -1606,6 +1768,10 @@ static void ui_shutdown(void)
            and the dump should show what the program last set. */
         if (!dumped)
         {
+            if (depth == 0 && last_closed != NULL)
+            {
+                stack[depth++] = last_closed; /* drawn as the user last saw it */
+            }
             draw_stack();
             tf_screen_dump(stdout);
         }
@@ -1657,18 +1823,41 @@ static void ui_open(void)
     tf_set_shutdown_hook(ui_shutdown);
 }
 
-/* Puts a form on top of the stack, focus on its first control and its
-   Timers counting from now. */
+static int in_stack(const tf_control *form)
+{
+    for (int i = 0; i < depth; ++i)
+    {
+        if (stack[i] == form)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void remove_from_stack(const tf_control *form)
+{
+    for (int i = 0; i < depth; ++i)
+    {
+        if (stack[i] == form)
+        {
+            memmove(&stack[i], &stack[i + 1], (size_t)(depth - i - 1) * sizeof stack[0]);
+            --depth;
+            return;
+        }
+    }
+}
+
+/* Puts a form on top of the stack (moving it there if already shown), its
+   Timers counting from now. (The focus is placed when it is activated.) */
 static void push(tf_control *form)
 {
+    remove_from_stack(form);
     if (depth == TF_STACK_MAX)
     {
         tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "too many forms shown at once");
     }
     stack[depth++] = form;
-    form->closed = 0;
-    form->focus = -1;
-    move_focus(form, 1);
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
@@ -1676,20 +1865,28 @@ static void push(tf_control *form)
     }
 }
 
-static void pop(void)
-{
-    if (depth > 0)
-    {
-        --depth;
-    }
-}
+static tf_control *active = NULL; /* the form last at the top (for Activate) */
 
-/* The event loop: keys go to the top form until it closes (or the key
-   script runs out, which ends every loop). Timers of all shown forms run. */
-static void run_until_closed(tf_control *top)
+/* The event loop: keys go to the top form, while any form is shown, or
+   until `until` is no longer shown (a modal form or a dialog). The key
+   script running out ends every loop. Timers of all shown forms run. */
+static void run_loop(const tf_control *until)
 {
-    while (!top->closed && !ending)
+    while (!ending && depth > 0 && (until == NULL || in_stack(until)))
     {
+        tf_control *top = stack[depth - 1];
+        if (top != active)
+        {
+            /* Come to the top (shown, or uncovered): Activate, then the focus
+               on its first control if it has none (GotFocus), as VB. */
+            active = top;
+            fire(top, TF_EVENT_ACTIVATE);
+            if (in_stack(top) && top->focus < 0)
+            {
+                move_focus(top, 1);
+            }
+            continue; /* the handlers may have changed the stack */
+        }
         draw_stack();
         tf_screen_flush();
 
@@ -1726,22 +1923,81 @@ static void run_until_closed(tf_control *top)
             }
             continue;
         }
-        if (form_key(top, key) && top->escapable)
+        if (form_key(top, key))
         {
-            top->closed = 1; /* Ctrl+F4 (a dialog only if it can be cancelled) */
+            /* Ctrl+F4: a form is unloaded (its Unload may refuse); a dialog
+               is answered as by Esc, if it can be. */
+            if (!top->is_dialog)
+            {
+                tf_form_unload(top);
+            }
+            else if (top->escapable)
+            {
+                tf_form_hide(top);
+            }
         }
     }
 }
 
-int tf_form_run(tf_control *form)
+void tf_form_load(tf_control *form)
 {
-    running_form = form;
+    if (!form->loaded)
+    {
+        form->loaded = 1;
+        fire(form, TF_EVENT_LOAD); /* before the form is first shown, as VB */
+    }
+}
+
+void tf_form_show(tf_control *form, int32_t modal)
+{
+    tf_form_load(form);
     ui_open();
-    form->escapable = 1;
     push(form);
-    run_until_closed(form);
+    if (modal)
+    {
+        run_loop(form);
+    }
+}
+
+void tf_form_hide(tf_control *form)
+{
+    if (depth == 1 && stack[0] == form && !form->is_dialog)
+    {
+        last_closed = form; /* the screen the user last saw, for a headless dump */
+    }
+    remove_from_stack(form);
+    if (active == form)
+    {
+        active = NULL;
+    }
+}
+
+void tf_form_unload(tf_control *form)
+{
+    if (form->loaded)
+    {
+        int32_t cancel = 0;
+        fire_ref(form, TF_EVENT_UNLOAD, &cancel);
+        if (cancel != 0)
+        {
+            return; /* the program said no */
+        }
+    }
+    form->loaded = 0;
+    tf_form_hide(form);
+}
+
+int tf_forms_run(void)
+{
+    run_loop(NULL);
     tf_run_shutdown_hook();
     return 0;
+}
+
+int tf_form_run(tf_control *form)
+{
+    tf_form_show(form, 0);
+    return tf_forms_run();
 }
 
 void tf_form_free(tf_control *form)
@@ -1776,7 +2032,7 @@ static int32_t answer = 0;
     static void name(void)                                                                         \
     {                                                                                              \
         answer = (value);                                                                          \
-        dialog->closed = 1;                                                                        \
+        tf_form_hide(dialog);                                                                      \
     }
 ANSWER(on_ok, 1)
 ANSWER(on_cancel, 2)
@@ -1968,6 +2224,8 @@ static tf_control *build_dialog(const char *title, const char *icon, const char 
         x += utf8_cells(plain) + 6;
     }
     form->escapable = cancel_button >= 0;
+    form->is_dialog = 1;
+    form->loaded = 1;
     return form;
 }
 
@@ -1980,7 +2238,6 @@ static int32_t ask(tf_control *form, int32_t escape_answer, int focus_default)
     dialog = form;
     answer = escape_answer;
     ui_open();
-    push(form);
     if (focus_default)
     {
         for (int i = 0; i < form->child_count; ++i)
@@ -1991,8 +2248,9 @@ static int32_t ask(tf_control *form, int32_t escape_answer, int focus_default)
             }
         }
     }
-    run_until_closed(form);
-    pop();
+    push(form);
+    run_loop(form);
+    tf_form_hide(form); /* the key script may have ended with it shown */
     const int32_t result = answer;
     dialog = saved_dialog;
     answer = saved_answer;

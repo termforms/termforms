@@ -1,0 +1,5 @@
+formerrs.bas:10:1: error: event handler 'Form_Unload' must be Sub Form_Unload(ByRef Cancel As Integer)
+formerrs.bas:14:1: error: event handler 'txt_KeyDown' must be Sub txt_KeyDown(ByRef KeyCode As Integer, Shift As Integer)
+formerrs.bas:18:9: error: a TextBox has no 'Show'
+formerrs/helper.bas:3:5: error: Me is the form of a form's module, and this module has no form
+formerrs/other.bas:2:1: error: two forms are called frmMain (the other is in formerrs)

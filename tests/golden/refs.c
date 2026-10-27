@@ -315,7 +315,6 @@ int main(void)
     tf_set_int(c_t5, TF_PROP_TOP, 4);
 #line 27 "refs.bas"
     tf_set_int(c_t5, TF_PROP_WIDTH, 50);
-    p_Form_Load();
-    tf_check_uncaught();
+    tf_control_on(c_f, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_f);
 }

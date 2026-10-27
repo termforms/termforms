@@ -994,6 +994,51 @@ name = InputBox("Your name:", "Hello", "Ann")  ' "" if cancelled
 - When a key script ends with a dialog shown, the screen is dumped as it
   is then, the dialog included.
 
+### Several forms and the events (Proposed)
+
+```vb
+Sub cmdOptions_Click()
+    frmOptions.Show vbModal          ' waits until frmOptions is hidden or unloaded
+End Sub
+Sub Form_Unload(ByRef Cancel As Integer)
+    If MsgBox("Quit?", vbYesNo) = vbNo Then Cancel = 1
+End Sub
+Sub txtCode_KeyPress(ByRef KeyAscii As Integer)
+    If KeyAscii < Asc("0") Or KeyAscii > Asc("9") Then KeyAscii = 0  ' digits only
+End Sub
+```
+
+- Each form is in its own module; form names are the whole program's
+  (two alike is an error), and other modules reach a form's controls
+  through it (`frmMain.txtName`). `Me` is the form of the module it is
+  written in.
+- `frm.Show` puts the form on top (loading it first); `frm.Show vbModal`
+  also waits until it is hidden or unloaded. `frm.Hide` takes it off.
+  `Load frm` runs its Form_Load without showing it; `Unload frm` runs
+  Form_Unload (whose Cancel may refuse) and hides it, so the next Show
+  loads it again. Its controls keep their values (VB would make them
+  afresh).
+- **Form_Load runs when the form is first shown or loaded**, not when the
+  program starts.
+- **The program starts** at the project's Startup, else at Sub Main if
+  there is one, else at the first form. After Sub Main, the forms it
+  showed run until the last is closed; the program ends when no form is
+  shown.
+- **A handler that may change its argument declares it ByRef**, since
+  parameters are ByVal by default (a ByVal one would silently lose the
+  change): `Form_Unload(ByRef Cancel As Integer)`, `KeyPress(ByRef
+  KeyAscii As Integer)`, `KeyDown(ByRef KeyCode As Integer, Shift As
+  Integer)`. Any other signature is a compile error that shows the right
+  one.
+- KeyDown comes first, with VB's codes (vbKeyA, vbKeyReturn, vbKeyF2, ...)
+  and Shift's bits (vbShiftMask, vbCtrlMask, vbAltMask); then KeyPress for
+  a character, Enter (13), Backspace (8), Esc (27) or Ctrl+letter (1-26).
+  Setting KeyCode or KeyAscii to 0 throws the key away; KeyPress may
+  change a character to another.
+- A form coming to the top (shown, or uncovered) gets Activate, then its
+  first control the focus (GotFocus), as VB. Moving the focus raises
+  LostFocus on one control and GotFocus on the next.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

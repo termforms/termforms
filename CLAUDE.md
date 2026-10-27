@@ -199,9 +199,17 @@ authoritative for design rationale.
   VB's named constants (`kNamedConstants` in sema, resolved after
   variables, names reserved). The headless dump happens when the script
   ends, so a test can show a dialog.
-- **Next:** Phase 4 step 5: several forms (Show [vbModal], Hide, Unload;
-  re-add run_modal) and the remaining events (GotFocus, LostFocus,
-  KeyPress, KeyDown, Form_Unload, Form_Activate).
+  Step 4.5 done: several forms (one per module; tf_form_show/hide/load/
+  unload; run_loop runs while forms are shown, or until a modal one
+  leaves the stack; Activate then GotFocus on coming to the top), Me,
+  startup (Startup=, else Sub Main, else the first form), Form_Load as an
+  event the runtime fires on first show, events with arguments
+  (catalog Event::params; handlers that may change their argument must
+  take it ByRef; tf_control_on_ref / _on_key, no casts), KeyPress and
+  KeyDown with VB's codes (vbKey* constants), control C names given the
+  form when two forms share one.
+- **Next:** Phase 4 step 6: menus (F10, Alt+letter, Ctrl alternatives for
+  function keys).
 
 ## Settled design decisions (do not relitigate without Jim)
 

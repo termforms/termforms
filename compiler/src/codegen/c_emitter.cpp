@@ -349,13 +349,17 @@ private:
             << "#include \"termforms/tf_runtime.h\"\n\n";
         emitTypes(out);
 
-        if (const ControlDef *form = theForm())
+        if (theForm() != nullptr)
         {
-            out << "/* Form and controls */\n";
-            out << "static tf_control *c_" << form->name << ";\n";
-            for (const ControlDef *child : controlsOf(*form))
+            out << (forms().size() > 1 ? "/* Forms and controls */\n"
+                                       : "/* Form and controls */\n");
+            for (const ControlDef *form : forms())
             {
-                out << "static tf_control *c_" << child->name << ";\n";
+                out << "static tf_control *" << cName(*form) << ";\n";
+                for (const ControlDef *child : controlsOf(*form))
+                {
+                    out << "static tf_control *" << cName(*child) << ";\n";
+                }
             }
             out << '\n';
         }
@@ -613,65 +617,107 @@ private:
             }
         }
 
-        const ControlDef *form = theForm();
-        if (form == nullptr)
+        // Every form and its controls (each after its Frame: tab order is
+        // this order, as written), then their events.
+        for (const ControlDef *form : forms())
         {
-            out << "    " << pName(*mainProcedure()) << "();\n"
-                << (checks_ ? "    tf_check_uncaught();\n" : "") << "    return 0;\n}\n";
-            return;
-        }
-
-        line(out, form->location);
-        out << "    c_" << form->name << " = tf_form_new(" << cString(form->name) << ");\n";
-        emitSettings(out, *form);
-
-        // Each control after its Frame (tab order is this order, as written).
-        for (const ControlDef *child : controlsOf(*form))
-        {
-            const catalog::ControlType *type = catalog::findType(child->typeName);
-            line(out, child->location);
-            out << "    c_" << child->name << " = tf_control_new(c_" << form->name << ", "
-                << type->cName << ", " << cString(child->name) << ");";
-            if (const ControlDef *frame = frameOf(*form, *child))
+            line(out, form->location);
+            out << "    " << cName(*form) << " = tf_form_new(" << cString(form->name) << ");\n";
+            emitSettings(out, *form);
+            for (const ControlDef *child : controlsOf(*form))
             {
-                out << " tf_control_container(c_" << child->name << ", c_" << frame->name << ");";
-            }
-            out << '\n';
-            emitSettings(out, *child);
-        }
-
-        // Event wiring, in the order the Subs appear in the source.
-        const Procedure *load = nullptr;
-        for (const auto &proc : formModule()->procedures)
-        {
-            if (proc->eventControl == nullptr)
-            {
-                continue;
-            }
-            if (proc->event == EventKind::Load)
-            {
-                load = proc.get();
-                continue;
-            }
-            const catalog::ControlType *type = catalog::findType(proc->eventControl->typeName);
-            for (const catalog::Event &event : type->events)
-            {
-                if (event.kind == proc->event && event.cName != nullptr)
+                const catalog::ControlType *type = catalog::findType(child->typeName);
+                line(out, child->location);
+                out << "    " << cName(*child) << " = tf_control_new(" << cName(*form) << ", "
+                    << type->cName << ", " << cString(child->name) << ");";
+                if (const ControlDef *frame = frameOf(*form, *child))
                 {
-                    out << "    tf_control_on(c_" << proc->eventControl->name << ", " << event.cName
-                        << ", " << pName(*proc) << ");\n";
+                    out << " tf_control_container(" << cName(*child) << ", " << cName(*frame)
+                        << ");";
+                }
+                out << '\n';
+                emitSettings(out, *child);
+            }
+        }
+        // Event wiring, in the order the Subs appear in the source.
+        for (const Module *m : modules_)
+        {
+            for (const auto &proc : m->procedures)
+            {
+                if (proc->eventControl == nullptr)
+                {
+                    continue;
+                }
+                const catalog::ControlType *type = catalog::findType(proc->eventControl->typeName);
+                for (const catalog::Event &event : type->events)
+                {
+                    if (event.kind != proc->event)
+                    {
+                        continue;
+                    }
+                    // Each kind of handler has its own registration, so no
+                    // function pointer is cast.
+                    const std::string params = event.params;
+                    if (params == "RI")
+                    {
+                        out << "    tf_control_on_key(" << cName(*proc->eventControl) << ", "
+                            << pName(*proc) << ");\n";
+                    }
+                    else
+                    {
+                        out << "    tf_control_on" << (params == "R" ? "_ref(" : "(")
+                            << cName(*proc->eventControl) << ", " << event.cName << ", "
+                            << pName(*proc) << ");\n";
+                    }
                 }
             }
         }
-        if (load != nullptr)
+
+        // The start: the project's Startup, else Sub Main if there is one, else
+        // the first form. After Sub Main, the forms it showed run until closed.
+        const ControlDef *start = startForm();
+        if (start == nullptr)
         {
-            out << "    " << pName(*load) << "();\n";
-            if (checks_)
+            out << "    " << pName(*mainProcedure()) << "();\n"
+                << (checks_ ? "    tf_check_uncaught();\n" : "")
+                << (theForm() != nullptr ? "    return tf_forms_run();\n}\n"
+                                         : "    return 0;\n}\n");
+            return;
+        }
+        out << "    return tf_form_run(" << cName(*start) << ");\n}\n";
+    }
+
+    // Every form, in module order.
+    std::vector<const ControlDef *> forms() const
+    {
+        std::vector<const ControlDef *> all;
+        for (const Module *m : modules_)
+        {
+            if (m->form != nullptr)
             {
-                out << "    tf_check_uncaught();\n";
+                all.push_back(m->form.get());
             }
         }
-        out << "    return tf_form_run(c_" << form->name << ");\n}\n";
+        return all;
+    }
+
+    // The form the program starts with, or null when it starts at Sub Main.
+    const ControlDef *startForm() const
+    {
+        const std::string &startup = options_.startup;
+        if (startup == "Sub Main" || startup == "Main" ||
+            (startup.empty() && mainProcedure() != nullptr))
+        {
+            return nullptr;
+        }
+        for (const ControlDef *form : forms())
+        {
+            if (startup.empty() || form->name == startup)
+            {
+                return form;
+            }
+        }
+        return nullptr;
     }
 
     // A form's controls, those in Frames after their Frame, as written.
@@ -715,12 +761,12 @@ private:
             line(out, s.location);
             if (prop->type == Type::String)
             {
-                out << "    tf_set_str(c_" << control.name << ", " << prop->cName << ", "
+                out << "    tf_set_str(" << cName(control) << ", " << prop->cName << ", "
                     << literal(s.value->text) << ");\n";
             }
             else
             {
-                out << "    tf_set_int(c_" << control.name << ", " << prop->cName << ", "
+                out << "    tf_set_int(" << cName(control) << ", " << prop->cName << ", "
                     << s.value->integer << ");\n";
             }
         }
@@ -1651,9 +1697,9 @@ private:
             {
                 // The setter borrows, so an owned value goes through a temporary.
                 const Value v = borrowed(settle(*s.value, expr(*s.value, scope), scope), scope);
-                return "tf_set_str(c_" + control->name + ", " + prop->cName + ", " + v.code + ");";
+                return "tf_set_str(" + cName(*control) + ", " + prop->cName + ", " + v.code + ");";
             }
-            return "tf_set_int(c_" + control->name + ", " + prop->cName + ", " +
+            return "tf_set_int(" + cName(*control) + ", " + prop->cName + ", " +
                    settle(*s.value, expr(*s.value, scope), scope).code + ");";
         }
 
@@ -2285,7 +2331,7 @@ private:
         const catalog::ControlType *type = catalog::findType(control->typeName);
         const catalog::Property *prop = catalog::findProperty(*type, e.text);
         const char *getter = prop->type == Type::String ? "tf_get_str" : "tf_get_int";
-        return {std::string(getter) + "(c_" + control->name + ", " + prop->cName + ")", false};
+        return {std::string(getter) + "(" + cName(*control) + ", " + prop->cName + ")", false};
     }
 
     Value binary(const Expr &e, StatementScope &scope)
@@ -2385,7 +2431,7 @@ private:
                 const Expr &arg = *e.args[i];
                 const char kind = f->params[i];
                 args += (i == 0 ? "" : ", ") +
-                        (kind == 'C'                  ? "c_" + arg.control->name
+                        (kind == 'C' || kind == 'F'   ? cName(*arg.control)
                          : kind == 'A' || kind == 'B' ? wholeArrayRef(arg, scope)
                          : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
                                        : settle(arg, expr(arg, scope), scope).code);
@@ -2968,6 +3014,24 @@ private:
                 ++types[def->name];
             }
         }
+        std::map<std::string, int> controls;
+        for (const ControlDef *form : forms())
+        {
+            ++controls[form->name];
+            for (const ControlDef *child : controlsOf(*form))
+            {
+                ++controls[child->name];
+            }
+        }
+        for (const ControlDef *form : forms())
+        {
+            cNames_[form] = "c_" + form->name;
+            for (const ControlDef *child : controlsOf(*form))
+            {
+                cNames_[child] = controls[child->name] > 1 ? "c_" + form->name + "_" + child->name
+                                                           : "c_" + child->name;
+            }
+        }
         for (const Module *m : modules_)
         {
             auto c = [&](const std::string &name, std::map<std::string, int> &uses) {
@@ -2989,6 +3053,8 @@ private:
     }
 
     std::string gName(const Variable &v) const { return cNames_.at(&v); }
+    // c_<name>, or c_<form>_<name> when two forms have a control of that name.
+    std::string cName(const ControlDef &c) const { return cNames_.at(&c); }
     std::string pName(const Procedure &p) const { return cNames_.at(&p); }
     std::string tName(const TypeDef &d) const { return cNames_.at(&d); }
 

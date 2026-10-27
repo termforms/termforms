@@ -641,10 +641,21 @@ typedef enum tf_event
     TF_EVENT_CHANGE,
     TF_EVENT_DBLCLICK,
     TF_EVENT_TIMER,
+    TF_EVENT_LOAD,     /* a form, when first shown (or Load) */
+    TF_EVENT_UNLOAD,   /* a form; a tf_ref_handler: set *cancel to refuse */
+    TF_EVENT_ACTIVATE, /* a form, when it comes to the top */
+    TF_EVENT_GOTFOCUS,
+    TF_EVENT_LOSTFOCUS,
+    TF_EVENT_KEYPRESS, /* a tf_ref_handler of KeyAscii: 0 discards the key */
+    TF_EVENT_KEYDOWN,  /* a tf_key_handler: KeyCode 0 discards the key */
     TF_EVENT_COUNT
 } tf_event;
 
 typedef void (*tf_handler)(void);
+/* Handlers of events with arguments: Unload's and KeyPress's take the value
+   the handler may change; KeyDown's, KeyCode (which it may change) and Shift. */
+typedef void (*tf_ref_handler)(int32_t *value);
+typedef void (*tf_key_handler)(int32_t *key_code, int32_t shift);
 
 /* Creates a form (borrowed name). The form owns its controls. */
 tf_control *tf_form_new(const char *name);
@@ -657,6 +668,8 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
 void tf_control_container(tf_control *control, tf_control *frame);
 
 void tf_control_on(tf_control *control, tf_event event, tf_handler handler);
+void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handler);
+void tf_control_on_key(tf_control *control, tf_key_handler handler); /* KeyDown */
 
 /* Property access. Setters borrow the value; tf_get_str returns borrowed. */
 void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value);
@@ -678,6 +691,20 @@ tf_string *tf_list_item(const tf_control *list, int32_t index);
 void tf_list_set_item(tf_control *list, int32_t index, const tf_string *item);
 int tf_list_selected(const tf_control *list, int32_t index);
 void tf_list_set_selected(tf_control *list, int32_t index, int selected);
+
+/*
+ * Several forms (a stack: only the top one takes keys). Load fires the
+ * form's Load event if it has not run; Show loads it and puts it on top
+ * (modal: waits until it is hidden or unloaded); Hide takes it off;
+ * Unload fires its Unload event (which may cancel) and hides it, so the
+ * next Show loads it again. tf_forms_run runs the forms shown (after Sub
+ * Main) until the last is closed.
+ */
+void tf_form_load(tf_control *form);
+void tf_form_show(tf_control *form, int32_t modal);
+void tf_form_hide(tf_control *form);
+void tf_form_unload(tf_control *form);
+int tf_forms_run(void);
 
 /*
  * VB's MsgBox and InputBox: a dialog over the forms shown (opening the
