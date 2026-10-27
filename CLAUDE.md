@@ -57,8 +57,8 @@ authoritative for design rationale.
   Step 2 done (27 Oct 2026): Long and Double, `/ \ Mod ^`, widening,
   CInt/CLng/CDbl/CStr/Str$/Val/Fix/Int. Jim settled the Double text
   format, Str$'s space, banker's rounding and errors instead of
-  Infinity/NaN; the smaller defaults are *Proposed* in `docs/REFERENCE.md`
-  ("Numbers (Proposed)") — confirm them with Jim.
+  Infinity/NaN, then (same day) the remaining number rules in
+  `docs/REFERENCE.md`. Nothing is Proposed at present.
 - **Next:** Phase 3 step 3 (Try/Catch/Finally), or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)

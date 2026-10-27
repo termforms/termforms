@@ -63,7 +63,7 @@ that will catch people out.
   result too large is error 6 (Overflow), and an undefined power such as
   `(-8) ^ 0.5` is error 5, as VB6.
 
-### Numbers (Proposed)
+### Numbers: literals, operators, conversions (Settled, 27 Oct 2026)
 
 - A whole-number literal is an Integer if it fits, otherwise a Long (as
   VB.NET); `5&` forces Long, `5#` Double. `1.5`, `2E10` are Doubles.
