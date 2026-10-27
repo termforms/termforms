@@ -886,6 +886,7 @@ private:
                 return isNumeric(t) ? t : wrongArgument("a number");
             case Builtin::LBound: // handled by checkBounds
             case Builtin::UBound:
+            case Builtin::Count: // made by For Each, never by name
             case Builtin::None:
                 break;
         }
@@ -1801,6 +1802,132 @@ private:
         }
     }
 
+    // For Each x In a: x takes a copy of each element in turn. Like a With,
+    // the array's path is evaluated once; then a hidden counter n runs
+    // while n < the array's element count, read afresh each pass, so a
+    // ReDim inside the loop that shrinks the array ends it early rather
+    // than reading past the end. The loop stays a For for Exit For.
+    void checkForEach(Stmt &s)
+    {
+        const Type varType = checkExpr(*s.target);
+        const Variable *array = wholeArray(*s.value, "For Each");
+        const bool variable = s.target->kind == ExprKind::Name && s.target->variable != nullptr &&
+                              varType != Type::Error;
+        if (varType != Type::Error && !variable)
+        {
+            diagnostics_.error(s.target->location, "the For Each loop variable must be a variable");
+        }
+        const TypeInfo element = array != nullptr
+                                     ? TypeInfo(array->type, array->enumDef, array->typeDef)
+                                     : TypeInfo(Type::Error);
+        const bool usable = variable && array != nullptr && array->type != Type::Error;
+        if (usable && !assignable(infoOf(*s.target), element))
+        {
+            diagnostics_.error(s.target->location,
+                               "the elements of '" + s.value->text + "' are " + plural(element) +
+                                   ", which '" + s.target->text + "' (" +
+                                   article(infoOf(*s.target)) + ") cannot hold" +
+                                   conversionHint(infoOf(*s.target), element));
+        }
+        if (!s.nextName.empty() && s.nextName != s.target->text)
+        {
+            diagnostics_.error(s.nextLocation, "'Next " + s.nextName + "' does not match 'For " +
+                                                   "Each " + s.target->text + "'");
+        }
+        loops_.push_back(&s);
+        checkBlock(s.body);
+        loops_.pop_back();
+        if (!usable)
+        {
+            return;
+        }
+
+        scopes_.emplace_back(); // the hidden locals
+        anchorWith(s.value, s.setup, s.location);
+        const Expr &path = *s.value;
+        Expr like;
+        like.kind = ExprKind::IntegerLiteral;
+        like.type = Type::Long;
+        like.location = s.location;
+        Variable &counter = hiddenLocal(like);
+        scopes_.pop_back();
+
+        auto zero = std::make_unique<Expr>();
+        zero->kind = ExprKind::IntegerLiteral;
+        zero->type = Type::Long;
+        zero->location = s.location;
+        s.setup.push_back(assign(nameOf(counter, s.location), std::move(zero), s.location));
+
+        // n < Count(a)
+        auto count = std::make_unique<Expr>();
+        count->kind = ExprKind::Call;
+        count->builtin = Builtin::Count;
+        count->type = Type::Long;
+        count->location = s.location;
+        count->args.push_back(clonePath(path, s.location));
+        s.condition = binary("<", Type::Boolean, nameOf(counter, s.location), std::move(count));
+        s.testAtTop = true;
+
+        // x = element n of a; n = n + 1
+        auto item = std::make_unique<Expr>();
+        item->kind = ExprKind::Index;
+        item->linear = true;
+        item->location = s.location;
+        item->type = array->type;
+        item->enumDef = array->enumDef;
+        item->typeDef = array->typeDef;
+        if (path.kind == ExprKind::Name)
+        {
+            item->variable = path.variable; // a(n)
+        }
+        else
+        {
+            item->left = clonePath(path, s.location); // o.Lines(n)
+            item->field = path.field;
+        }
+        item->args.push_back(nameOf(counter, s.location));
+        auto one = std::make_unique<Expr>();
+        one->kind = ExprKind::IntegerLiteral;
+        one->integer = 1;
+        one->type = Type::Long;
+        one->location = s.location;
+        Block body;
+        body.push_back(assign(clonePath(*s.target, s.location), std::move(item), s.location));
+        body.push_back(assign(nameOf(counter, s.location),
+                              binary("+", Type::Long, nameOf(counter, s.location), std::move(one)),
+                              s.location));
+        for (auto &stmt : s.body)
+        {
+            body.push_back(std::move(stmt));
+        }
+        s.body = std::move(body);
+    }
+
+    static StmtPtr assign(ExprPtr target, ExprPtr value, Location where)
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Assign;
+        s->location = where;
+        s->target = std::move(target);
+        s->value = std::move(value);
+        return s;
+    }
+
+    static ExprPtr binary(const char *op, Type type, ExprPtr left, ExprPtr right)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::Binary;
+        e->text = op;
+        e->type = type;
+        e->location = left->location;
+        e->left = std::move(left);
+        e->right = std::move(right);
+        return e;
+    }
+
+    // "Strings", "Integers", "Customers".
+    static std::string plural(const TypeInfo &info) { return name(info) + "s"; }
+
     Variable &hiddenLocal(const Expr &like)
     {
         auto v = std::make_unique<Variable>();
@@ -1819,13 +1946,9 @@ private:
     // slot = held, after "held = <what slot was>" joins the setup.
     static void hide(ExprPtr &slot, Variable &held, Block &setup, Location where)
     {
-        auto store = std::make_unique<Stmt>();
-        store->kind = StmtKind::Assign;
-        store->location = where;
-        store->target = nameOf(held, slot->location);
-        store->value = std::move(slot);
-        slot = nameOf(held, store->value->location);
-        setup.push_back(std::move(store));
+        const Location at = slot->location;
+        setup.push_back(assign(nameOf(held, at), std::move(slot), where));
+        slot = nameOf(held, at);
     }
 
     static ExprPtr nameOf(Variable &v, Location where)
@@ -2288,6 +2411,11 @@ private:
 
     void checkFor(Stmt &s)
     {
+        if (s.isForEach)
+        {
+            checkForEach(s);
+            return;
+        }
         const Type varType = checkExpr(*s.target);
         const TypeInfo var = infoOf(*s.target);
         const bool loopable =

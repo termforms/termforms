@@ -95,7 +95,12 @@ authoritative for design rationale.
   in REFERENCE.md, except one Jim settled: an element is looked up again
   at each use rather than its array locked as VB6 does (the difference
   only shows when a ReDim inside the With removes the element).
-- **Next:** 5c Dictionary (settle its design with Jim first).
+  Step 5c (27 Oct 2026): Jim settled the Dictionary design (REFERENCE.md
+  "Dictionary") and For Each in v1. 5c-1 done: For Each over arrays
+  (`Each`, `In` reserved).
+- **Next:** 5c-2 Dictionary (runtime hash table keeping insertion order;
+  `Dictionary(Of T)` as a value like arrays; Keys/Items return arrays so
+  For Each works on them).
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -281,6 +286,11 @@ Key mechanisms:
   Reads of a reachable Ref before a later call are held (retained);
   a ByRef path through a Ref holds the record for the statement.
   `opsOf()` records which Types' ops are emitted (arrays, New, get).
+- **For Each:** lowered by sema (`checkForEach`) with With's machinery:
+  the array path anchored once into `setup`, a hidden Long counter, the
+  condition `n < Count(path)` (`Builtin::Count`, internal), and the body
+  starting with `x = path(n)` (an Index with `linear`, which codegen emits
+  as `tf_array_atlin`) and `n = n + 1`. Codegen emits setup, then emitDo.
 - **With:** no codegen of its own. Sema (`checkWith`/`anchorWith`) moves
   the parts of the target evaluated once (the last Ref, Function call or
   New on the path, then later indexes) into assignments to hidden locals

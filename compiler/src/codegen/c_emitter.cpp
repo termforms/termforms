@@ -725,6 +725,12 @@ private:
                 emitIf(out, s, 0, depth);
                 return;
             case StmtKind::For:
+                if (s.isForEach)
+                {
+                    emitBlock(out, s.setup, depth); // lowered by the semantic pass
+                    emitDo(out, s, depth);
+                    return;
+                }
                 emitFor(out, s, depth);
                 return;
             case StmtKind::Do:
@@ -1392,6 +1398,8 @@ private:
                     case Builtin::LBound:
                     case Builtin::UBound:
                         return true; // an empty array, a dimension it does not have
+                    case Builtin::Count:
+                        return mayFail(*e.args[0]); // a Ref on the way that is Nothing
                     default:
                         return false;
                 }
@@ -2166,6 +2174,10 @@ private:
     // Conversions and number functions (see tf_runtime.h for their rules).
     Value builtin(const Expr &e, StatementScope &scope)
     {
+        if (e.builtin == Builtin::Count)
+        {
+            return {"tf_array_count(" + wholeArrayRef(*e.args[0], scope) + ")", false};
+        }
         if (e.builtin == Builtin::LBound || e.builtin == Builtin::UBound)
         {
             const std::string dimension =
@@ -2439,6 +2451,10 @@ private:
         for (const auto &index : e.args)
         {
             indexes.push_back(settle(*index, expr(*index, scope), scope).code);
+        }
+        if (e.linear) // For Each's element n
+        {
+            return "tf_array_atlin(" + ref + ", " + indexes[0] + ")";
         }
         if (indexes.size() == 1)
         {

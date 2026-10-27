@@ -64,7 +64,8 @@ enum class Builtin
     Fix,
     Int,
     LBound,
-    UBound
+    UBound,
+    Count // not a name programs use: For Each's element count of an array (a Long)
 };
 
 // The most dimensions an array may have (TF_ARRAY_MAX_RANK in tf_runtime.h).
@@ -153,7 +154,8 @@ struct Expr
     const EnumDef *enumDef = nullptr; // when type is Enum
     const TypeDef *typeDef = nullptr; // when type is Record
     const Variable *field = nullptr;  // Member of a record: the Type's member
-    int rank = 0; // a whole array (a Name or a record's array member): its dimensions
+    int rank = 0;        // a whole array (a Name or a record's array member): its dimensions
+    bool linear = false; // an Index For Each makes: args[0] numbers the elements in storage order
     // CType(value, type): the target type, written as convertTo or, for an
     // Enum, by name. The semantic pass turns it into a CInt/CLng/... call.
     Type convertTo = Type::Error;
@@ -267,6 +269,13 @@ struct Stmt
     bool viaErrRaise = false;
 
     bool preserve = false; // ReDim Preserve
+
+    // For Each target In value: the semantic pass turns it into a loop with
+    // a hidden counter. setup evaluates the array's path once and starts
+    // the counter; condition tests it against the array's element count;
+    // body begins by copying the element into target and counting it.
+    bool isForEach = false;
+    Block setup;
 
     // Exit: which construct it leaves ("For", "Do", "While", "Sub",
     // "Function"), and for loops the loop statement, resolved.

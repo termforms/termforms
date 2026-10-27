@@ -29,6 +29,7 @@
 //                 [ELSE EOS block] END IF
 //               | IF expr THEN statement [ELSE statement]   (single line)
 //   for        := FOR name '=' expr TO expr [STEP expr] EOS block NEXT [name]
+//               | FOR EACH name IN expr EOS block NEXT [name]
 //   do         := DO [(WHILE | UNTIL) expr] EOS block LOOP [(WHILE | UNTIL) expr]
 //   while      := WHILE expr EOS block (WEND | END WHILE)
 //   try        := TRY EOS block { CATCH [WHEN expr] EOS block }
@@ -991,19 +992,28 @@ private:
         s->kind = StmtKind::For;
         s->location = next().location; // FOR
 
+        s->isForEach = acceptKeyword("EACH");
         auto var = std::make_unique<Expr>();
         var->kind = ExprKind::Name;
         var->location = peek().location;
         var->suffix = peek().suffix;
         var->text = expectIdentifier("a loop variable");
         s->target = std::move(var);
-        expectSymbol("=");
-        s->value = parseExpression();
-        expectKeyword("TO", "To");
-        s->limit = parseExpression();
-        if (acceptKeyword("STEP"))
+        if (s->isForEach)
         {
-            s->step = parseExpression();
+            expectKeyword("IN", "In");
+            s->value = parseExpression(); // the array
+        }
+        else
+        {
+            expectSymbol("=");
+            s->value = parseExpression();
+            expectKeyword("TO", "To");
+            s->limit = parseExpression();
+            if (acceptKeyword("STEP"))
+            {
+                s->step = parseExpression();
+            }
         }
         expectEndOfStatement();
 

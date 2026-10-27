@@ -388,6 +388,20 @@ void *tf_array_atn(tf_array *a, int32_t rank, const int64_t *index)
     return element(a, linear);
 }
 
+int64_t tf_array_count(const tf_array *a)
+{
+    return a->count;
+}
+
+void *tf_array_atlin(tf_array *a, int64_t i)
+{
+    if (i < 0 || i >= a->count)
+    {
+        return out_of_range(a);
+    }
+    return element(a, i);
+}
+
 int32_t tf_array_lbound(const tf_array *a, int32_t dimension)
 {
     if (a->rank == 0 || dimension < 1 || dimension > a->rank)

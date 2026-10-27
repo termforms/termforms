@@ -353,6 +353,11 @@ void *tf_array_at1(tf_array *a, int64_t i);
 void *tf_array_at2(tf_array *a, int64_t i, int64_t j);
 void *tf_array_atn(tf_array *a, int32_t rank, const int64_t *index);
 
+/* For Each: how many elements, and element i (0..count-1) in storage
+   order (column-major, as the elements are kept); error 9 outside. */
+int64_t tf_array_count(const tf_array *a);
+void *tf_array_atlin(tf_array *a, int64_t i);
+
 /* LBound (always 0) and UBound of dimension 1..rank; error 9 if the array
    is empty or has no such dimension. */
 int32_t tf_array_lbound(const tf_array *a, int32_t dimension);

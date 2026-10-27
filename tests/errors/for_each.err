@@ -1,0 +1,6 @@
+for_each.bas:13:19: error: For Each needs an array here
+for_each.bas:15:14: error: the elements of 'names' are Strings, which 'n' (an Integer) cannot hold; use CInt(value) to convert
+for_each.bas:17:14: error: the elements of 'longs' are Longs, which 'n' (an Integer) cannot hold; use CInt(value) to convert
+for_each.bas:19:14: error: the For Each loop variable must be a variable
+for_each.bas:21:14: error: 'grid' is an array; use an element, as in grid(0)
+for_each.bas:24:5: error: 'Next total' does not match 'For Each n'

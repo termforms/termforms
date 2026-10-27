@@ -157,6 +157,30 @@ While cond  ...  End While     ' VB.NET spelling, same meaning
 - Step 0 loops forever (as VB). The final increment can overflow:
   `For i = 1 To 2147483647` raises Overflow, as in VB.
 
+### For Each (in v1: Settled, Jim, 27 Oct 2026; details Proposed)
+
+```vb
+For Each w In words             ' each element of an array, in turn
+    s = s & w
+Next w
+For Each k In ages.Keys         ' a Dictionary's keys (Keys is an array)
+```
+
+- The loop variable is an existing variable that can hold the elements
+  (Option Strict: Integer elements into a Long variable widen; Long into
+  Integer is an error).
+- **The variable gets a copy of each element**: changing it does not
+  change the array (a Type element is copied; a Ref element shares its
+  record, as Refs do).
+- A multi-dimensional array is visited in storage order, the first index
+  changing fastest: `grid(0,0), grid(1,0), grid(0,1), ...`.
+- The array's path is evaluated once, as for With (`For Each x In
+  list(i).Lines` keeps `i`, and a Ref on the way is kept). Each pass then
+  looks at the array as it is: a ReDim inside the loop that shrinks it
+  ends the loop early; one that grows it adds passes. Nothing is locked,
+  so nothing needs undoing when the loop is left early.
+- `Exit For` leaves it; `Next name` must name its variable.
+
 ## Scope (Settled, 27 Oct 2026)
 
 - A `Dim` inside a block (If, For, Do, While) is visible only inside that
@@ -518,6 +542,33 @@ End With
 - Copying into a record while one of its arrays is locked (an element
   of it is being passed ByRef) is error 10, as ReDim of that array would
   be.
+
+## Dictionary (Settled, Jim, 27 Oct 2026)
+
+```vb
+Dim ages As Dictionary(Of Integer)    ' keys are always Strings
+ages("Ann") = 30                      ' adds or replaces
+ages.Add "Bo", 25                     ' error 457 if "Bo" is already there
+If ages.Exists("Cy") Then n = ages("Cy")
+For Each k In ages.Keys
+    total = total + ages(k)
+Next
+```
+
+- **Declared as `Dictionary(Of T)`**: the keys are Strings, the values all
+  of type T.
+- **A value, like an array**: ready to use at its Dim (no New); `d2 = d`
+  copies it; passed ByVal it is read-only. To share one, put it in a Type
+  and use a Ref.
+- **Reading a key that is not there is error 5** (Invalid procedure call
+  or argument), as VB6's Collection; `Exists` asks first.
+- **Keys are case-sensitive** ("ann" and "Ann" are different keys).
+- **Insertion order**: Keys, Items and For Each give the entries in the
+  order they were first added.
+- **Members, as VB6's Scripting.Dictionary**: `d(key)` (read, or assign to
+  add or replace), `d.Add key, value` (457 if the key exists),
+  `d.Exists(key)`, `d.Remove key`, `d.Count`, `d.Clear`, `d.Keys` (a
+  String array) and `d.Items` (an array of T).
 
 ## Forms and events (Settled, 23 Oct 2026)
 

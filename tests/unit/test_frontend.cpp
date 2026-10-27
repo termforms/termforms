@@ -537,3 +537,24 @@ TEST_CASE("lexer: With is reserved")
 {
     CHECK(tf::isReservedKeyword("with"));
 }
+
+// -- For Each (Phase 3 step 5c) ------------------------------------------------
+
+TEST_CASE("For Each takes each element of an array into a variable that can hold it")
+{
+    const std::string decl = "Type P\n    X As Integer\n    L() As String\nEnd Type\n";
+    const std::string body =
+        "    Dim a(2) As Integer, g(1, 1) As P, n As Long, p As P, s As String\n"
+        "    For Each n In a\n        Exit For\n    Next n\n"
+        "    For Each p In g\n        For Each s In p.L\n        Next\n"
+        "    Next\n";
+    CHECK(check(inClick(decl, body)) == "");
+    CHECK(check(inClick(
+              "", "    Dim a(2) As Long, n As Integer\n    For Each n In a\n    Next\n")) != "");
+}
+
+TEST_CASE("lexer: Each and In are reserved")
+{
+    CHECK(tf::isReservedKeyword("each"));
+    CHECK(tf::isReservedKeyword("In"));
+}

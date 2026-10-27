@@ -296,6 +296,9 @@ Loop                            '   Do ... Loop While / Loop Until ...
 
 While n > 0                     ' VB-DOS spelling
 Wend                            ' End While (VB.NET) also works
+
+For Each w In words             ' each element of an array
+Next
 ```
 
 - The For variable is a numeric variable (Integer, Long or Double)
@@ -306,6 +309,9 @@ Wend                            ' End While (VB.NET) also works
   overflows on its last increment, as in VB.
 - `Exit For`, `Exit Do` and `Exit While` leave the innermost loop of that
   kind, even from inside other loops.
+- For Each gives its variable a copy of each element in turn (several
+  dimensions: the first index changes fastest). A ReDim inside that
+  shrinks the array ends the loop early.
 
 ## Keys in a running program
 
