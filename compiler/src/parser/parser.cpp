@@ -73,12 +73,20 @@ public:
     Module run()
     {
         Module module;
-        module.fileName = diagnostics_.fileName();
+        module.fileName =
+            diagnostics_.fileName(tokens_.empty() ? 0 : tokens_.front().location.file);
         skipStatementEnds();
 
         while (!at(TokenKind::EndOfFile))
         {
-            if (peek().isKeyword("BEGIN"))
+            // Public / Private before a module-level declaration (VB's
+            // defaults otherwise: Subs, Functions, Types, Enums Public;
+            // variables and Consts Private).
+            if (peek().isKeyword("PUBLIC") || peek().isKeyword("PRIVATE"))
+            {
+                parseVisible(module);
+            }
+            else if (peek().isKeyword("BEGIN"))
             {
                 parseFormBlock(module);
             }
@@ -1614,11 +1622,70 @@ private:
         module.enums.push_back(std::move(def));
     }
 
-    StmtPtr parseDim(Module *module, Procedure *procedure)
+    // Public x As T, Private Sub ..., Public Const ...: the declaration
+    // after the word, marked.
+    void parseVisible(Module &module)
+    {
+        const bool isPublic = next().isKeyword("PUBLIC");
+        const Token &t = peek();
+        if (t.isKeyword("SUB") || t.isKeyword("FUNCTION"))
+        {
+            module.procedures.push_back(parseProcedure());
+            module.procedures.back()->isPrivate = !isPublic;
+            return;
+        }
+        if (t.isKeyword("ENUM") || t.isKeyword("TYPE"))
+        {
+            const bool isEnum = t.isKeyword("ENUM");
+            const std::size_t before = isEnum ? module.enums.size() : module.types.size();
+            isEnum ? parseEnum(module) : parseType(module);
+            if (isEnum && module.enums.size() > before)
+            {
+                module.enums.back()->isPrivate = !isPublic;
+            }
+            else if (!isEnum && module.types.size() > before)
+            {
+                module.types.back()->isPrivate = !isPublic;
+            }
+            return;
+        }
+        StmtPtr s;
+        if (t.isKeyword("CONST"))
+        {
+            s = parseConst(&module, nullptr);
+        }
+        else if (t.isKeyword("DIM"))
+        {
+            error(t.location, "write 'Public x As ...' or 'Private x As ...', without Dim");
+            skipStatement();
+            return;
+        }
+        else if (t.kind == TokenKind::Identifier)
+        {
+            s = parseDim(&module, nullptr, false); // Public x As T: a Dim
+        }
+        else
+        {
+            error(t.location, "expected a declaration after '" +
+                                  std::string(isPublic ? "Public" : "Private") + "' but found " +
+                                  describe(t));
+            skipStatement();
+            return;
+        }
+        for (Variable *v : s->declared)
+        {
+            v->isPublic = isPublic;
+        }
+        module.moduleStatements.push_back(std::move(s));
+        expectEndOfStatement();
+    }
+
+    // Dim a, b As T (or, with dimWord false, the names after Public/Private).
+    StmtPtr parseDim(Module *module, Procedure *procedure, bool dimWord = true)
     {
         auto s = std::make_unique<Stmt>();
         s->kind = StmtKind::Dim;
-        s->location = next().location; // DIM
+        s->location = dimWord ? next().location : peek().location; // DIM
 
         // "Dim a, b As String" declares both as String (VB.NET rules).
         std::vector<std::unique_ptr<Variable>> pending;

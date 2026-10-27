@@ -654,3 +654,15 @@ TEST_CASE("system functions, and Shell both as a function and as a statement")
                              "    n = Shell(\"true\")\n    Shell \"true\"\n    secs = Timer\n";
     CHECK(check(inClick("", body)) == "");
 }
+
+// -- Modules (Phase 3 step 7) ----------------------------------------------------
+
+TEST_CASE("Public and Private mark module-level declarations")
+{
+    const std::string decl = "Public total As Long\nPrivate count As Integer\n"
+                             "Public Const LIMIT = 3\nPrivate Type P\n    X As Integer\nEnd Type\n"
+                             "Private Sub Helper()\nEnd Sub\nPublic Function Twice(n As Integer) As "
+                             "Integer\n    Twice = n * 2\nEnd Function\n";
+    CHECK(check(inClick(decl, "    Dim p As P\n    Helper\n    total = Twice(LIMIT)\n")) == "");
+    CHECK(check(kForm + "Public Dim x As Integer\n") != "");
+}

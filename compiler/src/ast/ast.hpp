@@ -255,6 +255,7 @@ struct TypeDef
 {
     std::string name;
     Location location;
+    bool isPrivate = false; // Private Type: its module only
     std::vector<std::unique_ptr<Variable>> members;
 };
 
@@ -264,6 +265,7 @@ struct EnumDef
 {
     std::string name;
     Location location;
+    bool isPrivate = false; // Private Enum: its module only
     Type underlying = Type::Integer;
     std::vector<EnumMember> members;
 };
@@ -487,6 +489,7 @@ struct Variable
     bool isParameter = false;
     bool byRef = false;    // parameters only
     bool isResult = false; // the value a Function returns, named after it
+    bool isPublic = false; // module level: Public x / Public Const (else its module only)
     // Hidden locals a With keeps its target in. withCopy: a copy of a
     // Function's Type result, which (as the result itself) cannot be changed.
     bool isWithAnchor = false;
@@ -526,7 +529,8 @@ struct Procedure
 {
     std::string name;
     Location location;
-    Location endLocation; // the End Sub / End Function line
+    bool isPrivate = false; // Private Sub/Function: its module only (Public by default)
+    Location endLocation;   // the End Sub / End Function line
     bool isFunction = false;
     std::vector<std::unique_ptr<Variable>> parameters;
     std::unique_ptr<Variable> result; // Functions only; its type is the return type
@@ -543,6 +547,7 @@ struct Procedure
 struct Module
 {
     std::string fileName;
+    std::string name;                 // the file's name without .bas: Module.Name qualifies with it
     std::unique_ptr<ControlDef> form; // at most one in this version
     std::vector<std::unique_ptr<Variable>> globals;
     Block moduleStatements; // module-level Dim and Const statements, in order

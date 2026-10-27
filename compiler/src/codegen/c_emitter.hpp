@@ -17,6 +17,7 @@
 #include "ast/ast.hpp"
 
 #include <string>
+#include <vector>
 
 namespace tf
 {
@@ -24,10 +25,15 @@ namespace tf
 struct EmitOptions
 {
     std::string sourcePath; // as written in #line directives
-    std::string version;    // compiler version, for the header comment
+    // With several modules: each file's path, indexed as Location::file.
+    std::vector<std::string> sourcePaths;
+    std::string version; // compiler version, for the header comment
 };
 
 // The module must have passed checkModule() without errors.
 std::string emitC(const ast::Module &module, const EmitOptions &options);
+
+// The whole program, its modules in order, as one C file.
+std::string emitC(const std::vector<const ast::Module *> &modules, const EmitOptions &options);
 
 } // namespace tf

@@ -22,8 +22,9 @@ void Diagnostics::print(std::ostream &out) const
 {
     for (const Diagnostic &d : list_)
     {
-        out << fileName_ << ':' << d.location.line << ':' << d.location.column << ": "
-            << (d.severity == Severity::Error ? "error" : "warning") << ": " << d.message << '\n';
+        out << fileName(d.location.file) << ':' << d.location.line << ':' << d.location.column
+            << ": " << (d.severity == Severity::Error ? "error" : "warning") << ": " << d.message
+            << '\n';
     }
 }
 

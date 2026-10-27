@@ -112,10 +112,14 @@ const char *tf_error_text(int32_t number);
 
 /*
  * The BASIC source line currently executing. Generated code updates it with
- * TF_LINE() before each statement so runtime errors can name the line.
+ * TF_LINE() before each statement so runtime errors can name the line; a
+ * program of several modules uses TF_AT(file, n), naming the file too (NULL
+ * means the main one, given to tf_runtime_init).
  */
 extern int32_t tf_current_line;
+extern const char *tf_current_file;
 #define TF_LINE(n) (tf_current_line = (n))
+#define TF_AT(file, n) (tf_current_file = (file), tf_current_line = (n))
 
 /*
  * An error the program cannot handle (out of memory, the terminal lost):
@@ -165,6 +169,7 @@ typedef struct tf_saved_error
     int pending;
     int32_t number;
     int32_t line;
+    const char *file;
     tf_string *description;
     tf_string *source;
 } tf_saved_error;

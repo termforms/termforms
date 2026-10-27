@@ -58,8 +58,16 @@ def run_tfc(tfc: str, args: list, cwd: Path) -> subprocess.CompletedProcess:
                           encoding="utf-8", errors="replace")
 
 
+def sources(source: Path) -> list:
+    """The test's .bas, then any further modules its .with file lists (one
+    path a line, relative to it): a program of several modules."""
+    with_file = source.with_suffix(".with")
+    more = with_file.read_text(encoding="utf-8").split() if with_file.exists() else []
+    return [source.name] + more
+
+
 def golden(tfc: str, source: Path) -> bool:
-    result = run_tfc(tfc, ["--emit-c", "-o", "-", source.name], source.parent)
+    result = run_tfc(tfc, ["--emit-c", "-o", "-"] + sources(source), source.parent)
     if result.returncode != 0:
         print(f"FAIL: tfc exited {result.returncode}\n{result.stderr}")
         return False
@@ -67,7 +75,7 @@ def golden(tfc: str, source: Path) -> bool:
 
 
 def errors(tfc: str, source: Path) -> bool:
-    result = run_tfc(tfc, ["--emit-c", "-o", "-", source.name], source.parent)
+    result = run_tfc(tfc, ["--emit-c", "-o", "-"] + sources(source), source.parent)
     expected_code = 2 if "error:" in result.stderr else 0
     if result.returncode != expected_code:
         print(f"FAIL: tfc exited {result.returncode}, expected {expected_code}\n{result.stderr}")
@@ -78,7 +86,7 @@ def errors(tfc: str, source: Path) -> bool:
 def run(tfc: str, source: Path, work: Path) -> bool:
     work.mkdir(parents=True, exist_ok=True)
     exe = work / (source.stem + (".exe" if os.name == "nt" else ""))
-    build = run_tfc(tfc, ["-o", str(exe), source.name], source.parent)
+    build = run_tfc(tfc, ["-o", str(exe)] + sources(source), source.parent)
     if build.returncode != 0:
         print(f"FAIL: build exited {build.returncode}\n{build.stdout}{build.stderr}")
         return False

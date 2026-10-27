@@ -19,10 +19,16 @@
 
 #include "ast/ast.hpp"
 
+#include <vector>
+
 namespace tf
 {
 
 // Annotates the module in place. Returns false if errors were reported.
 bool checkModule(ast::Module &module, Diagnostics &diagnostics);
+
+// A program of several modules (each a .bas file, named after it), in
+// order: checked together, each seeing the others' Public names.
+bool checkProgram(const std::vector<ast::Module *> &modules, Diagnostics &diagnostics);
 
 } // namespace tf

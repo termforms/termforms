@@ -807,6 +807,51 @@ b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outs
   not urgent: deferred to a later iteration. Until then, use
   `Left$(s, 1) & "x" & Mid$(s, 3)`.
 
+## Modules and projects (Settled, Jim, 28 Oct 2026)
+
+- **A project file, `.vbp`, in VB6's style**: `Key=Value` lines, one file
+  per line (`Form=`, `Module=`), `Name=` and `Startup=`; an unknown key is
+  an error.
+- **VB's visibility defaults**: Subs, Functions, Types and Enums are
+  Public unless marked `Private`; module-level `Dim` and `Const` are
+  Private unless declared `Public` (`Public total As Long`).
+- **One form plus any number of code modules** for now; programs of
+  several forms come with Phase 4's Show/Hide and modal stack.
+- **`tfc a.bas b.bas` builds the files as one program** without a
+  project file; a `.vbp` is for a name or settings.
+
+### Modules (Proposed)
+
+```vb
+' stock.bas                          ' main.bas (the form's module)
+Public Type Item                     Sub Form_Load()
+    Name As String                       AddStock "bolt", 5
+End Type                                 t1.Text = total & stock.Label()
+Public total As Integer              End Sub
+Sub AddStock(n As String, q As Integer)
+    total = total + q
+End Sub
+```
+
+- A module is a `.bas` file; **its name is the file's name without
+  `.bas`**, so with several modules each file name must be a BASIC name.
+- Each module sees its own names and every other module's Public ones.
+  **`Module.Name`** names one explicitly (a variable, Const, Function,
+  array element, or a Sub called as a statement); a name Public in two
+  other modules must be written that way (it is an error otherwise), and
+  a module's own name wins over another's Public one.
+- A name that is a module's name cannot also be declared (with several
+  modules).
+- **The form is known everywhere**; another module reaches its controls
+  through it: `frmMain.txtName.Text = "x"`.
+- The program starts at its form, or at `Sub Main` (one in the program).
+- Module-level variables are set up before anything runs, module by
+  module in the order given; a Const may use Public Consts of modules
+  given before its own.
+- Errors (at compile time and at run time) name the file they are in.
+- Types and Enums are named bare (`Dim p As Item`); one Public in two
+  modules is ambiguous and must be made Private in one, for now.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

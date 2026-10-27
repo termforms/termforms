@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <system_error>
 
@@ -258,29 +259,68 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
     return command;
 }
 
+// A module's name is its file's name without .bas; with several modules
+// it qualifies their names (Utils.Clean), so it must be a BASIC name.
+static bool isBasicName(const std::string &name)
+{
+    if (name.empty() || std::isalpha(static_cast<unsigned char>(name[0])) == 0)
+    {
+        return false;
+    }
+    return std::all_of(name.begin(), name.end(), [](char c) {
+        return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+    });
+}
+
 int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
 {
-    if (cmd.inputs.size() != 1)
+    if (cmd.inputs.empty())
     {
-        err << "tfc: error: one source file per build in this version\n";
+        err << "tfc: error: no input files\n";
         return kExitUsage;
     }
     const std::string &input = cmd.inputs.front();
 
-    std::string source;
-    if (!readFile(input, source))
-    {
-        err << "tfc: error: cannot read '" << input << "'\n";
-        return kExitUsage;
-    }
-
-    // -- Front end -----------------------------------------------------------
+    // -- Front end: every file, then the program checked as a whole ----------
+    // The files are the program's modules, in order: module variables are
+    // set up in this order too.
     Diagnostics diagnostics(input);
-    const std::vector<Token> tokens = tokenize(source, diagnostics);
-    ast::Module module = parseModule(tokens, diagnostics);
+    std::vector<ast::Module> modules;
+    std::set<std::string> names;
+    for (std::size_t i = 0; i < cmd.inputs.size(); ++i)
+    {
+        const std::string &file = cmd.inputs[i];
+        std::string source;
+        if (!readFile(file, source))
+        {
+            err << "tfc: error: cannot read '" << file << "'\n";
+            return kExitUsage;
+        }
+        const std::string name = fs::path(file).stem().string();
+        if (cmd.inputs.size() > 1 && !isBasicName(name))
+        {
+            err << "tfc: error: '" << file << "': a module's file name must be a BASIC name "
+                << "(letters, digits and _, starting with a letter), as it names the module\n";
+            return kExitUsage;
+        }
+        if (!names.insert(name).second)
+        {
+            err << "tfc: error: two modules are called '" << name << "'\n";
+            return kExitUsage;
+        }
+        const int index = i == 0 ? 0 : diagnostics.addFile(file);
+        const std::vector<Token> tokens = tokenize(source, diagnostics, index);
+        modules.push_back(parseModule(tokens, diagnostics));
+        modules.back().name = name;
+    }
+    std::vector<ast::Module *> program;
+    for (ast::Module &m : modules)
+    {
+        program.push_back(&m);
+    }
     if (!diagnostics.hasErrors())
     {
-        checkModule(module, diagnostics);
+        checkProgram(program, diagnostics);
     }
     diagnostics.print(err);
     if (diagnostics.hasErrors())
@@ -290,8 +330,10 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
 
     EmitOptions options;
     options.sourcePath = input;
+    options.sourcePaths = cmd.inputs;
     options.version = kVersion;
-    const std::string cSource = emitC(module, options);
+    const std::string cSource =
+        emitC(std::vector<const ast::Module *>(program.begin(), program.end()), options);
 
     // -- --emit-c: write the C and stop --------------------------------------
     const fs::path inputPath(input);

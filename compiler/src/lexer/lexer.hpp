@@ -63,7 +63,8 @@ struct Token
 
 // Tokenises a whole file. Problems are reported to diagnostics; the token
 // list always ends with EndOfStatement followed by EndOfFile.
-std::vector<Token> tokenize(std::string_view source, Diagnostics &diagnostics);
+// Tokens' Locations carry file (an index from Diagnostics::addFile).
+std::vector<Token> tokenize(std::string_view source, Diagnostics &diagnostics, int file = 0);
 
 // True if word (any case) is a reserved keyword.
 bool isReservedKeyword(std::string_view word);

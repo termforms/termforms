@@ -146,53 +146,272 @@ Type lowered(const TypeInfo &t)
 class Checker
 {
 public:
-    Checker(Module &module, Diagnostics &diagnostics) : module_(module), diagnostics_(diagnostics)
+    Checker(const std::vector<Module *> &modules, Diagnostics &diagnostics)
+        : modules_(modules), own_(modules.size()), diagnostics_(diagnostics)
     {
     }
 
+    // The modules are checked together: first every module's Types, Enums
+    // and form, then its variables and procedures (their types may come
+    // from other modules), then constants, then the code. Before each
+    // module's turn, enter() makes the name maps that module's view.
     bool run()
     {
-        for (const BuiltinInfo &b : kBuiltins)
+        for (std::size_t i = 0; i < modules_.size(); ++i)
         {
-            moduleNames_[b.name] = "built-in function";
+            moduleIndex_[modules_[i]->name] = i;
         }
-        moduleNames_["Err"] = "built-in object";
-        registerEnums();
-        registerTypes();
-        registerControls();
-        registerGlobals();
-        registerProcedures();
-        evaluateModuleConstants();
-        resolveTypeMembers();           // their array bounds may use the module's Consts
-        for (auto &v : module_.globals) // bounds may use the module's Consts
-        {
-            if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
+        forEachModule(false, [this] {
+            registerEnums();
+            registerTypes();
+            registerControls();
+        });
+        forEachModule(true, [this] {
+            registerGlobals();
+            registerProcedures();
+        });
+        forEachModule(true, [this] {
+            evaluateModuleConstants();
+            resolveTypeMembers();            // their array bounds may use the module's Consts
+            for (auto &v : module_->globals) // bounds may use the module's Consts
             {
-                resolveShape(*v);
+                if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
+                {
+                    resolveShape(*v);
+                }
             }
-        }
-        for (auto &proc : module_.procedures)
-        {
-            wireEvent(*proc);
-        }
-        for (auto &proc : module_.procedures)
-        {
-            checkProcedure(*proc);
-        }
+        });
+        forEachModule(true, [this] {
+            for (auto &proc : module_->procedures)
+            {
+                wireEvent(*proc);
+            }
+            for (auto &proc : module_->procedures)
+            {
+                checkProcedure(*proc);
+            }
+        });
         checkEntryPoint();
         return !diagnostics_.hasErrors();
     }
 
 private:
+    // -- Modules -------------------------------------------------------------
+
+    // Runs step for each module in turn (in the program's order), with its
+    // view of the names if view.
+    template <typename Step> void forEachModule(bool view, Step step)
+    {
+        for (std::size_t i = 0; i < modules_.size(); ++i)
+        {
+            here_ = i;
+            module_ = modules_[i];
+            if (view)
+            {
+                enter(i);
+            }
+            step();
+        }
+    }
+
+    // The names module i sees: its own, then every other module's Public
+    // ones (Subs, Functions, Types and Enums unless Private; variables and
+    // Consts if Public), and every form. A name Public in two other modules
+    // is in neither: it must be qualified (Module.Name).
+    void enter(std::size_t i)
+    {
+        const Names &mine = own_[i];
+        controls_ = mine.controls;
+        globals_ = mine.globals;
+        procedures_ = mine.procedures;
+        enums_ = mine.enums;
+        types_ = mine.types;
+        ambiguous_.clear();
+        std::map<std::string, std::string> seenIn; // a Public name -> its module
+        auto share = [&](auto &view, const auto &theirs, const std::string &module, auto isPublic) {
+            for (const auto &[name, item] : theirs)
+            {
+                if (!isPublic(item) || mine.claimed.count(name) != 0)
+                {
+                    continue; // private, or this module's own name wins
+                }
+                if (auto it = seenIn.find(name); it != seenIn.end())
+                {
+                    view.erase(name);
+                    auto &where = ambiguous_[name];
+                    if (where.empty())
+                    {
+                        where.push_back(it->second);
+                    }
+                    where.push_back(module);
+                    continue;
+                }
+                seenIn[name] = module;
+                view[name] = item;
+            }
+        };
+        for (std::size_t j = 0; j < modules_.size(); ++j)
+        {
+            if (j == i)
+            {
+                continue;
+            }
+            const Names &theirs = own_[j];
+            const std::string &module = modules_[j]->name;
+            share(globals_, theirs.globals, module, [](const Variable *v) { return v->isPublic; });
+            share(procedures_, theirs.procedures, module,
+                  [](const Procedure *p) { return !p->isPrivate; });
+            share(enums_, theirs.enums, module, [](const EnumDef *d) { return !d->isPrivate; });
+            share(types_, theirs.types, module, [](const TypeDef *d) { return !d->isPrivate; });
+            if (const ControlDef *form = modules_[j]->form.get())
+            {
+                controls_[form->name] = theirs.controls.at(form->name); // forms are program-wide
+            }
+        }
+    }
+
+    // A name that is Public in several other modules: says how to choose.
+    bool reportAmbiguous(const std::string &name, Location where)
+    {
+        auto it = ambiguous_.find(name);
+        if (it == ambiguous_.end())
+        {
+            return false;
+        }
+        std::string modules;
+        for (std::size_t k = 0; k < it->second.size(); ++k)
+        {
+            modules += (k == 0 ? "" : k + 1 == it->second.size() ? " and " : ", ") + it->second[k];
+        }
+        diagnostics_.error(where, "'" + name + "' is Public in the modules " + modules +
+                                      "; write " + it->second[0] + "." + name + " (or another " +
+                                      "module's) to say which");
+        return true;
+    }
+
+    // The module an object names (Utils in Utils.Clean), or -1: only with
+    // several modules, and only if the name is not a variable or control
+    // this module sees.
+    int moduleNamed(const Expr &object) const
+    {
+        if (modules_.size() < 2 || object.kind != ExprKind::Name || object.text.empty() ||
+            (current_ != nullptr && lookupLocal(object.text) != nullptr) ||
+            globals_.count(object.text) != 0 || controls_.count(object.text) != 0)
+        {
+            return -1;
+        }
+        auto it = moduleIndex_.find(object.text);
+        return it == moduleIndex_.end() ? -1 : static_cast<int>(it->second);
+    }
+
+    // Module.name, if module m lets this module see it (Public, or its own).
+    Variable *qualifiedVariable(int m, const std::string &name)
+    {
+        const auto &globals = own_[static_cast<std::size_t>(m)].globals;
+        auto it = globals.find(name);
+        return it != globals.end() && (it->second->isPublic || static_cast<std::size_t>(m) == here_)
+                   ? it->second
+                   : nullptr;
+    }
+
+    Procedure *qualifiedProcedure(int m, const std::string &name)
+    {
+        const auto &procs = own_[static_cast<std::size_t>(m)].procedures;
+        auto it = procs.find(name);
+        return it != procs.end() && (!it->second->isPrivate || static_cast<std::size_t>(m) == here_)
+                   ? it->second
+                   : nullptr;
+    }
+
+    // "module Utils has no Public 'x'" (or says it is Private).
+    void notInModule(int m, const std::string &name, Location where)
+    {
+        const Names &t = own_[static_cast<std::size_t>(m)];
+        const std::string &module = modules_[static_cast<std::size_t>(m)]->name;
+        const bool there = t.globals.count(name) != 0 || t.procedures.count(name) != 0;
+        diagnostics_.error(where, there ? "'" + name + "' is Private to the module " + module
+                                        : "the module " + module + " has no '" + name + "'");
+    }
+
+    // Utils.count, Utils.LIMIT, Utils.Now(): a variable, Const or Function
+    // of another module, named through it.
+    Type resolveQualified(Expr &e, int m)
+    {
+        if (Variable *v = qualifiedVariable(m, e.text))
+        {
+            e.kind = ExprKind::Name;
+            e.left.reset();
+            if (v->isConst)
+            {
+                return v->constReady ? makeConstant(e, *v) : Type::Error;
+            }
+            e.variable = v;
+            e.enumDef = v->enumDef;
+            e.typeDef = v->typeDef;
+            e.rank = v->rank;
+            if (v->rank > 0 && !wholeNow_)
+            {
+                diagnostics_.error(e.location, "'" + e.text + "' is an array; use an element");
+                return Type::Error;
+            }
+            return v->type;
+        }
+        if (Procedure *proc = qualifiedProcedure(m, e.text))
+        {
+            e.kind = ExprKind::Call;
+            e.left.reset();
+            return qualifiedCall(e, *proc);
+        }
+        notInModule(m, e.text, e.location);
+        return Type::Error;
+    }
+
+    // e (a Call, its args in place) of proc, named through its module.
+    Type qualifiedCall(Expr &e, Procedure &proc)
+    {
+        e.procedure = &proc;
+        if (!proc.isFunction)
+        {
+            for (auto &arg : e.args)
+            {
+                checkExpr(*arg);
+            }
+            diagnostics_.error(e.location, "Sub '" + proc.name +
+                                               "' does not return a value; call it as a "
+                                               "statement, or make it a Function");
+            return Type::Error;
+        }
+        checkArguments(proc, e.args, e.location);
+        e.enumDef = proc.result->enumDef;
+        e.typeDef = proc.result->typeDef;
+        return proc.result->type;
+    }
+
     // -- Declarations ------------------------------------------------------
 
     // Every name in module scope: controls, the form, globals and Subs.
     bool claimModuleName(const std::string &name, Location where, const char *what)
     {
-        auto [it, inserted] = moduleNames_.emplace(name, what);
+        std::map<std::string, std::string> &claimed = own_[here_].claimed;
+        if (claimed.empty())
+        {
+            for (const BuiltinInfo &b : kBuiltins)
+            {
+                claimed[b.name] = "built-in function";
+            }
+            claimed["Err"] = "built-in object";
+        }
+        auto [it, inserted] = claimed.emplace(name, what);
         if (!inserted)
         {
             diagnostics_.error(where, "'" + name + "' is already declared as a " + it->second);
+            return false;
+        }
+        // With several modules, Module.Name qualifies: a module's name is
+        // taken. (One file's name never clashes: it is not needed.)
+        if (modules_.size() > 1 && moduleIndex_.count(name) != 0)
+        {
+            diagnostics_.error(where, "'" + name + "' is the name of a module");
             return false;
         }
         return true;
@@ -200,13 +419,13 @@ private:
 
     void registerControls()
     {
-        ControlDef *form = module_.form.get();
+        ControlDef *form = module_->form.get();
         if (form == nullptr)
         {
             return;
         }
         claimModuleName(form->name, form->location, "form");
-        controls_[form->name] = form;
+        own_[here_].controls[form->name] = form;
         checkSettings(*form);
 
         for (auto &child : form->children)
@@ -220,7 +439,7 @@ private:
             }
             if (claimModuleName(child->name, child->location, "control"))
             {
-                controls_[child->name] = child.get();
+                own_[here_].controls[child->name] = child.get();
             }
             checkSettings(*child);
         }
@@ -275,26 +494,26 @@ private:
 
     void registerGlobals()
     {
-        for (auto &v : module_.globals)
+        for (auto &v : module_->globals)
         {
             // A Const's type may still be unknown: its value decides it.
             if (v->isConst ? claimModuleName(v->name, v->location, "Const")
                            : v->type != Type::Error && resolveType(*v) &&
                                  claimModuleName(v->name, v->location, "variable"))
             {
-                globals_[v->name] = v.get();
+                own_[here_].globals[v->name] = v.get();
             }
         }
     }
 
     void registerProcedures()
     {
-        for (auto &proc : module_.procedures)
+        for (auto &proc : module_->procedures)
         {
             if (!proc->name.empty() &&
                 claimModuleName(proc->name, proc->location, proc->isFunction ? "Function" : "Sub"))
             {
-                procedures_[proc->name] = proc.get();
+                own_[here_].procedures[proc->name] = proc.get();
             }
             for (auto &param : proc->parameters)
             {
@@ -328,9 +547,9 @@ private:
 
         // Form events use "Form_", whatever the form is called (as in VB).
         ControlDef *control = nullptr;
-        if (objectName == "Form" && module_.form != nullptr)
+        if (objectName == "Form" && module_->form != nullptr)
         {
-            control = module_.form.get();
+            control = module_->form.get();
         }
         else if (auto it = controls_.find(objectName); it != controls_.end() && !it->second->isForm)
         {
@@ -350,7 +569,7 @@ private:
                     return;
                 }
             }
-            if (catalog::equalsIgnoringCase(objectName, "Form") && module_.form != nullptr)
+            if (catalog::equalsIgnoringCase(objectName, "Form") && module_->form != nullptr)
             {
                 diagnostics_.warning(proc.location, "Sub '" + proc.name +
                                                         "' looks like a form event handler; "
@@ -744,6 +963,10 @@ private:
     // or when the name is something that cannot be called.
     void unknownCallee(const std::string &name, Location where)
     {
+        if (reportAmbiguous(name, where))
+        {
+            return;
+        }
         if (lookupLocal(name) != nullptr || globals_.count(name) != 0)
         {
             diagnostics_.error(where, "'" + name + "' is a variable and cannot be called");
@@ -1027,11 +1250,11 @@ private:
 
     void registerEnums()
     {
-        for (auto &def : module_.enums)
+        for (auto &def : module_->enums)
         {
             if (!def->name.empty() && claimModuleName(def->name, def->location, "Enum"))
             {
-                enums_[def->name] = def.get();
+                own_[here_].enums[def->name] = def.get();
             }
             std::set<std::string> seen;
             for (const EnumMember &m : def->members)
@@ -1090,11 +1313,11 @@ private:
 
     void registerTypes()
     {
-        for (auto &def : module_.types)
+        for (auto &def : module_->types)
         {
             if (!def->name.empty() && claimModuleName(def->name, def->location, "Type"))
             {
-                types_[def->name] = def.get();
+                own_[here_].types[def->name] = def.get();
             }
             std::set<std::string> seen;
             for (const auto &m : def->members)
@@ -1113,7 +1336,7 @@ private:
     // array, it may.
     void resolveTypeMembers()
     {
-        for (auto &def : module_.types)
+        for (auto &def : module_->types)
         {
             for (auto &m : def->members)
             {
@@ -1123,7 +1346,7 @@ private:
                 }
             }
         }
-        for (auto &def : module_.types)
+        for (auto &def : module_->types)
         {
             std::vector<const TypeDef *> path;
             if (containsByValue(*def, *def, path))
@@ -1164,6 +1387,10 @@ private:
 
     void unknownType(const std::string &name, Location where)
     {
+        if (reportAmbiguous(name, where))
+        {
+            return;
+        }
         std::string message = "unknown type '" + name + "'";
         for (const auto &[known, def] : enums_)
         {
@@ -1180,12 +1407,12 @@ private:
     void evaluateModuleConstants()
     {
         std::vector<std::pair<Location, std::function<void()>>> items;
-        for (auto &def : module_.enums)
+        for (auto &def : module_->enums)
         {
             EnumDef *d = def.get();
             items.emplace_back(d->location, [this, d] { evaluateEnum(*d); });
         }
-        for (auto &stmt : module_.moduleStatements)
+        for (auto &stmt : module_->moduleStatements)
         {
             if (stmt != nullptr && stmt->kind == StmtKind::Const)
             {
@@ -1745,6 +1972,28 @@ private:
     // o.Lines(i): an element of an array member.
     Type checkMemberIndex(Expr &e)
     {
+        // Utils.Clean(s) or Utils.names(2): a Function or array element of a
+        // module, named through it.
+        if (e.left->kind == ExprKind::Member && e.left->left != nullptr)
+        {
+            if (const int m = moduleNamed(*e.left->left); m >= 0)
+            {
+                const std::string name = e.left->text;
+                e.kind = ExprKind::Call;
+                e.text = name;
+                e.left.reset();
+                if (Procedure *proc = qualifiedProcedure(m, name))
+                {
+                    return qualifiedCall(e, *proc);
+                }
+                if (Variable *v = qualifiedVariable(m, name); v != nullptr && v->rank > 0)
+                {
+                    return checkIndex(e, *v);
+                }
+                notInModule(m, name, e.location);
+                return Type::Error;
+            }
+        }
         if (e.left->kind == ExprKind::Member && e.left->text == "Exists" && e.left->left != nullptr)
         {
             if (const Variable *d = dictionaryOf(*e.left->left))
@@ -2027,6 +2276,25 @@ private:
         {
             diagnostics_.error(member->location, "expected '=' after this");
             return;
+        }
+        // Utils.Report x: a Sub (or Function) of a module, called through it.
+        if (member->left != nullptr)
+        {
+            if (const int m = moduleNamed(*member->left); m >= 0)
+            {
+                Procedure *proc = qualifiedProcedure(m, member->text);
+                if (proc == nullptr)
+                {
+                    notInModule(m, member->text, member->location);
+                    return;
+                }
+                s.kind = StmtKind::Call;
+                s.callee = proc->name;
+                s.procedure = proc;
+                s.args = std::move(args);
+                checkArguments(*proc, s.args, s.location);
+                return;
+            }
         }
         const Variable *d = member->left != nullptr ? dictionaryOf(*member->left) : nullptr;
         if (d == nullptr)
@@ -3296,6 +3564,19 @@ private:
     // module variables, Functions, controls.
     Type resolveName(Expr &e)
     {
+        // Checked before and resolved to something it cannot be looked up as
+        // again by its bare name (frmMain.t3 made t3; Utils.count made count):
+        // it stays what it is.
+        if (e.control != nullptr)
+        {
+            return Type::Control;
+        }
+        if (e.variable != nullptr && !e.variable->isConst && e.variable->rank == e.rank)
+        {
+            e.enumDef = e.variable->enumDef;
+            e.typeDef = e.variable->typeDef;
+            return e.variable->type;
+        }
         Variable *v = current_ != nullptr ? lookupLocal(e.text) : nullptr;
         if (v == nullptr && current_ != nullptr && current_->isFunction && e.text == current_->name)
         {
@@ -3421,6 +3702,10 @@ private:
             }
         }
 
+        if (reportAmbiguous(e.text, e.location))
+        {
+            return Type::Error;
+        }
         std::string message = "'" + e.text + "' is not declared (add a Dim)";
         for (const auto &scope : scopes_)
         {
@@ -3484,6 +3769,10 @@ private:
                 return resolveEnumMember(e, *it->second);
             }
         }
+        if (const int m = moduleNamed(object); m >= 0)
+        {
+            return resolveQualified(e, m);
+        }
         if (const Variable *d = dictionaryOf(object))
         {
             return dictionaryMember(e, *d, whole);
@@ -3506,6 +3795,21 @@ private:
             }
             return wholeWanted(e, resolveField(e, *object.typeDef),
                                whole); // the record it refers to
+        }
+        // frmMain.txtName: a form's control, named through the form (as other
+        // modules reach it); it is then the control itself.
+        if (object.control != nullptr && object.control->isForm)
+        {
+            for (auto &child : object.control->children)
+            {
+                if (child->name == e.text)
+                {
+                    e.kind = ExprKind::Name;
+                    e.left.reset();
+                    e.control = child.get();
+                    return Type::Control;
+                }
+            }
         }
         if (object.control == nullptr)
         {
@@ -3663,19 +3967,40 @@ private:
 
     // -- Whole program -----------------------------------------------------
 
+    // The program starts at its form, or (with no form) at Sub Main: one
+    // of either in the whole program. Several forms come with Phase 4.
     void checkEntryPoint()
     {
-        if (const Procedure *main = findProcedure("Main"))
+        const ControlDef *form = nullptr;
+        const Procedure *main = nullptr;
+        for (std::size_t i = 0; i < modules_.size(); ++i)
         {
-            if (main->isFunction || !main->parameters.empty())
+            if (const ControlDef *f = modules_[i]->form.get())
             {
-                diagnostics_.error(main->location, "Main must be a Sub with no parameters");
+                if (form != nullptr)
+                {
+                    diagnostics_.error(f->location, "a program has one form in this version (" +
+                                                        form->name + " is the other)");
+                }
+                form = form != nullptr ? form : f;
+            }
+            if (auto it = own_[i].procedures.find("Main"); it != own_[i].procedures.end())
+            {
+                if (main != nullptr)
+                {
+                    diagnostics_.error(it->second->location, "a program has one Sub Main");
+                }
+                main = main != nullptr ? main : it->second;
             }
         }
-        else if (module_.form == nullptr)
+        if (main != nullptr && (main->isFunction || !main->parameters.empty()))
         {
-            diagnostics_.error({1, 1}, "nothing to run: add a form (Begin Form ... End) or a "
-                                       "Sub Main");
+            diagnostics_.error(main->location, "Main must be a Sub with no parameters");
+        }
+        if (main == nullptr && form == nullptr)
+        {
+            diagnostics_.error({1, 1, 0}, "nothing to run: add a form (Begin Form ... End) or a "
+                                          "Sub Main");
         }
     }
 
@@ -3738,10 +4063,28 @@ private:
         }
     }
 
-    Module &module_;
+    // One module's own names (its whole module scope); the maps below are
+    // the view of the module being checked (see enter).
+    struct Names
+    {
+        std::map<std::string, std::string> claimed; // name -> what it is
+        std::map<std::string, ControlDef *> controls;
+        std::map<std::string, Variable *> globals;
+        std::map<std::string, Procedure *> procedures;
+        std::map<std::string, EnumDef *> enums;
+        std::map<std::string, TypeDef *> types;
+    };
+
+    std::vector<Module *> modules_;
+    std::vector<Names> own_;
+    std::map<std::string, std::size_t> moduleIndex_;
+    // Names Public in more than one other module, so not in the view: the
+    // modules they are in, for the message.
+    std::map<std::string, std::vector<std::string>> ambiguous_;
+    std::size_t here_ = 0;
+    Module *module_ = nullptr;
     Diagnostics &diagnostics_;
-    std::map<std::string, std::string> moduleNames_; // name -> what it is
-    std::map<std::string, ControlDef *> controls_;   // includes the form
+    std::map<std::string, ControlDef *> controls_; // this form and its controls; every form
     std::map<std::string, Variable *> globals_;
     std::map<std::string, Procedure *> procedures_;
 
@@ -3767,9 +4110,14 @@ private:
 
 } // namespace
 
+bool checkProgram(const std::vector<ast::Module *> &modules, Diagnostics &diagnostics)
+{
+    return Checker(modules, diagnostics).run();
+}
+
 bool checkModule(ast::Module &module, Diagnostics &diagnostics)
 {
-    return Checker(module, diagnostics).run();
+    return checkProgram({&module}, diagnostics);
 }
 
 } // namespace tf

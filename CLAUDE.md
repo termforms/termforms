@@ -148,8 +148,19 @@ authoritative for design rationale.
   offset y, the position advancing by x on each read, the size or position
   settable in the read or by a separate statement: done in 6b-3.
   Step 5 (arrays, Types, Ref, With, For Each, Dictionary) is complete.
-- **Next:** Phase 3 step 7, multiple modules and the `.vbp` project
-  file; settle its design with Jim first.
+- **Step 7 (28 Oct 2026), Jim settled:** `.vbp` as VB6-style Key=Value
+  lines; VB's visibility defaults; one form + modules now (several forms
+  in Phase 4); `tfc a.bas b.bas` works without a project file.
+  7a done: several modules. Sema: each module registers into its own
+  `Names`; `enter(i)` rebuilds the familiar maps (`globals_`, ...) as
+  module i's view (own + others' Public; a name Public in two others is
+  left out and recorded in `ambiguous_`); `moduleNamed`/`resolveQualified`
+  for Module.Name; forms are program-wide (frmMain.ctl). Codegen: one C
+  file, `gName/pName/tName` prefix a name with its module only when two
+  modules share it (single-file C is unchanged); `TF_AT(f_i, n)` marks
+  statements when there are several modules. Tests: a `.with` file lists
+  a test's other modules (in a sub-folder the globs skip).
+- **Next:** 7b, the `.vbp` project file.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -256,7 +267,8 @@ tests/
   errors/     .bas -> expected .err       golden/errors/run; new cases are
   run/        .bas + .keys -> .screen     just new files (re-run cmake)
               (+ .stderr = must fail with that message;
-              + .args = command-line arguments, one a line)
+              + .args = command-line arguments, one a line;
+              + .with = further modules, paths one a line)
   runtime/    C tests linked against tfrt
 examples/hello.bas                         the vertical-slice program
 ```

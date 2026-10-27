@@ -21,6 +21,7 @@
 #include <string.h>
 
 int32_t tf_current_line = 0;
+const char *tf_current_file = NULL;
 int tf_error_pending = 0;
 
 static const char *source_file = "program";
@@ -32,6 +33,7 @@ static int32_t try_depth = 0;
 /* Err: the error in flight, or the last one caught. Strings are owned. */
 static int32_t err_number = 0;
 static int32_t err_line = 0;
+static const char *err_file = NULL; /* where err_line is: NULL for the main file */
 static tf_string *err_description = NULL;
 static tf_string *err_source = NULL;
 
@@ -67,12 +69,13 @@ void tf_end(int exit_code)
 }
 
 /* Leaves raw mode and the alternate screen first, or the message is lost. */
-static TF_NORETURN void report_and_exit(int32_t number, int32_t line, const char *message)
+static TF_NORETURN void report_and_exit(int32_t number, const char *file, int32_t line,
+                                        const char *message)
 {
     tf_run_shutdown_hook();
     fflush(stdout);
-    fprintf(stderr, "%s:%ld: runtime error %ld: %s\n", source_file, (long)line, (long)number,
-            message);
+    fprintf(stderr, "%s:%ld: runtime error %ld: %s\n", file != NULL ? file : source_file,
+            (long)line, (long)number, message);
     exit(1);
 }
 
@@ -138,7 +141,8 @@ const char *tf_error_text(int32_t number)
 
 void tf_fatal_error(int number, const char *message)
 {
-    report_and_exit(number, tf_current_line, message != NULL ? message : tf_error_text(number));
+    report_and_exit(number, tf_current_file, tf_current_line,
+                    message != NULL ? message : tf_error_text(number));
 }
 
 /* Replaces Err; takes ownership of description and source. */
@@ -148,6 +152,7 @@ static void set_err(int32_t number, tf_string *description, tf_string *source)
     tf_str_release(err_source);
     err_number = number;
     err_line = tf_current_line;
+    err_file = tf_current_file;
     err_description = description;
     err_source = source;
 }
@@ -156,7 +161,8 @@ void tf_raise(int number, const char *message)
 {
     if (try_depth == 0)
     {
-        report_and_exit(number, tf_current_line, message != NULL ? message : tf_error_text(number));
+        report_and_exit(number, tf_current_file, tf_current_line,
+                        message != NULL ? message : tf_error_text(number));
     }
     if (tf_error_pending)
     {
@@ -187,7 +193,7 @@ void tf_throw(int32_t number, const tf_string *source, const tf_string *descript
     set_err(number, text, tf_str_ref((tf_string *)source));
     if (try_depth == 0)
     {
-        report_and_exit(err_number, err_line, tf_str_cstr(err_description));
+        report_and_exit(err_number, err_file, err_line, tf_str_cstr(err_description));
     }
     tf_error_pending = 1;
 }
@@ -196,7 +202,7 @@ void tf_rethrow(void)
 {
     if (try_depth == 0)
     {
-        report_and_exit(err_number, err_line, tf_str_cstr(err_description));
+        report_and_exit(err_number, err_file, err_line, tf_str_cstr(err_description));
     }
     tf_error_pending = 1;
 }
@@ -240,6 +246,7 @@ void tf_err_clear(void)
 {
     set_err(0, NULL, NULL);
     err_line = 0;
+    err_file = NULL;
 }
 
 void tf_err_save(tf_saved_error *saved)
@@ -247,6 +254,7 @@ void tf_err_save(tf_saved_error *saved)
     saved->pending = tf_error_pending;
     saved->number = err_number;
     saved->line = err_line;
+    saved->file = err_file;
     saved->description = tf_str_ref(err_description);
     saved->source = tf_str_ref(err_source);
     tf_error_pending = 0;
@@ -263,6 +271,7 @@ void tf_err_restore(tf_saved_error *saved)
     tf_str_release(err_source);
     err_number = saved->number;
     err_line = saved->line;
+    err_file = saved->file;
     err_description = saved->description;
     err_source = saved->source;
     saved->description = NULL;
@@ -270,7 +279,7 @@ void tf_err_restore(tf_saved_error *saved)
     /* With no Try left to run, the error can only end the program. */
     if (try_depth == 0)
     {
-        report_and_exit(err_number, err_line, tf_str_cstr(err_description));
+        report_and_exit(err_number, err_file, err_line, tf_str_cstr(err_description));
     }
     tf_error_pending = 1;
 }
@@ -287,7 +296,7 @@ void tf_check_uncaught(void)
 {
     if (tf_error_pending)
     {
-        report_and_exit(err_number, err_line, tf_str_cstr(err_description));
+        report_and_exit(err_number, err_file, err_line, tf_str_cstr(err_description));
     }
 }
 

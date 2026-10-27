@@ -67,6 +67,7 @@ End Sub
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
+| Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
 | System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
 | Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
@@ -261,6 +262,20 @@ home = Environ$("HOME")           ' "" when not set
 args = Command$                   ' the arguments, joined by spaces
 stamp = Now                       ' "2026-10-28 14:05:09"
 ```
+
+## Modules
+
+```sh
+tfc main.bas stock.bas reports.bas       # one program of three modules
+```
+
+- A module is named after its file (`stock.bas` is `stock`). Its Subs,
+  Functions, Types and Enums are Public (seen by every module) unless
+  marked `Private`; its `Dim`s and `Const`s are Private unless declared
+  `Public x As T`.
+- `stock.Label()` names one module's `Label` when two have one.
+- Other modules reach the form's controls through the form:
+  `frmMain.txtName.Text`.
 
 ## Dictionaries
 

@@ -18,14 +18,14 @@ namespace
 
 // Reserved words, upper case. Some are not used by the parser yet but are
 // reserved now so programs written today keep compiling as the language grows.
-constexpr std::array<std::string_view, 61> kKeywords = {
-    "AND",    "AS",      "BEGIN", "BOOLEAN", "BYREF", "BYTE",     "BYVAL", "CALL",     "CASE",
-    "CATCH",  "CONST",   "CTYPE", "DIM",     "DO",    "DOUBLE",   "EACH",  "ELSE",     "ELSEIF",
-    "END",    "ENUM",    "ERASE", "EXIT",    "FALSE", "FINALLY",  "FOR",   "FUNCTION", "IF",
-    "IN",     "INTEGER", "IS",    "ISNOT",   "LONG",  "LOOP",     "MOD",   "NEW",      "NEXT",
-    "NOT",    "NOTHING", "OF",    "OPTION",  "OR",    "PRESERVE", "REDIM", "REF",      "REM",
-    "RETURN", "SELECT",  "STEP",  "STRING",  "SUB",   "THEN",     "THROW", "TO",       "TRUE",
-    "TRY",    "TYPE",    "UNTIL", "WEND",    "WHEN",  "WHILE",    "WITH"};
+constexpr std::array<std::string_view, 63> kKeywords = {
+    "AND",   "AS",      "BEGIN",  "BOOLEAN", "BYREF", "BYTE",     "BYVAL",   "CALL",     "CASE",
+    "CATCH", "CONST",   "CTYPE",  "DIM",     "DO",    "DOUBLE",   "EACH",    "ELSE",     "ELSEIF",
+    "END",   "ENUM",    "ERASE",  "EXIT",    "FALSE", "FINALLY",  "FOR",     "FUNCTION", "IF",
+    "IN",    "INTEGER", "IS",     "ISNOT",   "LONG",  "LOOP",     "MOD",     "NEW",      "NEXT",
+    "NOT",   "NOTHING", "OF",     "OPTION",  "OR",    "PRESERVE", "PRIVATE", "PUBLIC",   "REDIM",
+    "REF",   "REM",     "RETURN", "SELECT",  "STEP",  "STRING",   "SUB",     "THEN",     "THROW",
+    "TO",    "TRUE",    "TRY",    "TYPE",    "UNTIL", "WEND",     "WHEN",    "WHILE",    "WITH"};
 
 std::string toUpper(std::string_view text)
 {
@@ -53,8 +53,8 @@ bool isSuffix(char c)
 class Lexer
 {
 public:
-    Lexer(std::string_view source, Diagnostics &diagnostics)
-        : source_(source), diagnostics_(diagnostics)
+    Lexer(std::string_view source, Diagnostics &diagnostics, int file)
+        : source_(source), diagnostics_(diagnostics), file_(file)
     {
     }
 
@@ -86,7 +86,7 @@ private:
     {
         return pos_ + ahead < source_.size() ? source_[pos_ + ahead] : '\0';
     }
-    Location here() const { return {line_, column_}; }
+    Location here() const { return {line_, column_, file_}; }
 
     void advance()
     {
@@ -432,6 +432,7 @@ private:
     std::size_t pos_ = 0;
     int line_ = 1;
     int column_ = 1;
+    int file_ = 0;
 };
 
 } // namespace
@@ -442,9 +443,9 @@ bool isReservedKeyword(std::string_view word)
     return std::find(kKeywords.begin(), kKeywords.end(), upper) != kKeywords.end();
 }
 
-std::vector<Token> tokenize(std::string_view source, Diagnostics &diagnostics)
+std::vector<Token> tokenize(std::string_view source, Diagnostics &diagnostics, int file)
 {
-    return Lexer(source, diagnostics).run();
+    return Lexer(source, diagnostics, file).run();
 }
 
 } // namespace tf

@@ -106,17 +106,25 @@ struct StatementScope
 class Emitter
 {
 public:
-    Emitter(const Module &module, const EmitOptions &options) : module_(module), options_(options)
+    Emitter(const std::vector<const Module *> &modules, const EmitOptions &options)
+        : modules_(modules), options_(options)
     {
+        nameCNames();
     }
 
     std::string run()
     {
-        checks_ = containsTry(module_);
+        // A Try anywhere makes every procedure test for errors: an error in
+        // one module's Sub may be caught in another's caller.
+        checks_ = std::any_of(modules_.begin(), modules_.end(),
+                              [](const Module *m) { return containsTry(*m); });
         std::ostringstream body;
-        for (const auto &proc : module_.procedures)
+        for (const Module *m : modules_)
         {
-            emitProcedure(body, *proc);
+            for (const auto &proc : m->procedures)
+            {
+                emitProcedure(body, *proc);
+            }
         }
         emitMain(body);
 
@@ -136,30 +144,30 @@ private:
     // busy (an array in it is locked, so it must not be overwritten).
     void emitTypes(std::ostringstream &out)
     {
-        if (module_.types.empty())
+        if (allTypes().empty())
         {
             return;
         }
         out << "/* Types */\n";
-        for (const auto &def : module_.types)
+        for (const TypeDef *def : allTypes())
         {
-            out << "typedef struct t_" << def->name << " t_" << def->name << ";\n";
+            out << "typedef struct " << tName(*def) << " " << tName(*def) << ";\n";
         }
         out << '\n';
         std::set<const TypeDef *> done;
-        for (const auto &def : module_.types)
+        for (const TypeDef *def : allTypes())
         {
             emitStruct(out, *def, done);
         }
         // The helpers are written first: their array members may need ops too.
         std::ostringstream helpers;
-        for (const auto &def : module_.types)
+        for (const TypeDef *def : allTypes())
         {
             emitTypeHelpers(helpers, *def);
         }
-        for (const auto &def : module_.types)
+        for (const TypeDef *def : allTypes())
         {
-            const std::string t = "t_" + def->name;
+            const std::string t = tName(*def);
             // Not every program uses every helper (a Type never copied).
             out << "static TF_MAYBE_UNUSED void " << t << "_init(void *record);\n"
                 << "static TF_MAYBE_UNUSED void " << t << "_free(void *record);\n"
@@ -168,7 +176,7 @@ private:
             {
                 out << "static TF_MAYBE_UNUSED int " << t << "_busy(const " << t << " *x);\n";
             }
-            if (opsNeeded_.count(def.get()) != 0) // only arrays and Refs of the Type need it
+            if (opsNeeded_.count(def) != 0) // only arrays and Refs of the Type need it
             {
                 out << "static const tf_record_ops " << t << "_ops = {sizeof(" << t << "), " << t
                     << "_init, " << t << "_free, " << t << "_copy};\n";
@@ -191,7 +199,7 @@ private:
                 emitStruct(out, *m->typeDef, done);
             }
         }
-        out << "struct t_" << def.name << "\n{\n";
+        out << "struct " << tName(def) << "\n{\n";
         for (const auto &m : def.members)
         {
             out << "    "
@@ -216,7 +224,7 @@ private:
 
     void emitTypeHelpers(std::ostringstream &out, const TypeDef &def)
     {
-        const std::string t = "t_" + def.name;
+        const std::string t = tName(def);
 
         out << "static void " << t << "_init(void *record)\n{\n"
             << "    " << t << " *x = record;\n"
@@ -230,7 +238,7 @@ private:
             }
             else if (m->rank == 0 && m->type == Type::Record)
             {
-                out << "    t_" << m->typeDef->name << "_init(&x->f_" << m->name << ");\n";
+                out << "    " << tName(*m->typeDef) << "_init(&x->f_" << m->name << ");\n";
             }
         }
         out << "}\n\n";
@@ -255,7 +263,7 @@ private:
             }
             else if (m->type == Type::Record)
             {
-                out << "    t_" << m->typeDef->name << "_free(&" << f << ");\n";
+                out << "    " << tName(*m->typeDef) << "_free(&" << f << ");\n";
             }
             else
             {
@@ -300,7 +308,7 @@ private:
             }
             else if (m->type == Type::Record)
             {
-                out << "    t_" << m->typeDef->name << "_copy(&" << to << ", &" << from << ");\n";
+                out << "    " << tName(*m->typeDef) << "_copy(&" << to << ", &" << from << ");\n";
             }
             else
             {
@@ -322,8 +330,8 @@ private:
                 }
                 else if (m->type == Type::Record && holdsArrays(*m->typeDef))
                 {
-                    busy += (busy.empty() ? "" : " || ") + std::string("t_") + m->typeDef->name +
-                            "_busy(&x->f_" + m->name + ")";
+                    busy += (busy.empty() ? "" : " || ") + tName(*m->typeDef) + "_busy(&x->f_" +
+                            m->name + ")";
                 }
             }
             out << "static int " << t << "_busy(const " << t << " *x)\n{\n"
@@ -341,30 +349,40 @@ private:
             << "#include \"termforms/tf_runtime.h\"\n\n";
         emitTypes(out);
 
-        if (module_.form != nullptr)
+        if (const ControlDef *form = theForm())
         {
             out << "/* Form and controls */\n";
-            out << "static tf_control *c_" << module_.form->name << ";\n";
-            for (const auto &child : module_.form->children)
+            out << "static tf_control *c_" << form->name << ";\n";
+            for (const auto &child : form->children)
             {
                 out << "static tf_control *c_" << child->name << ";\n";
             }
             out << '\n';
         }
 
-        if (std::any_of(module_.globals.begin(), module_.globals.end(),
-                        [](const auto &v) { return !v->isConst; }))
+        if (std::any_of(allGlobals().begin(), allGlobals().end(),
+                        [](const Variable *v) { return !v->isConst; }))
         {
             out << "/* Module-level variables */\n";
-            for (const auto &v : module_.globals)
+            for (const Variable *v : allGlobals())
             {
                 if (!v->isConst) // a Const's uses are its value: it needs no storage
                 {
                     out << "static "
-                        << (v->rank > 0 ? "tf_array g_" + v->name
-                                        : declarationOf(*v, "g_" + v->name))
+                        << (v->rank > 0 ? "tf_array " + gName(*v) : declarationOf(*v, gName(*v)))
                         << ";\n";
                 }
+            }
+            out << '\n';
+        }
+        if (modules_.size() > 1)
+        {
+            // Runtime errors name the file a statement is in (TF_AT).
+            out << "/* Source files */\n";
+            for (std::size_t i = 0; i < options_.sourcePaths.size(); ++i)
+            {
+                out << "static const char f_" << i << "[] = " << cString(options_.sourcePaths[i])
+                    << ";\n";
             }
             out << '\n';
         }
@@ -379,19 +397,23 @@ private:
             out << '\n';
         }
 
-        if (!module_.procedures.empty())
+        if (std::any_of(modules_.begin(), modules_.end(),
+                        [](const Module *m) { return !m->procedures.empty(); }))
         {
             out << "/* Subs and Functions */\n";
-            for (const auto &proc : module_.procedures)
+            for (const Module *m : modules_)
             {
-                out << signature(*proc) << ";\n";
+                for (const auto &proc : m->procedures)
+                {
+                    out << signature(*proc) << ";\n";
+                }
             }
             out << '\n';
         }
     }
 
     // "static int32_t p_Area(int32_t v_w, int32_t v_h)"
-    static std::string signature(const Procedure &proc)
+    std::string signature(const Procedure &proc) const
     {
         std::string out = "static ";
         out += proc.isFunction ? cTypeOf(*proc.result) : "void";
@@ -399,7 +421,7 @@ private:
         {
             out += ' ';
         }
-        out += "p_" + proc.name + "(";
+        out += pName(proc) + "(";
         if (proc.parameters.empty())
         {
             out += "void";
@@ -447,7 +469,7 @@ private:
         {
             if (p->type == Type::Record && !p->byRef && p->rank == 0)
             {
-                out << "    t_" << p->typeDef->name << " v_" << p->name << ";\n";
+                out << "    " << tName(*p->typeDef) << " v_" << p->name << ";\n";
             }
         }
         for (const auto &v : proc.locals) // fixed arrays get their size at once
@@ -458,14 +480,14 @@ private:
             }
             else if (v->rank == 0 && v->type == Type::Record && !v->isConst)
             {
-                out << "    t_" << v->typeDef->name << "_init(&" << names_.at(v.get()) << ");\n";
+                out << "    " << tName(*v->typeDef) << "_init(&" << names_.at(v.get()) << ");\n";
             }
         }
         for (const auto &p : proc.parameters)
         {
             if (p->type == Type::Record && !p->byRef && p->rank == 0)
             {
-                const std::string t = "t_" + p->typeDef->name;
+                const std::string t = tName(*p->typeDef);
                 out << "    " << t << "_init(&v_" << p->name << "); " << t << "_copy(&v_" << p->name
                     << ", a_" << p->name << ");\n";
             }
@@ -474,7 +496,7 @@ private:
         {
             // Returned by value: the caller owns (and frees) what it gets.
             out << "    " << declarationOf(*proc.result, "r_" + proc.name) << ";\n"
-                << "    t_" << proc.result->typeDef->name << "_init(&r_" << proc.name << ");\n";
+                << "    " << tName(*proc.result->typeDef) << "_init(&r_" << proc.name << ");\n";
         }
         else if (proc.isFunction)
         {
@@ -503,7 +525,7 @@ private:
             }
             else if (p->type == Type::Record && !p->byRef && p->rank == 0)
             {
-                cleanup_ += " t_" + p->typeDef->name + "_free(&v_" + p->name + ");";
+                cleanup_ += " " + tName(*p->typeDef) + "_free(&v_" + p->name + ");";
             }
             else if (p->type == Type::Ref && !p->byRef && p->rank == 0)
             {
@@ -518,7 +540,7 @@ private:
             }
             else if (v->type == Type::Record && !v->isConst)
             {
-                cleanup_ += " t_" + v->typeDef->name + "_free(&" + names_.at(v.get()) + ");";
+                cleanup_ += " " + tName(*v->typeDef) + "_free(&" + names_.at(v.get()) + ");";
             }
             else if (v->type == Type::Ref)
             {
@@ -572,29 +594,29 @@ private:
         {
             out << "    tf_runtime_args(argc, argv);\n";
         }
-        for (const auto &v : module_.globals)
+        for (const Variable *v : allGlobals()) // in the program's order of modules
         {
             if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
             {
                 line(out, v->location);
-                out << "    " << arrayInit(*v, "&g_" + v->name) << '\n';
+                out << "    " << arrayInit(*v, "&" + gName(*v)) << '\n';
             }
             else if (v->rank == 0 && v->type == Type::Record && !v->isConst)
             {
                 line(out, v->location);
-                out << "    t_" << v->typeDef->name << "_init(&g_" << v->name << ");\n";
+                out << "    " << tName(*v->typeDef) << "_init(&" << gName(*v) << ");\n";
             }
             else if (v->autoNew)
             {
                 line(out, v->location);
-                out << "    g_" << v->name << " = tf_ref_new(" << opsOf(*v->typeDef) << ");\n";
+                out << "    " << gName(*v) << " = tf_ref_new(" << opsOf(*v->typeDef) << ");\n";
             }
         }
 
-        const ControlDef *form = module_.form.get();
+        const ControlDef *form = theForm();
         if (form == nullptr)
         {
-            out << "    p_Main();\n"
+            out << "    " << pName(*mainProcedure()) << "();\n"
                 << (checks_ ? "    tf_check_uncaught();\n" : "") << "    return 0;\n}\n";
             return;
         }
@@ -614,7 +636,7 @@ private:
 
         // Event wiring, in the order the Subs appear in the source.
         const Procedure *load = nullptr;
-        for (const auto &proc : module_.procedures)
+        for (const auto &proc : formModule()->procedures)
         {
             if (proc->eventControl == nullptr)
             {
@@ -631,13 +653,13 @@ private:
                 if (event.kind == proc->event && event.cName != nullptr)
                 {
                     out << "    tf_control_on(c_" << proc->eventControl->name << ", " << event.cName
-                        << ", p_" << proc->name << ");\n";
+                        << ", " << pName(*proc) << ");\n";
                 }
             }
         }
         if (load != nullptr)
         {
-            out << "    p_" << load->name << "();\n";
+            out << "    " << pName(*load) << "();\n";
             if (checks_)
             {
                 out << "    tf_check_uncaught();\n";
@@ -711,8 +733,8 @@ private:
                         }
                         else if (v->type == Type::Record)
                         {
-                            one = "t_" + v->typeDef->name + "_free(&" + n + "); t_" +
-                                  v->typeDef->name + "_init(&" + n + ");";
+                            one = tName(*v->typeDef) + "_free(&" + n + "); " + tName(*v->typeDef) +
+                                  "_init(&" + n + ");";
                         }
                         else if (v->type == Type::Ref)
                         {
@@ -831,7 +853,7 @@ private:
     void emitLine(std::ostringstream &out, Location where, int depth, const std::string &code)
     {
         line(out, where);
-        out << indent(depth) << "TF_LINE(" << where.line << "); " << code << '\n';
+        out << indent(depth) << mark(where) << "; " << code << '\n';
     }
 
     // Emits arm `index` of an If (and, through else, the arms after it).
@@ -845,8 +867,7 @@ private:
         line(out, arm.condition->location);
         if (scope.prelude.empty() && !(checks_ && mayFail(*arm.condition)))
         {
-            out << indent(depth) << "TF_LINE(" << arm.condition->location.line << "); if ("
-                << condition << ")\n";
+            out << indent(depth) << mark(arm.condition->location) << "; if (" << condition << ")\n";
             emitArmBodies(out, s, index, depth);
             return;
         }
@@ -855,7 +876,7 @@ private:
         // Kept on one line: a second line would be attributed to the next
         // BASIC line by the debugger.
         const std::string cond = "cond_" + std::to_string(arm.condition->location.line);
-        out << indent(depth) << "{ TF_LINE(" << arm.condition->location.line << ");"
+        out << indent(depth) << "{ " << mark(arm.condition->location) << ";"
             << evaluate(scope, cond, condition, mayFail(*arm.condition)) << " if (" << cond
             << ")\n";
         emitArmBodies(out, s, index, depth);
@@ -962,7 +983,7 @@ private:
         // Temporaries need a block of their own; the loop goes inside it.
         const bool braced = !scope.prelude.empty();
         line(out, s.location);
-        out << indent(depth) << (braced ? "{ " : "") << "TF_LINE(" << s.location.line << ");"
+        out << indent(depth) << (braced ? "{ " : "") << mark(s.location) << ";"
             << withTemporaries(scope, code) << '\n';
 
         const int inner = depth + (braced ? 1 : 0);
@@ -1025,7 +1046,7 @@ private:
         }
         const std::string cond = "cond_" + std::to_string(where.line);
         line(out, where);
-        out << indent(depth) << "{ TF_LINE(" << where.line << ");"
+        out << indent(depth) << "{ " << mark(where) << ";"
             << evaluate(scope, cond, condition, mayFail(*s.condition)) << " if ("
             << (s.until ? "" : "!") << cond << ") break; }\n";
     }
@@ -1082,7 +1103,7 @@ private:
         std::string store;
         if (r.type == Type::Record)
         {
-            store = "t_" + r.typeDef->name + "_copy(&" + result + ", &" +
+            store = tName(*r.typeDef) + "_copy(&" + result + ", &" +
                     parenthesised(recordValue(*s.value, v, scope)) + ");";
         }
         else if (r.type == Type::Ref)
@@ -1216,8 +1237,8 @@ private:
         tries_.back().part = TryContext::Part::Finally;
         finally << indent(depth) << "finally_" << n << ":\n";
         line(finally, s.hasFinally ? s.finallyLocation : s.endLocation);
-        const int finallyLine = (s.hasFinally ? s.finallyLocation : s.endLocation).line;
-        finally << indent(depth + 1) << "TF_LINE(" << finallyLine << "); tf_try_leave();"
+        const Location finallyAt = s.hasFinally ? s.finallyLocation : s.endLocation;
+        finally << indent(depth + 1) << mark(finallyAt) << "; tf_try_leave();"
                 << (s.hasFinally ? " tf_err_save(&saved_" + n + ");" : "") << '\n';
         emitBlock(finally, s.finallyBody, depth + 1);
 
@@ -1244,7 +1265,7 @@ private:
         }
 
         line(out, s.location);
-        out << indent(depth) << "{ TF_LINE(" << s.location.line << "); tf_try_enter();"
+        out << indent(depth) << "{ " << mark(s.location) << "; tf_try_enter();"
             << (done.leaves.empty() ? "" : " int leave_" + n + " = 0;")
             << (s.hasFinally ? " tf_saved_error saved_" + n + ";" : "") << '\n';
         out << body.str() << catches.str() << finally.str();
@@ -1258,7 +1279,7 @@ private:
         if (c.when == nullptr)
         {
             line(out, c.location);
-            out << indent(depth) << "TF_LINE(" << c.location.line << ");\n";
+            out << indent(depth) << mark(c.location) << ";\n";
             out << indent(depth) << "{\n";
             emitBlock(out, c.body, depth + 1);
             if (!endsInJump(c.body))
@@ -1273,7 +1294,7 @@ private:
         const std::string condition = unparenthesised(expr(*c.when, scope).code);
         const std::string cond = "cond_" + std::to_string(c.location.line);
         line(out, c.location);
-        out << indent(depth) << "{ TF_LINE(" << c.location.line << ");"
+        out << indent(depth) << "{ " << mark(c.location) << ";"
             << evaluate(scope, cond, condition, mayFail(*c.when)) << " if (" << cond << ")\n";
         out << indent(depth) << "{\n";
         emitBlock(out, c.body, depth + 1);
@@ -1621,7 +1642,7 @@ private:
     // result, is freed after the statement like any temporary).
     std::string copyRecord(const Expr &target, const std::string &to, const std::string &from)
     {
-        return "t_" + target.typeDef->name + "_copy(" + to + ", &" + parenthesised(from) + ");";
+        return tName(*target.typeDef) + "_copy(" + to + ", &" + parenthesised(from) + ");";
     }
 
     // The record a Ref refers to, for a member or a copy: (*(t_X *)tf_ref_get(r, ops)).
@@ -1640,8 +1661,8 @@ private:
             return v.code;
         }
         const std::string temp = scope.newTemp();
-        scope.prelude.push_back("t_" + value.typeDef->name + " *" + temp + " = tf_ref_get(" +
-                                v.code + ", " + opsOf(*value.typeDef) + ");");
+        scope.prelude.push_back(tName(*value.typeDef) + " *" + temp + " = tf_ref_get(" + v.code +
+                                ", " + opsOf(*value.typeDef) + ");");
         checkpoint(scope);
         return "(*" + temp + ")";
     }
@@ -1787,7 +1808,7 @@ private:
         const std::string value = scope.newTemp();
         if (target.type == Type::Record)
         {
-            const std::string t = "t_" + target.typeDef->name;
+            const std::string t = tName(*target.typeDef);
             scope.prelude.push_back(
                 t + " " + value + "; " + t + "_init(&" + value + "); " +
                 copyRecord(target, "&" + value, recordValue(*s.value, v, scope)));
@@ -1901,13 +1922,13 @@ private:
         const Procedure &callee = *s.procedure;
         std::vector<std::string> locks;
         const std::string call =
-            "p_" + callee.name + "(" + arguments(callee, s.args, scope, locks) + ")";
+            pName(callee) + "(" + arguments(callee, s.args, scope, locks) + ")";
         if (callee.isFunction && callee.result->type == Type::Record)
         {
             // A record result is still the caller's to free.
             const std::string temp = scope.newTemp();
             scope.prelude.push_back(declarationOf(*callee.result, temp) + ";");
-            scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
+            scope.releases.push_back(tName(*callee.result->typeDef) + "_free(&" + temp + ");");
             return lockedAround(locks, temp + " = " + call + ";");
         }
         const std::string statement =
@@ -2174,7 +2195,7 @@ private:
         const Procedure &callee = *e.procedure;
         std::vector<std::string> locks;
         const std::string code =
-            "p_" + callee.name + "(" + arguments(callee, e.args, scope, locks) + ")";
+            pName(callee) + "(" + arguments(callee, e.args, scope, locks) + ")";
         const std::string temp = scope.newTemp();
         if (locks.empty())
         {
@@ -2191,7 +2212,7 @@ private:
         }
         else if (callee.result->type == Type::Record)
         {
-            scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
+            scope.releases.push_back(tName(*callee.result->typeDef) + "_free(&" + temp + ");");
         }
         else if (callee.result->type == Type::Ref)
         {
@@ -2452,7 +2473,7 @@ private:
     {
         if (v.isModuleLevel)
         {
-            return "g_" + v.name;
+            return gName(v);
         }
         if (v.isResult)
         {
@@ -2545,38 +2566,38 @@ private:
     }
 
     // "(int32_t *)", "(tf_string **)", "(t_Customer *)": an address as its type.
-    static std::string pointerCastOf(const Expr &e)
+    std::string pointerCastOf(const Expr &e) const
     {
         const std::string type = cTypeOf(e);
         return "(" + type + (type.back() == '*' ? "*" : " *") + ")";
     }
 
     // The C type of a variable's or an expression's value.
-    static std::string cTypeOf(const Variable &v) { return cTypeOf(v.type, v.typeDef, storage(v)); }
+    std::string cTypeOf(const Variable &v) const { return cTypeOf(v.type, v.typeDef, storage(v)); }
 
-    static std::string cTypeOf(const Expr &e) { return cTypeOf(e.type, e.typeDef, storage(e)); }
+    std::string cTypeOf(const Expr &e) const { return cTypeOf(e.type, e.typeDef, storage(e)); }
 
     // A record is t_<Type>; a Ref a pointer to one (Nothing: void *).
-    static std::string cTypeOf(Type type, const TypeDef *def, Type stored)
+    std::string cTypeOf(Type type, const TypeDef *def, Type stored) const
     {
         if (type == Type::Record)
         {
-            return "t_" + def->name;
+            return tName(*def);
         }
         if (type == Type::Ref)
         {
-            return def != nullptr ? "t_" + def->name + " *" : "void *";
+            return def != nullptr ? tName(*def) + " *" : "void *";
         }
         return cType(stored);
     }
 
-    static std::string declarationOf(const Variable &v, const std::string &name)
+    std::string declarationOf(const Variable &v, const std::string &name) const
     {
         const std::string type = cTypeOf(v);
         return type + (type.back() == '*' ? "" : " ") + name;
     }
 
-    static std::string declarationOf(const Expr &e, const std::string &name)
+    std::string declarationOf(const Expr &e, const std::string &name) const
     {
         const std::string type = cTypeOf(e);
         return type + (type.back() == '*' ? "" : " ") + name;
@@ -2592,7 +2613,7 @@ private:
     std::string opsOf(const TypeDef &def)
     {
         opsNeeded_.insert(&def);
-        return "&t_" + def.name + "_ops";
+        return "&" + tName(def) + "_ops";
     }
 
     // "(const int32_t[]){10, 20}": a shape for the runtime.
@@ -2798,16 +2819,142 @@ private:
 
     void line(std::ostringstream &out, Location where) const
     {
-        out << "#line " << where.line << ' ' << cString(options_.sourcePath) << '\n';
+        out << "#line " << where.line << ' ' << cString(sourceOf(where)) << '\n';
     }
+
+    // The file a Location is in, as #line names it.
+    const std::string &sourceOf(Location where) const
+    {
+        const auto i = static_cast<std::size_t>(where.file);
+        return i < options_.sourcePaths.size() ? options_.sourcePaths[i] : options_.sourcePath;
+    }
+
+    // Before each statement: its line for runtime errors (and Err.Line),
+    // and with several modules its file too.
+    std::string mark(Location where) const
+    {
+        return modules_.size() > 1 ? "TF_AT(f_" + std::to_string(where.file) + ", " +
+                                         std::to_string(where.line) + ")"
+                                   : "TF_LINE(" + std::to_string(where.line) + ")";
+    }
+
+    // -- The program's modules ------------------------------------------------
+
+    std::vector<const TypeDef *> allTypes() const
+    {
+        std::vector<const TypeDef *> all;
+        for (const Module *m : modules_)
+        {
+            for (const auto &def : m->types)
+            {
+                all.push_back(def.get());
+            }
+        }
+        return all;
+    }
+
+    const std::vector<const Variable *> &allGlobals()
+    {
+        if (globals_.empty())
+        {
+            for (const Module *m : modules_)
+            {
+                for (const auto &v : m->globals)
+                {
+                    globals_.push_back(v.get());
+                }
+            }
+        }
+        return globals_;
+    }
+
+    const Module *formModule() const
+    {
+        for (const Module *m : modules_)
+        {
+            if (m->form != nullptr)
+            {
+                return m;
+            }
+        }
+        return nullptr;
+    }
+
+    const ControlDef *theForm() const
+    {
+        const Module *m = formModule();
+        return m != nullptr ? m->form.get() : nullptr;
+    }
+
+    const Procedure *mainProcedure() const
+    {
+        for (const Module *m : modules_)
+        {
+            for (const auto &proc : m->procedures)
+            {
+                if (proc->name == "Main")
+                {
+                    return proc.get();
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    // C names: g_<name>, p_<name>, t_<name>, unless two modules use the
+    // same name (each its own Private one): then g_<module>_<name>, so a
+    // single module's C never changes.
+    void nameCNames()
+    {
+        std::map<std::string, int> globals, procs, types;
+        for (const Module *m : modules_)
+        {
+            for (const auto &v : m->globals)
+            {
+                ++globals[v->name];
+            }
+            for (const auto &proc : m->procedures)
+            {
+                ++procs[proc->name];
+            }
+            for (const auto &def : m->types)
+            {
+                ++types[def->name];
+            }
+        }
+        for (const Module *m : modules_)
+        {
+            auto c = [&](const std::string &name, std::map<std::string, int> &uses) {
+                return uses[name] > 1 ? m->name + "_" + name : name;
+            };
+            for (const auto &v : m->globals)
+            {
+                cNames_[v.get()] = "g_" + c(v->name, globals);
+            }
+            for (const auto &proc : m->procedures)
+            {
+                cNames_[proc.get()] = "p_" + c(proc->name, procs);
+            }
+            for (const auto &def : m->types)
+            {
+                cNames_[def.get()] = "t_" + c(def->name, types);
+            }
+        }
+    }
+
+    std::string gName(const Variable &v) const { return cNames_.at(&v); }
+    std::string pName(const Procedure &p) const { return cNames_.at(&p); }
+    std::string tName(const TypeDef &d) const { return cNames_.at(&d); }
 
     static std::string indent(int depth)
     {
         return std::string(static_cast<std::size_t>(depth) * 4, ' ');
     }
 
-    const Module &module_;
+    std::vector<const Module *> modules_;
     const EmitOptions &options_;
+    std::map<const void *, std::string> cNames_; // a global, procedure or Type: its C name
+    std::vector<const Variable *> globals_;      // every module's, in order (allGlobals)
     std::vector<std::string> literals_;
     std::map<std::string, std::size_t> literalIndex_;
 
@@ -2829,9 +2976,14 @@ private:
 
 } // namespace
 
+std::string emitC(const std::vector<const ast::Module *> &modules, const EmitOptions &options)
+{
+    return Emitter(modules, options).run();
+}
+
 std::string emitC(const ast::Module &module, const EmitOptions &options)
 {
-    return Emitter(module, options).run();
+    return emitC(std::vector<const ast::Module *>{&module}, options);
 }
 
 } // namespace tf
