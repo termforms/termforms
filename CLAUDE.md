@@ -107,8 +107,9 @@ authoritative for design rationale.
   codegen's; left as is.
   Driver (Jim, 27 Oct 2026): the programmer never sees C compiler output.
   Builds pass `-w` / `/w`; the compiler's messages go to `<out>.tf-log`
-  (shown live with `-v`); "cannot run the C compiler" when the shell
-  reports no such command; any other C failure is reported as a tfc
+  (shown live with `-v`); "cannot run the C compiler" when its program
+  is not found (`canRun`, checked before running: cmd.exe's not-found
+  status is not dependable); any other C failure is reported as a tfc
   internal error, keeping `.tf.c` and `.tf-log`.
 - **Next:** Phase 3 step 6 (string library, file I/O, Command$,
   Environ$); confirm with Jim. Step 5 (arrays, Types, Ref, With, For
@@ -424,9 +425,8 @@ Phase 3, language core:
 6. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
 7. Multiple modules and the `.vbp` project file.
 
-After Phase 3 (agreed with Jim, 27 Oct 2026): a BASIC-level warning for
-a local assigned but never read (as VB.NET), at the .bas line; settle
-its rules (which cases, how to turn it off) with Jim first.
+Not planned (Jim, 27 Oct 2026): warnings for a local assigned but never
+read. Not worth the effort for TermForms' use; do not propose it again.
 
 Phase 4, TUI runtime: Label, CheckBox, OptionButton, ListBox, Frame, Timer;
 menus (F10, Alt+letter); MsgBox/InputBox and a modal form stack; overlay

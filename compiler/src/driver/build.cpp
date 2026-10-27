@@ -18,10 +18,6 @@
 #include <sstream>
 #include <system_error>
 
-#if !defined(_WIN32)
-#include <sys/wait.h> // WIFEXITED, for the status std::system returns
-#endif
-
 namespace fs = std::filesystem;
 
 namespace tf::driver
@@ -62,9 +58,8 @@ std::string getEnv(const char *name)
     return value != nullptr ? value : "";
 }
 
-// Finds an executable on PATH; returns true if present. Only the Windows
-// default-compiler search uses it.
-[[maybe_unused]] bool onPath(const std::string &name)
+// Finds an executable on PATH; returns true if present.
+bool onPath(const std::string &name)
 {
     const std::string path = getEnv("PATH");
     const char separator = kWindowsHost ? ';' : ':';
@@ -77,7 +72,9 @@ std::string getEnv(const char *name)
         {
             std::error_code ec;
             if (fs::exists(fs::path(dir) / name, ec) ||
-                (kWindowsHost && fs::exists(fs::path(dir) / (name + ".exe"), ec)))
+                (kWindowsHost && (fs::exists(fs::path(dir) / (name + ".exe"), ec) ||
+                                  fs::exists(fs::path(dir) / (name + ".cmd"), ec) ||
+                                  fs::exists(fs::path(dir) / (name + ".bat"), ec))))
             {
                 return true;
             }
@@ -85,6 +82,36 @@ std::string getEnv(const char *name)
         start = end + 1;
     }
     return false;
+}
+
+// Can the shell run the program a compiler command starts with ("zig" in
+// "zig cc -target ...", a quoted path)? Asked before running it, because
+// the shells' "no such command" statuses are not dependable (cmd.exe's
+// varies with redirection).
+bool canRun(const std::string &command)
+{
+    std::string program;
+    std::size_t i = command.find_first_not_of(' ');
+    if (i == std::string::npos)
+    {
+        return false;
+    }
+    if (command[i] == '"')
+    {
+        const std::size_t close = command.find('"', i + 1);
+        program =
+            command.substr(i + 1, close == std::string::npos ? std::string::npos : close - i - 1);
+    }
+    else
+    {
+        program = command.substr(i, command.find(' ', i) - i);
+    }
+    std::error_code ec;
+    if (program.find('/') != std::string::npos || program.find('\\') != std::string::npos)
+    {
+        return fs::exists(program, ec) || (kWindowsHost && fs::exists(program + ".exe", ec));
+    }
+    return onPath(program);
 }
 
 // --cc, then $TFC_CC, then the platform default.
@@ -185,16 +212,6 @@ CompilerStyle compilerStyle(const std::string &command)
     const std::string first = command.substr(0, command.find(' '));
     const std::string stem = lowerFileStem(first);
     return stem == "cl" || stem == "clang-cl" ? CompilerStyle::Msvc : CompilerStyle::Gcc;
-}
-
-// The shell's "no such command": 127 from sh, 9009 from cmd.exe.
-static bool commandNotFound(int status)
-{
-#if defined(_WIN32)
-    return status == 9009;
-#else
-    return WIFEXITED(status) && WEXITSTATUS(status) == 127;
-#endif
 }
 
 std::string compileCommand(const std::string &compiler, CompilerStyle style,
@@ -304,6 +321,12 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
         err << "tfc: error: " << problem << '\n';
         return kExitCompile;
     }
+    if (!canRun(compiler))
+    {
+        err << "tfc: error: cannot run the C compiler '" << compiler
+            << "'; is it installed? (choose one with --cc or TFC_CC)\n";
+        return kExitCompile;
+    }
 
     const std::string runtimeDir = chooseRuntime(cmd);
     const std::vector<std::string> runtime = runtimeSources(runtimeDir);
@@ -381,14 +404,6 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     // means tfc wrote bad C (or the compiler is broken): either way not the
     // programmer's mistake, so say so in their terms, and keep what a bug
     // report needs.
-    if (commandNotFound(status))
-    {
-        err << "tfc: error: cannot run the C compiler '" << compiler
-            << "'; is it installed? (choose one with --cc or TFC_CC)\n";
-        fs::remove(cFile, ec);
-        fs::remove(logFile, ec);
-        return kExitCompile;
-    }
     err << "tfc: internal error: the C compiler '" << compiler
         << "' could not build the C that tfc made from '" << inputPath.string() << "'.\n"
         << "This is a problem in tfc or in the C compiler, not in your program. Please\n"
