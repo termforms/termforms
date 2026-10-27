@@ -101,6 +101,7 @@ int tf_platform_stat(const char *path, int64_t *size, int64_t *modified, int *fo
 {
     wchar_t *w = wide(path);
     struct _stat64 st;
+    memset(&st, 0, sizeof st); /* MSVC cannot see it is read only after success (C4701) */
     const int result = w != NULL ? _wstat64(w, &st) : -1;
     free(w);
     if (result != 0)
