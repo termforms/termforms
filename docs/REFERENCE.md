@@ -185,8 +185,8 @@ x = calls + Counted() + calls   ' 0 + 1 + 1 = 2, where Counted adds 1 to calls
 - `Try / Catch [When cond] / Finally / End Try`; several Catch blocks.
 - `Throw number, description` raises; a bare `Throw` inside Catch
   rethrows. `Err` has Number, Description and Line.
-- Finally runs on every way out: normal end, Exit, Return, an error.
-  An error inside Finally replaces the pending one.
+- Finally runs on every way out: normal end, Exit, Return, an error (but
+  not `End`: see below). An error inside Finally replaces the pending one.
 - No GoTo into or out of a Try block.
 - An error nobody catches restores the terminal, prints
   `file:line: runtime error N: message` and exits with status 1.
@@ -255,21 +255,36 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 - Named constants for these numbers (`Catch When Err.Number =
   errFileNotFound`) come with `Const`/`Enum` (below).
 
-### Errors (Proposed)
+### Errors: details (Settled, 27 Oct 2026)
 
 - Catch takes no variable (VB.NET's `Catch ex As Exception` is an error):
   the error is in `Err`. `Err` keeps the last error after End Try, until
   the next error or `Err.Clear`. Err's properties are read-only.
 - `Err.Line` is the line where the error happened, which may be inside a
   procedure the Try called.
+- A statement that fails has no partial effect: in `x = a \ b` with b = 0,
+  x keeps its old value.
+- **`End` ends the program at once, even inside a Try: no Finally block
+  runs**, as in VB. End means "stop now"; a program that needs cleanup
+  before stopping should do it before the End (or leave the Try normally
+  and End afterwards). This is the one exception to "Finally always runs".
+
+```vb
+Try
+    Open "data.txt" For Output As #1
+    End                            ' stops here: the Finally below does NOT run
+Finally
+    Close #1
+End Try
+```
+
+### Errors (Proposed)
+
 - `Throw number` alone uses VB's standard text for the number ("Division
   by zero", ...) or "Application-defined or object-defined error";
   `Throw 0` is error 5.
-- A statement that fails has no partial effect: in `x = a \ b` with b = 0,
-  x keeps its old value.
 - Exit and Return cannot leave a Finally block (as VB.NET); leaving a loop
-  that is wholly inside the Finally is allowed. `End` inside a Try ends the
-  program at once, without running Finally blocks (as VB).
+  that is wholly inside the Finally is allowed.
 - A Try needs at least one Catch or a Finally. Catch clauses are tried in
   order; the first whose When is True (or that has no When) handles the
   error, and if none does, the error goes on after the Finally.

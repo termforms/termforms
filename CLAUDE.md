@@ -74,8 +74,10 @@ authoritative for design rationale.
   **Const (and Enum unless complex) added to v1 scope** (Jim, 27 Oct
   2026); their detailed rules are still to be settled with him.
   Step 4 done (27 Oct 2026): Const and Enum, CType; all their rules
-  settled, including the details. Still Proposed: "Errors (Proposed)" in
-  REFERENCE.md (Catch/Err details).
+  settled, including the details. Error details settled too (27 Oct
+  2026), including **End inside a Try runs no Finally** (documented in
+  REFERENCE.md and LANGUAGE.md); still Proposed: Throw's default text,
+  no leaving a Finally, Catch order (REFERENCE.md "Errors (Proposed)").
 - **Next:** Phase 3 step 5 (arrays, Types and Ref, Dictionary), or Phase 4
   work; ask Jim.
 

@@ -140,6 +140,8 @@ Err.Raise 1000, "Lookup", "Customer not found"   ' the same, VB's form (with a s
   message`, as before. `Err.Line` is the line where the error happened.
 - Finally runs on every way out of the Try: normal end, an error, `Exit`
   or `Return`. A Finally cannot itself be left with `Exit` or `Return`.
+- **`End` stops the program at once, even inside a Try: Finally blocks do
+  not run.** Do any cleanup before the `End`.
 - A statement that fails changes nothing: after a failed `x = a \ b`, x
   keeps its old value.
 - Out of memory cannot be caught.
