@@ -1,0 +1,12 @@
+
+
+  ┌──────────────────────── Refs ────────────────────────┐
+  │2 True True False                                     │
+  │sum=10 43 after=100 True cleared=True                 │
+  │9 8 85 True                                           │
+  │91 Object variable or With block variable not set     │
+  │fresh=3 9                                             │
+  │                                                      │
+  │                                                      │
+  │                                                      │
+  └──────────────────────────────────────────────────────┘

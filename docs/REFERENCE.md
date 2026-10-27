@@ -241,7 +241,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
 | 9 | Subscript out of range | an array index outside its bounds; UBound of an empty array; ReDim Preserve changing a dimension other than the last | now |
 | 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef | now |
-| 91 | Object variable or With block variable not set | using a `Ref` that is Nothing | Types and Ref |
+| 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
 | 457 | This key is already associated with an element of this collection | adding a Dictionary key twice | Dictionary |
 | 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
 | 380 | Invalid property value | a control property set out of range | forms |
@@ -434,6 +434,38 @@ copy = o                     ' a deep copy: copy.Lines is a separate array
   refer to a new copy of c; `c = r` copies the record r refers to (error 91
   if r is Nothing).
 - **`With ... End With` is in v1**, for Types (coming with Ref).
+
+### Refs: details (Proposed)
+
+```vb
+Type Node
+    Value As Integer
+    Next As Ref Node          ' a member may be named with a keyword
+End Type
+
+Dim head As Ref Node          ' Nothing until given a record
+Dim n As New Node             ' a Ref given a new record when the Dim runs
+n.Value = 1
+n.Next = head
+head = n                      ' head and n now refer to the same record
+If head IsNot Nothing Then total = total + head.Value
+```
+
+- A Ref passed ByVal shares the record (the callee can change its members)
+  but the callee cannot make the caller's variable refer to another
+  record; ByRef can.
+- Refs are compared with `Is` / `IsNot` (the same record, or Nothing);
+  `=` on Refs is an error, as is `&`.
+- A member of a record reached through a Ref may be assigned to wherever
+  the Ref came from (even a Function's result): the record is shared.
+- Using a Ref that is Nothing (its members, or copying from it) is error
+  91, Object variable or With block variable not set.
+- `Dim r As New Node` makes a new record each time the Dim runs (inside a
+  loop, each pass).
+- Keywords may name members (`Next`, `Step`, `Type`): after a dot, and in a
+  Type block, nothing else could stand there, so it is not ambiguous.
+- Freeing a record frees the records only it refers to, recursively: a
+  very long chain (a linked list of millions) uses as much stack.
 
 ### Types: details (Proposed)
 

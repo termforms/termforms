@@ -31,6 +31,7 @@ enum class Type
     Boolean,
     Enum,   // a user Enum; which one is in the Expr's or Variable's enumDef
     Record, // a value of a user Type; which one is in typeDef
+    Ref,    // a Ref to a user Type (typeDef), or Nothing (typeDef null)
     Control // a form or control used as an object
 };
 
@@ -113,6 +114,8 @@ enum class ExprKind
     IntegerLiteral, // Integer or Long, by value and suffix
     DoubleLiteral,
     Constant, // a Const or Enum member, replaced by its value by the semantic pass
+    New,      // New Customer: text is the Type's name
+    Nothing,  // the Ref that refers to nothing
     Index,    // a(i, j): an array element (parsed as a Call; the semantic pass decides)
     StringLiteral,
     BooleanLiteral,
@@ -280,6 +283,7 @@ struct Variable
     const TypeDef *typeDef = nullptr; // when type is Record
     Location location;
     bool isMember = false; // a member of a Type
+    bool autoNew = false;  // Dim r As New Customer: a Ref given a new record at the Dim
     bool isConst = false;  // a Const: never stored, its uses become its value
     std::int64_t constInteger = 0;
     double constReal = 0;

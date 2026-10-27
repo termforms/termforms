@@ -192,6 +192,18 @@ private:
         return false;
     }
 
+    // A member's name, after a '.' or in a Type block: a keyword is allowed
+    // there (Next As Ref Node, p.Next), as VB.NET allows rnd.Next(), since
+    // nothing else could stand in that place. It keeps the case written.
+    std::string expectMemberName()
+    {
+        if (at(TokenKind::Keyword))
+        {
+            return next().spelling;
+        }
+        return expectIdentifier("a member or property name");
+    }
+
     std::string expectIdentifier(const char *what)
     {
         if (at(TokenKind::Identifier))
@@ -1150,7 +1162,7 @@ private:
         while (!at(TokenKind::EndOfFile) && !isEndOf("TYPE") && !isEndOf("SUB") &&
                !isEndOf("FUNCTION") && !peek().isKeyword("SUB") && !peek().isKeyword("FUNCTION"))
         {
-            if (!at(TokenKind::Identifier))
+            if (!at(TokenKind::Identifier) && !at(TokenKind::Keyword))
             {
                 error(peek().location, "expected a member name but found " + describe(peek()));
                 skipStatement();
@@ -1161,7 +1173,7 @@ private:
             member->isMember = true;
             member->location = peek().location;
             const char suffix = peek().suffix;
-            member->name = next().text;
+            member->name = expectMemberName();
             member->type = typeFromSuffix(suffix);
             if (peek().isSymbol("("))
             {
@@ -1256,7 +1268,8 @@ private:
             {
                 const Location typeAt = peek().location;
                 std::string enumName;
-                const Type declared = parseTypeName(&enumName);
+                bool isNew = false;
+                const Type declared = parseTypeName(&enumName, &isNew);
                 // "As" types the names before it that have no suffix of their
                 // own; only the name written directly before it may not
                 // contradict it ("Dim n% As String").
@@ -1268,6 +1281,7 @@ private:
                     {
                         p.type = declared;
                         p.typeName = enumName;
+                        p.autoNew = isNew;
                     }
                     else if (adjacent && p.type != declared && declared != Type::Error)
                     {
@@ -1315,8 +1329,19 @@ private:
 
     // A built-in type keyword, or an Enum's name (stored in *enumName for the
     // semantic pass to resolve; without enumName, only built-in types).
-    Type parseTypeName(std::string *enumName = nullptr)
+    Type parseTypeName(std::string *enumName = nullptr, bool *isNew = nullptr)
     {
+        // Ref Customer; New Customer (in a Dim: a Ref given a new record).
+        const bool newOne = isNew != nullptr && acceptKeyword("NEW");
+        if (enumName != nullptr && (newOne || acceptKeyword("REF")))
+        {
+            if (isNew != nullptr)
+            {
+                *isNew = newOne;
+            }
+            *enumName = expectIdentifier("a Type name");
+            return Type::Ref;
+        }
         if (enumName != nullptr && at(TokenKind::Identifier))
         {
             *enumName = next().text;
@@ -1477,6 +1502,13 @@ private:
                 return makeBinary(op, where, std::move(left), parseConcat());
             }
         }
+        // r Is Nothing, r IsNot s: Refs compared by identity.
+        if (peek().isKeyword("IS") || peek().isKeyword("ISNOT"))
+        {
+            const Token &op = next();
+            return makeBinary(op.isKeyword("IS") ? "Is" : "IsNot", op.location, std::move(left),
+                              parseConcat());
+        }
         return left;
     }
 
@@ -1613,6 +1645,19 @@ private:
                 break;
         }
 
+        if (t.isKeyword("NEW"))
+        {
+            e->kind = ExprKind::New;
+            next();
+            e->text = expectIdentifier("a Type name");
+            return parsePostfix(std::move(e));
+        }
+        if (t.isKeyword("NOTHING"))
+        {
+            e->kind = ExprKind::Nothing;
+            next();
+            return e;
+        }
         if (t.isKeyword("CTYPE"))
         {
             e->kind = ExprKind::Call;
@@ -1654,7 +1699,7 @@ private:
             auto member = std::make_unique<Expr>();
             member->kind = ExprKind::Member;
             member->location = peek().location;
-            member->text = expectIdentifier("a member or property name");
+            member->text = expectMemberName();
             member->left = std::move(e);
             e = std::move(member);
             if (peek().isSymbol("("))
@@ -1696,6 +1741,8 @@ const char *ast::typeName(Type type)
             return "Enum";
         case Type::Record:
             return "Type";
+        case Type::Ref:
+            return "Ref";
         case Type::String:
             return "String";
         case Type::Boolean:

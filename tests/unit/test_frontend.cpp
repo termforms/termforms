@@ -481,3 +481,29 @@ TEST_CASE("lexer: Type is reserved")
 {
     CHECK(tf::isReservedKeyword("type"));
 }
+
+// -- Ref (Phase 3 step 5b) -----------------------------------------------------
+
+TEST_CASE("Refs share, values copy, and they convert into each other by copying")
+{
+    const std::string decl = "Type P\n    X As Integer\n    Next As Ref P\nEnd Type\n";
+    const std::string body = "    Dim r As Ref P, s As Ref P, v As P, n As New P\n"
+                             "    r = New P\n    s = r\n    r = v\n    v = r\n    r = Nothing\n"
+                             "    If r Is Nothing Or s IsNot r Then n.Next = s\n";
+    CHECK(check(inClick(decl, body)) == "");
+}
+
+TEST_CASE("a keyword may name a member, after a dot and in a Type")
+{
+    CHECK(check(kForm + "Type L\n    Next As Ref L\n    Step As Integer\nEnd Type\n"
+                        "Sub b_Click()\n    Dim x As New L\n    x.Step = 1\n    x.Next = x.Next\n"
+                        "End Sub\n") == "");
+}
+
+TEST_CASE("lexer: Ref, New, Nothing, Is and IsNot are reserved")
+{
+    for (const char *word : {"ref", "NEW", "Nothing", "is", "IsNot"})
+    {
+        CHECK(tf::isReservedKeyword(word));
+    }
+}

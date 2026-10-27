@@ -587,9 +587,22 @@ private:
         {
             return value.type == Type::Enum && value.def == target.def;
         }
-        if (target.type == Type::Record || value.type == Type::Record)
+        // Refs take Refs of their Type and Nothing; a Ref and a value of its
+        // Type convert into each other by copying (settled 27 Oct 2026).
+        if (target.type == Type::Ref)
         {
-            return target.type == value.type && target.record == value.record;
+            return (value.type == Type::Ref &&
+                    (value.record == target.record || value.record == nullptr)) ||
+                   (value.type == Type::Record && value.record == target.record);
+        }
+        if (target.type == Type::Record)
+        {
+            return (value.type == Type::Record || value.type == Type::Ref) &&
+                   value.record == target.record;
+        }
+        if (value.type == Type::Record || value.type == Type::Ref)
+        {
+            return false;
         }
         const Type v = lowered(value);
         if (target.type == v)
@@ -900,6 +913,25 @@ private:
     // if there is no such type.
     bool resolveType(Variable &v)
     {
+        if (v.type == Type::Ref && v.typeDef == nullptr && !v.typeName.empty())
+        {
+            if (auto it = types_.find(v.typeName); it != types_.end())
+            {
+                v.typeDef = it->second;
+                return true;
+            }
+            if (enums_.count(v.typeName) != 0)
+            {
+                diagnostics_.error(v.location,
+                                   "Ref works with a Type, and " + v.typeName + " is an Enum");
+            }
+            else
+            {
+                unknownType(v.typeName, v.location);
+            }
+            v.type = Type::Error;
+            return false;
+        }
         if (v.type != Type::Enum || v.enumDef != nullptr)
         {
             return true;
@@ -1539,6 +1571,10 @@ private:
         {
             return info.record->name;
         }
+        if (info.type == Type::Ref)
+        {
+            return info.record != nullptr ? "Ref " + info.record->name : "Nothing";
+        }
         return typeName(info.type);
     }
 
@@ -1616,12 +1652,33 @@ private:
     // of one (not a Function's result, a property or a constant)?
     static bool isLvalue(const Expr &e)
     {
+        // A member of a record reached through a Ref is in a shared record,
+        // wherever the Ref came from (even a Function's result).
+        if (e.kind == ExprKind::Member && e.field != nullptr && e.left->type == Type::Ref)
+        {
+            return true;
+        }
+        if (e.kind == ExprKind::Member && e.field != nullptr)
+        {
+            return isLvalue(*e.left);
+        }
         return rootVariable(e) != nullptr && !(e.kind == ExprKind::Name && e.variable->isConst);
     }
 
     // A ByVal array parameter is read-only, and so is everything inside it.
     bool readOnlyPath(const Expr &e, Location where)
     {
+        // Through a Ref the record is shared, not part of the array.
+        for (const Expr *p = &e; p != nullptr;)
+        {
+            if (p->kind == ExprKind::Member && p->left != nullptr && p->left->type == Type::Ref)
+            {
+                return false;
+            }
+            p = p->kind == ExprKind::Member || (p->kind == ExprKind::Index && p->left != nullptr)
+                    ? p->left.get()
+                    : nullptr;
+        }
         const Variable *root = rootVariable(e);
         return root != nullptr && root->rank > 0 && readOnlyArray(*root, where);
     }
@@ -2189,6 +2246,18 @@ private:
                 return Type::Double;
             case ExprKind::Constant:
                 return e.type; // set when the Const or member was replaced
+            case ExprKind::New:
+                if (auto it = types_.find(e.text); it != types_.end())
+                {
+                    e.typeDef = it->second;
+                    return Type::Ref;
+                }
+                diagnostics_.error(e.location, "New makes a record of a Type, and '" + e.text +
+                                                   "' is not a Type");
+                return Type::Error;
+            case ExprKind::Nothing:
+                e.typeDef = nullptr;
+                return Type::Ref;
             case ExprKind::Index:
                 // a(i) was a Call the checks turned into an Index; o.Lines(i)
                 // was parsed as one and is checked here.
@@ -2381,6 +2450,15 @@ private:
         {
             return resolveField(e, *object.typeDef);
         }
+        if (objectType == Type::Ref && object.rank == 0)
+        {
+            if (object.typeDef == nullptr)
+            {
+                diagnostics_.error(object.location, "Nothing has no members");
+                return Type::Error;
+            }
+            return resolveField(e, *object.typeDef); // the record it refers to
+        }
         if (object.control == nullptr)
         {
             diagnostics_.error(object.location, describeObject(object) + " is " +
@@ -2447,6 +2525,27 @@ private:
         {
             return operandError(e, l, r);
         }
+        if (op == "Is" || op == "IsNot")
+        {
+            const bool refs = l == Type::Ref && r == Type::Ref &&
+                              (e.left->typeDef == e.right->typeDef || e.left->typeDef == nullptr ||
+                               e.right->typeDef == nullptr);
+            if (!refs)
+            {
+                diagnostics_.error(e.location, "'" + op +
+                                                   "' compares two Refs of the same Type (or "
+                                                   "Nothing), not " +
+                                                   article(infoOf(*e.left)) + " and " +
+                                                   article(infoOf(*e.right)));
+                return Type::Error;
+            }
+            return Type::Boolean;
+        }
+        if (comparison && (l == Type::Ref || r == Type::Ref))
+        {
+            diagnostics_.error(e.location, "compare Refs with 'Is' or 'IsNot', not '" + op + "'");
+            return Type::Error;
+        }
         if (comparison && (l == Type::Record || r == Type::Record))
         {
             diagnostics_.error(e.location,
@@ -2460,7 +2559,8 @@ private:
         if (op == "&")
         {
             // The one implicit conversion: numbers and Booleans become text.
-            if (l == Type::Control || r == Type::Control || l == Type::Record || r == Type::Record)
+            if (l == Type::Control || r == Type::Control || l == Type::Record ||
+                r == Type::Record || l == Type::Ref || r == Type::Ref)
             {
                 return operandError(e, l, r);
             }
@@ -2555,6 +2655,10 @@ private:
     // "an Integer", "a Color" (an Enum by its name).
     static std::string article(const TypeInfo &info)
     {
+        if (info.type == Type::Ref)
+        {
+            return info.record != nullptr ? "a Ref " + info.record->name : "Nothing";
+        }
         const std::string *named = info.type == Type::Enum && info.def != nullptr ? &info.def->name
                                    : info.type == Type::Record && info.record != nullptr
                                        ? &info.record->name

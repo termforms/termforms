@@ -145,41 +145,17 @@ private:
         {
             out << "typedef struct t_" << def->name << " t_" << def->name << ";\n";
         }
-        // Types some array holds: those need a tf_record_ops for the runtime.
-        std::set<const TypeDef *> inArrays;
-        auto note = [&inArrays](const Variable &v) {
-            if (v.rank > 0 && v.type == Type::Record)
-            {
-                inArrays.insert(v.typeDef);
-            }
-        };
-        for (const auto &v : module_.globals)
-        {
-            note(*v);
-        }
-        for (const auto &proc : module_.procedures)
-        {
-            for (const auto &v : proc->locals)
-            {
-                note(*v);
-            }
-            for (const auto &v : proc->parameters)
-            {
-                note(*v);
-            }
-        }
-        for (const auto &def : module_.types)
-        {
-            for (const auto &m : def->members)
-            {
-                note(*m);
-            }
-        }
         out << '\n';
         std::set<const TypeDef *> done;
         for (const auto &def : module_.types)
         {
             emitStruct(out, *def, done);
+        }
+        // The helpers are written first: their array members may need ops too.
+        std::ostringstream helpers;
+        for (const auto &def : module_.types)
+        {
+            emitTypeHelpers(helpers, *def);
         }
         for (const auto &def : module_.types)
         {
@@ -191,17 +167,13 @@ private:
             {
                 out << "static int " << t << "_busy(const " << t << " *x);\n";
             }
-            if (inArrays.count(def.get()) != 0) // only arrays of the Type need it
+            if (opsNeeded_.count(def.get()) != 0) // only arrays and Refs of the Type need it
             {
                 out << "static const tf_record_ops " << t << "_ops = {sizeof(" << t << "), " << t
                     << "_init, " << t << "_free, " << t << "_copy};\n";
             }
         }
-        out << '\n';
-        for (const auto &def : module_.types)
-        {
-            emitTypeHelpers(out, *def);
-        }
+        out << '\n' << helpers.str();
     }
 
     // A struct after the structs it holds by value.
@@ -276,6 +248,10 @@ private:
             {
                 out << "    tf_str_release(" << f << ");\n";
             }
+            else if (m->type == Type::Ref)
+            {
+                out << "    tf_ref_release(" << f << ");\n";
+            }
             else if (m->type == Type::Record)
             {
                 out << "    t_" << m->typeDef->name << "_free(&" << f << ");\n";
@@ -316,6 +292,10 @@ private:
             else if (m->type == Type::String)
             {
                 out << "    " << to << " = tf_str_ref(" << from << ");\n";
+            }
+            else if (m->type == Type::Ref)
+            {
+                out << "    " << to << " = tf_ref_ref(" << from << ");\n";
             }
             else if (m->type == Type::Record)
             {
@@ -506,6 +486,10 @@ private:
             {
                 out << "    tf_str_retain(v_" << p->name << ");\n";
             }
+            else if (p->type == Type::Ref && !p->byRef && p->rank == 0)
+            {
+                out << "    tf_ref_retain(v_" << p->name << ");\n";
+            }
         }
 
         // The cleanup at End Sub: strings to release, then the result.
@@ -520,6 +504,10 @@ private:
             {
                 cleanup_ += " t_" + p->typeDef->name + "_free(&v_" + p->name + ");";
             }
+            else if (p->type == Type::Ref && !p->byRef && p->rank == 0)
+            {
+                cleanup_ += " tf_ref_release(v_" + p->name + ");";
+            }
         }
         for (const auto &v : proc.locals)
         {
@@ -530,6 +518,10 @@ private:
             else if (v->type == Type::Record && !v->isConst)
             {
                 cleanup_ += " t_" + v->typeDef->name + "_free(&" + names_.at(v.get()) + ");";
+            }
+            else if (v->type == Type::Ref)
+            {
+                cleanup_ += " tf_ref_release(" + names_.at(v.get()) + ");";
             }
             else if (v->type == Type::String && !v->isConst)
             {
@@ -584,6 +576,11 @@ private:
             {
                 line(out, v->location);
                 out << "    t_" << v->typeDef->name << "_init(&g_" << v->name << ");\n";
+            }
+            else if (v->autoNew)
+            {
+                line(out, v->location);
+                out << "    g_" << v->name << " = tf_ref_new(" << opsOf(*v->typeDef) << ");\n";
             }
         }
 
@@ -682,19 +679,44 @@ private:
             case StmtKind::Dim:
                 // Locals are declared at the top of the procedure; inside a
                 // loop each pass starts them afresh.
-                if (s.insideLoop)
+                // Dim r As New Customer makes the record here, each time the
+                // Dim runs.
+                if (s.insideLoop || std::any_of(s.declared.begin(), s.declared.end(),
+                                                [](const Variable *v) { return v->autoNew; }))
                 {
                     std::string code;
                     for (const Variable *v : s.declared)
                     {
                         const std::string n = names_.at(v);
-                        code += (code.empty() ? "" : " ") +
-                                (v->rank > 0 ? "tf_array_erase(&" + n + ");"
-                                 : v->type == Type::Record
-                                     ? "t_" + v->typeDef->name + "_free(&" + n + "); t_" +
-                                           v->typeDef->name + "_init(&" + n + ");"
-                                 : v->type == Type::String ? "tf_str_assign(&" + n + ", NULL);"
-                                                           : n + " = 0;");
+                        std::string one;
+                        if (v->autoNew)
+                        {
+                            one = n + " = tf_ref_replace(" + n + ", tf_ref_new(" +
+                                  opsOf(*v->typeDef) + "));";
+                        }
+                        else if (!s.insideLoop)
+                        {
+                            continue;
+                        }
+                        else if (v->rank > 0)
+                        {
+                            one = "tf_array_erase(&" + n + ");";
+                        }
+                        else if (v->type == Type::Record)
+                        {
+                            one = "t_" + v->typeDef->name + "_free(&" + n + "); t_" +
+                                  v->typeDef->name + "_init(&" + n + ");";
+                        }
+                        else if (v->type == Type::Ref)
+                        {
+                            one = n + " = tf_ref_replace(" + n + ", NULL);";
+                        }
+                        else
+                        {
+                            one = v->type == Type::String ? "tf_str_assign(&" + n + ", NULL);"
+                                                          : n + " = 0;";
+                        }
+                        code += (code.empty() ? "" : " ") + one;
                     }
                     emitLine(out, s.location, depth, code);
                 }
@@ -1025,9 +1047,26 @@ private:
         }
         const std::string result = "r_" + current_->name;
         const Value v = settle(*s.value, expr(*s.value, scope), scope);
-        const std::string store = current_->result->type == Type::String
-                                      ? "tf_str_assign(&" + result + ", " + ownedCode(v) + ");"
-                                      : result + " = " + v.code + ";";
+        const Variable &r = *current_->result;
+        std::string store;
+        if (r.type == Type::Record)
+        {
+            store = "t_" + r.typeDef->name + "_copy(&" + result + ", &" +
+                    parenthesised(recordValue(*s.value, v, scope)) + ");";
+        }
+        else if (r.type == Type::Ref)
+        {
+            store = result + " = tf_ref_replace(" + result + ", " +
+                    ownedRef(*s.value, r.typeDef, v) + ");";
+        }
+        else if (r.type == Type::String)
+        {
+            store = "tf_str_assign(&" + result + ", " + ownedCode(v) + ");";
+        }
+        else
+        {
+            store = result + " = " + v.code + ";";
+        }
         return wrap(scope, store) + " " + leave(nullptr);
     }
 
@@ -1333,6 +1372,8 @@ private:
                 return e.text == "-" && (e.type == Type::Integer || e.type == Type::Long);
             case ExprKind::Binary:
                 return isNumeric(e.type) || e.type == Type::String; // arithmetic, & and +
+            case ExprKind::Member:
+                return e.field != nullptr && e.left->type == Type::Ref; // Nothing: error 91
             case ExprKind::Call:
                 switch (e.builtin)
                 {
@@ -1449,13 +1490,13 @@ private:
             // The target's indexes first (left to right), then the value; any
             // element's address is taken last, after a call that might ReDim.
             if (target.type == Type::Record || target.type == Type::String ||
-                target.kind == ExprKind::Index)
+                (target.kind == ExprKind::Index && target.type != Type::Ref))
             {
                 const std::string at = address(target, scope);
                 const Value v = settle(*s.value, expr(*s.value, scope), scope);
                 if (target.type == Type::Record)
                 {
-                    return copyRecord(target, at, v);
+                    return copyRecord(target, at, recordValue(*s.value, v, scope));
                 }
                 if (target.type == Type::String)
                 {
@@ -1464,7 +1505,13 @@ private:
                 return "*" + at + " = " + v.code + ";";
             }
             const std::string to = lvalue(target, scope);
-            return to + " = " + settle(*s.value, expr(*s.value, scope), scope).code + ";";
+            const Value v = settle(*s.value, expr(*s.value, scope), scope);
+            if (target.type == Type::Ref)
+            {
+                return to + " = tf_ref_replace(" + to + ", " +
+                       ownedRef(*s.value, target.typeDef, v) + ");";
+            }
+            return to + " = " + v.code + ";";
         }
 
         if (target.kind == ExprKind::Member)
@@ -1486,7 +1533,13 @@ private:
         const Value v = settle(*s.value, expr(*s.value, scope), scope);
         if (target.type == Type::Record)
         {
-            return copyRecord(target, variableAddress(var), v);
+            return copyRecord(target, variableAddress(var), recordValue(*s.value, v, scope));
+        }
+        if (target.type == Type::Ref)
+        {
+            const std::string to = variableValue(var);
+            return to + " = tf_ref_replace(" + to + ", " + ownedRef(*s.value, target.typeDef, v) +
+                   ");";
         }
         if (target.type == Type::String)
         {
@@ -1497,9 +1550,59 @@ private:
 
     // to = value for records: a deep copy (an owned value, a Function's
     // result, is freed after the statement like any temporary).
-    std::string copyRecord(const Expr &target, const std::string &to, const Value &v)
+    std::string copyRecord(const Expr &target, const std::string &to, const std::string &from)
     {
-        return "t_" + target.typeDef->name + "_copy(" + to + ", &" + parenthesised(v.code) + ");";
+        return "t_" + target.typeDef->name + "_copy(" + to + ", &" + parenthesised(from) + ");";
+    }
+
+    // The record a Ref refers to, for a member or a copy: (*(t_X *)tf_ref_get(r, ops)).
+    std::string deref(const Expr &ref, const std::string &code)
+    {
+        return "(*(t_" + ref.typeDef->name + " *)tf_ref_get(" + code + ", " + opsOf(*ref.typeDef) +
+               "))";
+    }
+
+    // A record value for copying: a Ref's record is looked up first and,
+    // inside a Try, checked (Nothing is error 91) before anything is copied.
+    std::string recordValue(const Expr &value, const Value &v, StatementScope &scope)
+    {
+        if (value.type != Type::Ref)
+        {
+            return v.code;
+        }
+        const std::string temp = scope.newTemp();
+        scope.prelude.push_back("t_" + value.typeDef->name + " *" + temp + " = tf_ref_get(" +
+                                v.code + ", " + opsOf(*value.typeDef) + ");");
+        checkpoint(scope);
+        return "(*" + temp + ")";
+    }
+
+    // A Ref value to store (+1): a value record becomes a new copy; Nothing is NULL.
+    std::string ownedRef(const Expr &value, const TypeDef *def, const Value &v)
+    {
+        if (value.type == Type::Record)
+        {
+            return "tf_ref_new_copy(" + opsOf(*def) + ", &" + parenthesised(v.code) + ")";
+        }
+        if (value.kind == ExprKind::Nothing)
+        {
+            return "NULL";
+        }
+        return v.owned ? v.code : "tf_ref_ref(" + v.code + ")";
+    }
+
+    // A Ref read for a moment (Is, a ByVal argument): an owned one (New, a
+    // Function's result) is parked and released after the statement.
+    Value heldRef(const Expr &e, const Value &v, StatementScope &scope)
+    {
+        if (!v.owned)
+        {
+            return v;
+        }
+        const std::string temp = scope.newTemp();
+        scope.prelude.push_back(cTypeOf(e) + temp + " = " + v.code + ";");
+        scope.releases.push_back("tf_ref_release(" + temp + ");");
+        return {temp, false};
     }
 
     // Does storing into this target do work that can fail: find an element,
@@ -1510,8 +1613,11 @@ private:
         {
             return true;
         }
+        // A member of a record variable is stored straight into it; through
+        // a Ref (Nothing) or an element (an index) the store can fail.
         return target.kind == ExprKind::Member && target.field != nullptr &&
-               storeMayFail(*target.left);
+               (target.left->type == Type::Ref ||
+                (target.left->kind != ExprKind::Name && storeMayFail(*target.left)));
     }
 
     // -- Paths: variables, elements, members -------------------------------------
@@ -1529,6 +1635,21 @@ private:
             case ExprKind::Index:
                 return "(*" + address(e, scope, arrays) + ")";
             case ExprKind::Member:
+                if (e.left->type == Type::Ref)
+                {
+                    std::string ref = expr(*e.left, scope).code;
+                    if (arrays != nullptr)
+                    {
+                        // Passed ByRef: hold the record until the statement
+                        // ends, so the callee cannot free it from under itself.
+                        const std::string held = scope.newTemp();
+                        scope.prelude.push_back(cTypeOf(*e.left) + held + " = tf_ref_ref(" + ref +
+                                                ");");
+                        scope.releases.push_back("tf_ref_release(" + held + ");");
+                        ref = held;
+                    }
+                    return deref(*e.left, ref) + ".f_" + e.text;
+                }
                 return parenthesised(lvalue(*e.left, scope, arrays)) + ".f_" + e.text;
             default:
                 return expr(e, scope).code; // a Function's result, read through
@@ -1647,10 +1768,11 @@ private:
             scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
             return lockedAround(locks, temp + " = " + call + ";");
         }
-        const std::string statement = !callee.isFunction ? call + ";"
-                                      : callee.result->type == Type::String
-                                          ? "tf_str_release(" + call + ");"
-                                          : "(void)" + call + ";";
+        const std::string statement =
+            !callee.isFunction                    ? call + ";"
+            : callee.result->type == Type::String ? "tf_str_release(" + call + ");"
+            : callee.result->type == Type::Ref    ? "tf_ref_release(" + call + ");"
+                                                  : "(void)" + call + ";";
         return lockedAround(locks, statement);
     }
 
@@ -1701,8 +1823,27 @@ private:
             }
             else if (param.type == Type::Record)
             {
-                // ByVal: the callee copies it; pass where it is.
-                code = "&" + parenthesised(settle(*args[i], expr(*args[i], scope), scope).code);
+                // ByVal: the callee copies it; pass where it is (a Ref's record).
+                const Value v = settle(*args[i], expr(*args[i], scope), scope);
+                code = "&" + parenthesised(recordValue(*args[i], v, scope));
+            }
+            else if (param.type == Type::Ref)
+            {
+                // ByVal: borrowed for the call (the callee takes its own
+                // reference); a value record becomes a new copy for it.
+                const Value v = settle(*args[i], expr(*args[i], scope), scope);
+                if (args[i]->type == Type::Record)
+                {
+                    const std::string temp = scope.newTemp();
+                    scope.prelude.push_back(cTypeOf(param) + temp + " = " +
+                                            ownedRef(*args[i], param.typeDef, v) + ";");
+                    scope.releases.push_back("tf_ref_release(" + temp + ");");
+                    code = temp;
+                }
+                else
+                {
+                    code = heldRef(*args[i], v, scope).code;
+                }
             }
             else if (param.type == Type::String)
             {
@@ -1811,6 +1952,10 @@ private:
                 return {doubleLiteral(e.real), false};
             case ExprKind::Constant:
                 return {constantCode(e), false};
+            case ExprKind::New:
+                return {"tf_ref_new(" + opsOf(*e.typeDef) + ")", true};
+            case ExprKind::Nothing:
+                return {"NULL", false};
             case ExprKind::StringLiteral:
                 return {literal(e.text), false};
             case ExprKind::BooleanLiteral:
@@ -1818,6 +1963,15 @@ private:
             case ExprKind::Name:
             {
                 const Variable &v = *e.variable;
+                if (scope.pendingCalls > 0 && v.type == Type::Ref && reachable(v, scope))
+                {
+                    // Held, so a call that drops it cannot free it meanwhile.
+                    const std::string temp = scope.newTemp();
+                    scope.prelude.push_back(cTypeOf(v) + temp + " = tf_ref_ref(" +
+                                            variableValue(v) + ");");
+                    scope.releases.push_back("tf_ref_release(" + temp + ");");
+                    return {temp, false};
+                }
                 if (scope.pendingCalls > 0 && v.type != Type::Record && reachable(v, scope))
                 {
                     return snapshot(storage(v), variableValue(v), scope);
@@ -1897,6 +2051,10 @@ private:
         {
             scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
         }
+        else if (callee.result->type == Type::Ref)
+        {
+            scope.releases.push_back("tf_ref_release(" + temp + ");");
+        }
         checkpoint(scope); // nothing after a failed call may run
         return {temp, false};
     }
@@ -1906,6 +2064,10 @@ private:
         if (e.left->isErr)
         {
             return {"tf_err_" + lowerCase(e.text) + "()", false}; // tf_err_number() ...
+        }
+        if (e.field != nullptr && e.left->type == Type::Ref) // through a Ref
+        {
+            return {deref(*e.left, expr(*e.left, scope).code) + ".f_" + e.text, false};
         }
         if (e.field != nullptr) // a record's member
         {
@@ -1921,6 +2083,13 @@ private:
     Value binary(const Expr &e, StatementScope &scope)
     {
         const std::string &op = e.text;
+
+        if (op == "Is" || op == "IsNot") // the same record, or both Nothing
+        {
+            const Value l = heldRef(*e.left, expr(*e.left, scope), scope);
+            const Value r = heldRef(*e.right, expr(*e.right, scope), scope);
+            return {"(" + l.code + (op == "Is" ? " == " : " != ") + r.code + ")", false};
+        }
 
         if (op == "&" || (op == "+" && e.type == Type::String))
         {
@@ -2174,6 +2343,8 @@ private:
                 return "TF_ELEM_STRING";
             case Type::Record:
                 return "TF_ELEM_RECORD";
+            case Type::Ref:
+                return "TF_ELEM_REF";
             default:
                 return "TF_ELEM_I32";
         }
@@ -2187,14 +2358,22 @@ private:
     }
 
     // The C type of a variable's or an expression's value.
-    static std::string cTypeOf(const Variable &v)
-    {
-        return v.type == Type::Record ? "t_" + v.typeDef->name : cType(storage(v));
-    }
+    static std::string cTypeOf(const Variable &v) { return cTypeOf(v.type, v.typeDef, storage(v)); }
 
-    static std::string cTypeOf(const Expr &e)
+    static std::string cTypeOf(const Expr &e) { return cTypeOf(e.type, e.typeDef, storage(e)); }
+
+    // A record is t_<Type>; a Ref a pointer to one (Nothing: void *).
+    static std::string cTypeOf(Type type, const TypeDef *def, Type stored)
     {
-        return e.type == Type::Record ? "t_" + e.typeDef->name : cType(storage(e));
+        if (type == Type::Record)
+        {
+            return "t_" + def->name;
+        }
+        if (type == Type::Ref)
+        {
+            return def != nullptr ? "t_" + def->name + " *" : "void *";
+        }
+        return cType(stored);
     }
 
     static std::string declarationOf(const Variable &v, const std::string &name)
@@ -2210,9 +2389,16 @@ private:
     }
 
     // The tf_record_ops of a record array's element Type, else NULL.
-    static std::string elemOps(const Variable &v)
+    std::string elemOps(const Variable &v)
     {
-        return v.type == Type::Record ? "&t_" + v.typeDef->name + "_ops" : "NULL";
+        return v.type == Type::Record ? opsOf(*v.typeDef) : "NULL";
+    }
+
+    // "&t_Customer_ops", noting that the Type's ops must be emitted.
+    std::string opsOf(const TypeDef &def)
+    {
+        opsNeeded_.insert(&def);
+        return "&t_" + def.name + "_ops";
     }
 
     // "(const int32_t[]){10, 20}": a shape for the runtime.
@@ -2226,7 +2412,7 @@ private:
         return out + "}";
     }
 
-    std::string arrayInit(const Variable &v, const std::string &ref) const
+    std::string arrayInit(const Variable &v, const std::string &ref)
     {
         std::vector<std::string> bounds;
         for (std::int32_t u : v.upper)
@@ -2356,7 +2542,7 @@ private:
         return type + (type.back() == '*' ? "" : " ") + name;
     }
 
-    static const char *zero(Type t) { return t == Type::String ? "NULL" : "0"; }
+    static const char *zero(Type t) { return t == Type::String || t == Type::Ref ? "NULL" : "0"; }
 
     // A borrowed reference to a literal, created on first use. The empty
     // string is NULL, so "" needs no literal at all.
@@ -2430,7 +2616,8 @@ private:
     int loopCount_ = 0;
     std::vector<TryContext> tries_; // Trys around the statement, innermost last
     int tryCount_ = 0;
-    bool checks_ = false; // the program has a Try, so errors are tested for
+    bool checks_ = false;                 // the program has a Try, so errors are tested for
+    std::set<const TypeDef *> opsNeeded_; // Types whose tf_record_ops some code uses
 };
 
 } // namespace

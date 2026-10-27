@@ -99,6 +99,8 @@ const char *tf_error_text(int32_t number)
             return "Type mismatch";
         case TF_ERR_OUT_OF_STRING_SPACE:
             return "Out of string space";
+        case TF_ERR_NOTHING:
+            return "Object variable or With block variable not set";
         case TF_ERR_TERMINAL:
             return "Terminal error";
         default:

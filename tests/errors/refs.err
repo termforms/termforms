@@ -1,0 +1,8 @@
+refs.bas:23:9: error: Ref works with a Type, and Color is an Enum
+refs.bas:24:9: error: New makes a record of a Type, and 'Color' is not a Type
+refs.bas:25:10: error: compare Refs with 'Is' or 'IsNot', not '='
+refs.bas:26:10: error: 'Is' compares two Refs of the same Type (or Nothing), not an Integer and a Node
+refs.bas:27:9: error: cannot assign a Ref Other to a Ref Node (Option Strict)
+refs.bas:28:9: error: cannot assign Nothing to a Node (Option Strict)
+refs.bas:29:10: error: 'Is' compares two Refs of the same Type (or Nothing), not a Ref Node and a Ref Other
+refs.bas:30:9: error: cannot assign a Ref Node to an Integer (Option Strict)

@@ -31,6 +31,8 @@ static size_t elem_size(int32_t elem, const tf_record_ops *ops)
             return sizeof(double);
         case TF_ELEM_BOOL:
             return sizeof(int);
+        case TF_ELEM_REF:
+            return sizeof(void *);
         default:
             return sizeof(tf_string *);
     }
@@ -56,6 +58,12 @@ void *tf_scratch_element(int32_t elem, const tf_record_ops *ops)
     else if (scratch_elem == TF_ELEM_RECORD && scratch != NULL)
     {
         scratch_ops->free(scratch);
+    }
+    else if (scratch_elem == TF_ELEM_REF && scratch != NULL)
+    {
+        void *held = NULL;
+        memcpy(&held, scratch, sizeof held);
+        tf_ref_release(held);
     }
     const size_t size = elem_size(elem, ops);
     if (size > scratch_size)
@@ -127,6 +135,15 @@ static void release_elements(tf_array *a, int64_t from, int64_t to)
         {
             a->ops->free(element(a, i));
             memset(element(a, i), 0, a->ops->size);
+        }
+    }
+    else if (a->elem == TF_ELEM_REF)
+    {
+        void **refs = a->data;
+        for (int64_t i = from; i < to; ++i)
+        {
+            tf_ref_release(refs[i]);
+            refs[i] = NULL;
         }
     }
 }
@@ -299,6 +316,14 @@ static void copy_elements(tf_array *to, const tf_array *from)
         for (int64_t i = 0; i < to->count; ++i)
         {
             tf_str_retain(strings[i]);
+        }
+    }
+    else if (from->elem == TF_ELEM_REF)
+    {
+        void **refs = to->data;
+        for (int64_t i = 0; i < to->count; ++i)
+        {
+            tf_ref_retain(refs[i]);
         }
     }
 }

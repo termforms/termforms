@@ -75,6 +75,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_ARRAY_LOCKED 10        /* This array is fixed or temporarily locked */
 #define TF_ERR_DIVISION_BY_ZERO 11    /* Division by zero */
 #define TF_ERR_TYPE_MISMATCH 13       /* Type mismatch */
+#define TF_ERR_NOTHING 91             /* Object variable or With block variable not set */
 #define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
 #define TF_ERR_TERMINAL 900           /* Terminal error (always fatal) */
 #define TF_ERR_FIRST_USER 1000        /* the first number left to programs */
@@ -292,7 +293,8 @@ typedef enum tf_elem
     TF_ELEM_F64,    /* Double */
     TF_ELEM_BOOL,   /* Boolean (int) */
     TF_ELEM_STRING, /* tf_string *, released when replaced or freed */
-    TF_ELEM_RECORD  /* a user Type, handled through its tf_record_ops */
+    TF_ELEM_RECORD, /* a user Type, handled through its tf_record_ops */
+    TF_ELEM_REF     /* a Ref to a user Type (see "Refs" below) */
 } tf_elem;
 
 /*
@@ -360,6 +362,38 @@ int32_t tf_array_ubound(const tf_array *a, int32_t dimension);
    array are error 10 meanwhile, so the element's address stays valid. */
 void tf_array_lock(tf_array *a);
 void tf_array_unlock(tf_array *a);
+
+/* ------------------------------------------------------------------------ */
+/* Refs: reference-counted records                                           */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * A Ref (Ref Customer) points to a record on the heap, behind a header that
+ * holds its reference count and its Type's tf_record_ops; NULL is Nothing.
+ * Ownership follows strings: a function documented "+1" hands the caller
+ * a reference to release; arguments are borrowed. Cycles are never freed
+ * (decided 23 Oct 2026).
+ */
+
+/* New Customer: a fresh record, initialised. +1 */
+void *tf_ref_new(const tf_record_ops *ops);
+
+/* A new record holding a deep copy of *from (r = c, copying a value). +1 */
+void *tf_ref_new_copy(const tf_record_ops *ops, const void *from);
+
+void tf_ref_retain(void *record);
+void tf_ref_release(void *record);
+
+/* Takes a reference to a borrowed Ref and returns it. +1 */
+void *tf_ref_ref(void *record);
+
+/* old is the variable's current value, owned the new one (+1): releases
+   old and returns owned, as in "v = tf_ref_replace(v, tf_ref_ref(x))". */
+void *tf_ref_replace(void *old, void *owned);
+
+/* The record a Ref points to, or, for Nothing, error 91 and a scratch
+   record of the Type (so a statement going on to its check harms nothing). */
+void *tf_ref_get(void *record, const tf_record_ops *ops);
 
 /* ------------------------------------------------------------------------ */
 /* Forms and controls                                                       */

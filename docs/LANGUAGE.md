@@ -62,6 +62,7 @@ End Sub
 | Constants | `Const` (module level or in a procedure), `Enum ... End Enum` (Integer or `As Long`), `CType(value, type)` |
 | Arrays | fixed `Dim a(9)`, `Dim g(24, 79)`; dynamic `Dim a()`, `Dim t(,)` with `ReDim [Preserve]`; `Erase`, `UBound`, `LBound`; array parameters |
 | Types | `Type ... End Type` records with scalar, array and Type members; arrays of Types; Type parameters and Function results |
+| Refs | `Ref T`, `New T`, `Dim r As New T`, `Nothing`, `Is` / `IsNot`; Ref members, arrays of Refs |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -164,7 +165,33 @@ copy = s                                ' copies everything: they share nothing
 - A Type is a value: assignment copies the record, arrays and nested Types
   included. A ByVal Type parameter is the callee's own copy; ByRef shares.
 - Types cannot be compared with `=`; compare their members.
-- `Ref`, `New`, `Nothing` and `With ... End With` come next.
+- `With ... End With` comes next.
+
+## Refs
+
+```vb
+Type Node
+    Value As Integer
+    Next As Ref Node
+End Type
+
+Dim head As Ref Node                    ' Nothing until given a record
+Dim n As New Node                       ' a new record, made at the Dim
+n.Value = 1
+n.Next = head
+head = n                                ' head and n share one record
+While head IsNot Nothing
+    total = total + head.Value
+    head = head.Next
+Wend
+```
+
+- A Ref shares its record; a Type value copies. `r = v` (a value into a
+  Ref) makes a new record holding a copy; `v = r` copies the record out.
+- Using a Ref that is Nothing is error 91. Compare Refs with `Is` and
+  `IsNot`, not `=`.
+- Records are freed when nothing refers to them any more, but records that
+  refer to each other in a circle are never freed.
 
 ## Errors
 

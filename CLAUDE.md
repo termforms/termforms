@@ -85,8 +85,12 @@ authoritative for design rationale.
   Types; Type parameters, ByVal copied; Functions returning Types). Jim
   settled: values and Refs convert by copying, arrays in Types, Type
   results, With in v1.
-- **Next:** 5b-2 Ref/New/Nothing/Is (design settled), 5b-3 With, then 5c
-  Dictionary (settle its design with Jim first).
+  Step 5b-2 done (27 Oct 2026): Ref, New, Dim As New, Nothing, Is/IsNot,
+  value<->Ref copying, Ref members and arrays of Refs, error 91; keywords
+  allowed as member names. Also fixed `Return` of a Type (was a shallow
+  copy). Smaller Ref/Type rules are Proposed in REFERENCE.md.
+- **Next:** 5b-3 With ... End With, then 5c Dictionary (settle its design
+  with Jim first).
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -265,6 +269,13 @@ Key mechanisms:
   per-statement `releases` list holds whole C statements
   (`tf_str_release(t1);`, `t_X_free(&t2);`). Codegen paths: `lvalue()`,
   `address()`, `wholeArrayRef()`; a ByRef path through arrays locks each.
+- **Refs in C:** `t_X *` pointing at a record behind a header (count,
+  ops) from `tf_ref_new`; NULL is Nothing. Owned/borrowed as strings:
+  stores use `v = tf_ref_replace(v, owned)`; ByVal Ref params retained on
+  entry; `tf_ref_get(r, ops)` derefs (91 + scratch record for Nothing).
+  Reads of a reachable Ref before a later call are held (retained);
+  a ByRef path through a Ref holds the record for the statement.
+  `opsOf()` records which Types' ops are emitted (arrays, New, get).
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in
