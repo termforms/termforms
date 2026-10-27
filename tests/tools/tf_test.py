@@ -90,7 +90,10 @@ def run(tfc: str, source: Path, work: Path) -> bool:
     folder = work / (source.stem + ".dir")
     shutil.rmtree(folder, ignore_errors=True)
     folder.mkdir()
-    result = subprocess.run([str(exe)], cwd=folder, env=env, capture_output=True,
+    # An optional .args file: the program's command-line arguments, one a line.
+    args_file = source.with_suffix(".args")
+    args = args_file.read_text(encoding="utf-8").splitlines() if args_file.exists() else []
+    result = subprocess.run([str(exe)] + args, cwd=folder, env=env, capture_output=True,
                             timeout=60)
     stdout = result.stdout.decode("utf-8", errors="replace")
     stderr = result.stderr.decode("utf-8", errors="replace")

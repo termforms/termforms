@@ -61,6 +61,9 @@ const char *tf_runtime_version(void);
  */
 void tf_runtime_init(const char *source_file);
 
+/* A program that uses Command$ passes main's arguments on. */
+void tf_runtime_args(int argc, char **argv);
+
 /* Restores the terminal (if a form was shown) and exits with the given code. */
 TF_NORETURN void tf_end(int exit_code);
 
@@ -466,6 +469,21 @@ void tf_array_unlock(tf_array *a);
    the whole string. Join: a String array's elements, the delimiter between. */
 void tf_str_split(tf_array *to, const tf_string *s, const tf_string *delimiter);
 tf_string *tf_str_join(const tf_array *strings, const tf_string *delimiter);
+
+/* The system. Shell runs a command through the system's shell (sh,
+   cmd.exe) and waits for it, giving its exit code (127 from sh, 9009 from
+   cmd.exe when there is no such command); while it runs a shown form gives
+   the terminal back, and redraws after. Error 5 for "". Environ$ of a
+   variable not set is "". Now is local time as "yyyy-mm-dd hh:mm:ss",
+   Date$ "mm-dd-yyyy" and Time$ "hh:mm:ss" as VB's, Timer the seconds
+   since local midnight (with the fraction). */
+tf_string *tf_command(void);
+tf_string *tf_environ(const tf_string *name);
+int32_t tf_shell(const tf_string *command);
+tf_string *tf_now(void);
+tf_string *tf_date(void);
+tf_string *tf_time(void);
+double tf_timer(void);
 
 /* The file system. Paths are UTF-8 (any name works on Windows too).
    Kill and Dir$ take * and ? in the last part (not in folder names); Dir$

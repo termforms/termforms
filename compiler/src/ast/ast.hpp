@@ -127,7 +127,15 @@ enum class Builtin
     Exists,
     Dir,
     DirNext, // Dir$() with no pattern
-    Count,   // not a name programs use: For Each's element count of an array (a Long)
+    // The system (step 6b-5).
+    Command,
+    Environ,
+    Shell,
+    Now,
+    Date,
+    Time,
+    Timer,
+    Count, // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
     DictCount,
@@ -203,6 +211,13 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Exists, "S", 1, {}, Type::Boolean, "tf_fs_exists", false},
     {Builtin::Dir, "S", 0, {}, Type::String, "tf_fs_dir", false},
     {Builtin::DirNext, "", 0, {}, Type::String, "tf_fs_dir_next", true},
+    {Builtin::Command, "", 0, {}, Type::String, "tf_command", false},
+    {Builtin::Environ, "S", 1, {}, Type::String, "tf_environ", false},
+    {Builtin::Shell, "S", 1, {}, Type::Integer, "tf_shell", true},
+    {Builtin::Now, "", 0, {}, Type::String, "tf_now", false},
+    {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
+    {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},
+    {Builtin::Timer, "", 0, {}, Type::Double, "tf_timer", false},
 };
 
 inline const StringFunction *findStringFunction(Builtin id)

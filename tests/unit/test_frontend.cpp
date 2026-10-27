@@ -646,3 +646,11 @@ TEST_CASE("file-system routines: statements, functions, and Name ... As by its s
                              "    n = FileLen(s)\n    If Exists(s) Then Kill s\n";
     CHECK(check(inClick("", body)) == "");
 }
+
+TEST_CASE("system functions, and Shell both as a function and as a statement")
+{
+    const std::string body = "    Dim s As String, n As Integer, secs As Double\n"
+                             "    s = Command$ & Environ$(\"HOME\") & Now & Date$ & Time & CurDir\n"
+                             "    n = Shell(\"true\")\n    Shell \"true\"\n    secs = Timer\n";
+    CHECK(check(inClick("", body)) == "");
+}

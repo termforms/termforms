@@ -1,0 +1,4 @@
+system.bas:10:18: error: argument 1 of 'Environ$' must be a String, not an Integer; use CStr(value) to convert
+system.bas:11:15: error: argument 1 of 'Shell' must be a String, not an Integer; use CStr(value) to convert
+system.bas:12:9: error: 'Now' takes 0 arguments, not 1
+system.bas:13:9: error: cannot assign a Double to an Integer (Option Strict); use CInt(value) to convert

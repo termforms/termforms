@@ -564,8 +564,14 @@ private:
 
     void emitMain(std::ostringstream &out)
     {
-        out << "int main(void)\n{\n";
+        // Only a program that uses Command$ takes main's arguments, so the
+        // others' C is as before.
+        out << (usesCommandLine_ ? "int main(int argc, char **argv)\n{\n" : "int main(void)\n{\n");
         out << "    tf_runtime_init(" << cString(options_.sourcePath) << ");\n";
+        if (usesCommandLine_)
+        {
+            out << "    tf_runtime_args(argc, argv);\n";
+        }
         for (const auto &v : module_.globals)
         {
             if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
@@ -2305,6 +2311,7 @@ private:
         }
         if (const StringFunction *f = findStringFunction(e.builtin))
         {
+            usesCommandLine_ = usesCommandLine_ || f->id == Builtin::Command;
             // Every argument is there (sema supplied the defaults), in order.
             std::string args;
             for (std::size_t i = 0; i < e.args.size(); ++i)
@@ -2816,6 +2823,7 @@ private:
     std::vector<TryContext> tries_; // Trys around the statement, innermost last
     int tryCount_ = 0;
     bool checks_ = false;                 // the program has a Try, so errors are tested for
+    bool usesCommandLine_ = false;        // Command$ is used: main passes argc/argv on
     std::set<const TypeDef *> opsNeeded_; // Types whose tf_record_ops some code uses
 };
 

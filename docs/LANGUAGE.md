@@ -67,6 +67,7 @@ End Sub
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
+| System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
 | Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
@@ -250,6 +251,15 @@ Do While name <> ""
 Loop
 If Exists("old.txt") Then Kill "old.txt"
 Name "a.txt" As "b.txt"
+```
+
+## The system
+
+```vb
+code = Shell("make all")          ' runs it through the shell, waits: its exit code
+home = Environ$("HOME")           ' "" when not set
+args = Command$                   ' the arguments, joined by spaces
+stamp = Now                       ' "2026-10-28 14:05:09"
 ```
 
 ## Dictionaries

@@ -89,6 +89,33 @@ int tf_platform_list(const char *dir, void (*each)(const char *name, int folder,
 void tf_platform_local_time(int64_t seconds, int32_t fields[6]);
 #define TF_NAMES_IGNORE_CASE TF_ON_WINDOWS
 
+/* ------------------------------------------------------------------------ */
+/* The system: platform/<os>/tf_sys_<os>.c (getenv: tf_term_<os>.c)         */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Reads an environment variable as UTF-8 (on Windows, getenv would convert
+ * it to the ANSI code page). Returns NULL if unset. The result stays valid
+ * until the next call.
+ */
+const char *tf_platform_getenv(const char *name);
+
+/* Runs a command through the system's shell (sh, cmd.exe), waiting for it;
+   its exit code in *code. -1 with errno if it could not be started. */
+int tf_platform_system(const char *command, int32_t *code);
+
+/* The time now: seconds since 1970 (UTC) and the microseconds past them. */
+void tf_platform_clock(int64_t *seconds, int32_t *microseconds);
+
+/* Command$: the arguments after the program's name joined by single
+   spaces (quotes as the system's rules take them), to free. */
+char *tf_platform_command(int argc, char **argv);
+
+/* The forms layer hands the terminal back while Shell runs a command
+   (normal mode, main screen), and takes it again after; set when a form
+   is shown. */
+void tf_set_terminal_hooks(void (*suspend)(void), void (*resume)(void));
+
 /* A zeroed, ready element of the given kind, to hand out after an error
    instead of a real one (see tf_array.c). */
 void *tf_scratch_element(int32_t elem, const tf_record_ops *ops);

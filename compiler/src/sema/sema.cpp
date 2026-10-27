@@ -79,7 +79,14 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"FileLen", Builtin::FileLen, false},
                                      {"FileDateTime", Builtin::FileDateTime, false},
                                      {"Exists", Builtin::Exists, false},
-                                     {"Dir", Builtin::Dir, true}};
+                                     {"Dir", Builtin::Dir, true},
+                                     {"Command", Builtin::Command, true},
+                                     {"Environ", Builtin::Environ, true},
+                                     {"Shell", Builtin::Shell, false},
+                                     {"Now", Builtin::Now, false},
+                                     {"Date", Builtin::Date, true},
+                                     {"Time", Builtin::Time, true},
+                                     {"Timer", Builtin::Timer, false}};
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -774,8 +781,9 @@ private:
         // calls of a Sub (a program's own Sub of that name comes first).
         if (const BuiltinInfo *b = s.procedure == nullptr ? findBuiltin(s.callee, 0) : nullptr)
         {
+            // Shell may be a statement too, its exit code unused.
             if (const StringFunction *f = findStringFunction(b->id);
-                f != nullptr && f->result == Type::Void)
+                f != nullptr && (f->result == Type::Void || f->id == Builtin::Shell))
             {
                 auto call = std::make_unique<Expr>();
                 call->kind = ExprKind::Call;

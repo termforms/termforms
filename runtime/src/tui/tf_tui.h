@@ -48,12 +48,7 @@ int tf_term_take_resize(void);
 /* Whether box-drawing characters can be sent as UTF-8. */
 int tf_term_utf8(void);
 
-/*
- * Reads an environment variable as UTF-8 (on Windows, getenv would convert
- * it to the ANSI code page). Returns NULL if unset. The result stays valid
- * until the next call.
- */
-const char *tf_platform_getenv(const char *name);
+/* tf_platform_getenv is declared in tf_internal.h (Environ$ uses it too). */
 
 /* ------------------------------------------------------------------------ */
 /* Keys                                                                     */

@@ -719,6 +719,34 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
   ChDir, RmDir), 58 Name onto a file that is there, 70 not permitted, 75
   any other refusal (a folder not empty, one already there).
 
+### The system (Proposed)
+
+| Function or statement | Gives or does |
+|---|---|
+| `Command$` | the program's arguments, joined by single spaces |
+| `Environ$(name)` | an environment variable's value; "" if it is not set |
+| `Shell(command)`, `Shell command` | runs command through the system's shell and waits; the function gives its exit code |
+| `Now` | the local date and time, "yyyy-mm-dd hh:mm:ss" (until there is a Date type) |
+| `Date$`, `Time$` | VB's "mm-dd-yyyy" and "hh:mm:ss" |
+| `Timer` | the seconds since local midnight, a Double with the fraction |
+
+- **`Command$` is the same on every platform**: the arguments as the
+  program received them (Windows' quoting rules applied there, as the
+  shell applies its own on Linux and macOS), joined by single spaces. VB
+  gave the command line's tail as typed. An argument with spaces in it
+  cannot be told from two; a way to get the arguments one by one can come
+  later if needed.
+- **`Shell` waits** for the command and gives its exit code (VB's Shell
+  starts a program and returns at once with its task id). The command
+  goes to `sh -c` on Linux and macOS and `cmd.exe /c` on Windows, so
+  redirection and pipes work; a command that does not exist gives the
+  shell's code (127 from sh, 9009 from cmd.exe), not an error.
+  `Shell ""` is error 5. While it runs, a shown form hands the terminal
+  back (the command may use it), and is redrawn after.
+- The names `Command`, `Environ`, `Shell`, `Now`, `Date`, `Time` and
+  `Timer` are built-in functions (the `$` is optional, as for the string
+  functions), so they cannot name variables.
+
 ### Byte (Proposed)
 
 ```vb

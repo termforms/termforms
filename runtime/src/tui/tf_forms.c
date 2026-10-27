@@ -508,6 +508,32 @@ static void parse_size(const char *text, int *cols, int *rows)
     }
 }
 
+/* While Shell runs a command: the terminal back to normal for it, then
+   taken again and redrawn whole (the command may have left anything on
+   the screen, and the window may have been resized). */
+static void ui_suspend(void)
+{
+    tf_term_close();
+}
+
+static void ui_resume(void)
+{
+    const char *reason = "";
+    if (tf_term_open(&reason) != 0)
+    {
+        tf_fatal_error(TF_ERR_TERMINAL, reason);
+    }
+    int cols = 80;
+    int rows = 25;
+    tf_term_size(&cols, &rows);
+    tf_screen_init(cols, rows, 1);
+    if (running_form != NULL)
+    {
+        draw_form(running_form);
+        tf_screen_flush();
+    }
+}
+
 /* Registered as the shutdown hook: runs on normal close, End, or an error. */
 static void ui_shutdown(void)
 {
@@ -558,6 +584,7 @@ static void ui_open(void)
         tf_term_size(&cols, &rows);
         tf_screen_init(cols, rows, 1);
         tf_input_start(NULL);
+        tf_set_terminal_hooks(ui_suspend, ui_resume);
     }
     tf_set_shutdown_hook(ui_shutdown);
 }

@@ -36,7 +36,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (27 Oct 2026, Phase 3 step 4 done)
+## Status (28 Oct 2026, Phase 3 steps 1-6 done)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -134,6 +134,10 @@ authoritative for design rationale.
   statements such as Kill parse as Sub calls and become library
   statements in checkCallStatement when no Sub has the name; Name ... As
   by shape; Dir$ sorted, files only).
+  6b-5 done: Command$ (main takes argc/argv only in programs that use
+  it), Environ$, Shell (waits; exit code; the forms layer's terminal
+  hooks hand the terminal back meanwhile), Now, Date$, Time$, Timer.
+  **Step 6 is complete.**
   6a done: the string functions (table `kStringFunctions` in ast.hpp,
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case
@@ -142,10 +146,10 @@ authoritative for design rationale.
   (`Mid$(s, 2, 1) = "x"`); not urgent.
   **Binary files soon (Jim, 27 Oct 2026):** read a buffer of x bytes at
   offset y, the position advancing by x on each read, the size or position
-  settable in the read or by a separate statement. Design 6b's file
-  numbers and Open so Binary mode fits; settle the byte type (no Byte
-  type yet; Strings are UTF-8 text) with Jim. Step 5 (arrays, Types, Ref, With, For
-  Each, Dictionary) is complete.
+  settable in the read or by a separate statement: done in 6b-3.
+  Step 5 (arrays, Types, Ref, With, For Each, Dictionary) is complete.
+- **Next:** Phase 3 step 7, multiple modules and the `.vbp` project
+  file; settle its design with Jim first.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -251,7 +255,8 @@ tests/
   golden/     .bas -> expected .c         tests/tools/tf_test.py drives
   errors/     .bas -> expected .err       golden/errors/run; new cases are
   run/        .bas + .keys -> .screen     just new files (re-run cmake)
-              (+ .stderr = must fail with that message)
+              (+ .stderr = must fail with that message;
+              + .args = command-line arguments, one a line)
   runtime/    C tests linked against tfrt
 examples/hello.bas                         the vertical-slice program
 ```
@@ -432,7 +437,9 @@ Lessons from getting CI green: MSVC flags unreachable code after an
 `if (constexpr-bool) return` (use `if constexpr … else`); clang flags unused
 static functions behind a constexpr branch (`[[maybe_unused]]`); Windows
 console Python needs UTF-8 stdout for box-drawing; `tf_platform_getenv`'s
-buffer is reused by the next call (copy what you keep).
+buffer is reused by the next call (copy what you keep). MSVC's C4701
+("potentially uninitialized") only shows in CI's Windows jobs: initialise
+a variable that is filled in only when a call succeeds.
 
 ## Known limitations of the slice (intentional, to be replaced)
 
@@ -453,8 +460,9 @@ Phase 3, language core:
 2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
 3. ~~Try/Catch/Finally, Err, Throw~~ (done 27 Oct 2026).
 4. ~~Const and Enum~~ (done 27 Oct 2026).
-5. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
-6. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
+5. ~~Arrays, Types and Ref, With, For Each, Dictionary~~ (done 27 Oct 2026).
+6. ~~Strings, Byte, text and binary files, the file system, Command$,
+   Environ$, Shell, time~~ (done 28 Oct 2026).
 7. Multiple modules and the `.vbp` project file.
 
 Not planned (Jim, 27 Oct 2026): warnings for a local assigned but never

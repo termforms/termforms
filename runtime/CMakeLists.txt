@@ -24,14 +24,17 @@ set(TF_RUNTIME_SOURCES
     src/core/tf_text.c
     src/core/tf_file.c
     src/core/tf_fsys.c
+    src/core/tf_system.c
     src/core/tf_ref.c
     src/tui/tf_keys.c
     src/tui/tf_screen.c
     src/tui/tf_input.c
     src/tui/tf_forms.c
     src/platform/posix/tf_fs_posix.c
+    src/platform/posix/tf_sys_posix.c
     src/platform/posix/tf_term_posix.c
     src/platform/win32/tf_fs_win32.c
+    src/platform/win32/tf_sys_win32.c
     src/platform/win32/tf_term_win32.c)
 
 add_library(tfrt STATIC ${TF_RUNTIME_SOURCES})
