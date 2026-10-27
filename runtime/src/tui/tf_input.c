@@ -6,13 +6,15 @@
  * is typed as itself, except brace-enclosed names for special keys:
  *
  *   {ENTER} {TAB} {BACKTAB} {BKSP} {DEL} {LEFT} {RIGHT} {UP} {DOWN}
- *   {HOME} {END} {ESC} {CTRL+<letter>} {{ (a literal brace)
+ *   {HOME} {END} {ESC} {F1}..{F12} {CTRL+<letter>} {ALT+<letter>}, CTRL+ /
+ *   ALT+ / SHIFT+ before F<n> ({CTRL+F4}), and {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
  */
 #include "tf_tui.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 /* Milliseconds to wait for the rest of an escape sequence before deciding
@@ -44,7 +46,7 @@ static const named_key NAMED_KEYS[] = {
 
 static tf_key next_scripted(void)
 {
-    tf_key key = {TF_KEY_EOF, 0};
+    tf_key key = {TF_KEY_EOF, 0, 0};
 
     if (*script == '\0')
     {
@@ -66,16 +68,54 @@ static tf_key next_scripted(void)
         {
             tf_fatal_error(TF_ERR_INVALID_ARGUMENT, "Unterminated {key} in TERMFORMS_HEADLESS");
         }
-        const size_t length = (size_t)(close - script - 1);
+        size_t length = (size_t)(close - script - 1);
         const char *name = script + 1;
         script = close + 1;
 
-        if (length == 6 && strncmp(name, "CTRL+", 5) == 0)
+        /* CTRL+, ALT+ and SHIFT+ prefixes, then a letter, F1-F12 or a name. */
+        int mods = 0;
+        for (;;)
         {
-            const char c = name[5];
-            key.kind = TF_KEY_CTRL;
+            if (length > 5 && strncmp(name, "CTRL+", 5) == 0)
+            {
+                mods |= TF_MOD_CTRL;
+                name += 5;
+                length -= 5;
+            }
+            else if (length > 4 && strncmp(name, "ALT+", 4) == 0)
+            {
+                mods |= TF_MOD_ALT;
+                name += 4;
+                length -= 4;
+            }
+            else if (length > 6 && strncmp(name, "SHIFT+", 6) == 0)
+            {
+                mods |= TF_MOD_SHIFT;
+                name += 6;
+                length -= 6;
+            }
+            else
+            {
+                break;
+            }
+        }
+        if (length == 1 && mods != 0)
+        {
+            const char c = name[0];
+            key.kind = mods == TF_MOD_CTRL ? TF_KEY_CTRL : TF_KEY_ALT;
             key.ch = (uint32_t)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
             return key;
+        }
+        if (length >= 2 && length <= 3 && name[0] == 'F' && name[1] >= '1' && name[1] <= '9')
+        {
+            const int n = atoi(name + 1);
+            if (n >= 1 && n <= 12)
+            {
+                key.kind = TF_KEY_F;
+                key.ch = (uint32_t)n;
+                key.mods = mods;
+                return key;
+            }
         }
         for (size_t i = 0; i < sizeof NAMED_KEYS / sizeof NAMED_KEYS[0]; ++i)
         {
@@ -103,7 +143,7 @@ tf_key tf_input_next(void)
         return next_scripted();
     }
 
-    tf_key key = {TF_KEY_NONE, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0};
     for (;;)
     {
         if (tf_keys_next(&decoder, &key, 0))

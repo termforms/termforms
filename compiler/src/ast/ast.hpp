@@ -513,7 +513,7 @@ struct ControlDef
     std::string name;
     Location location;
     std::vector<PropertySetting> properties;
-    std::vector<std::unique_ptr<ControlDef>> children; // forms only
+    std::vector<std::unique_ptr<ControlDef>> children; // a form's or a Frame's, in order
     bool isForm = false;
 };
 

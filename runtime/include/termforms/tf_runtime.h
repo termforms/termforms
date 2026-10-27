@@ -98,6 +98,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_DISK_FULL 61           /* Disk full */
 #define TF_ERR_PAST_END 62            /* Input past end of file */
 #define TF_ERR_BAD_RECORD 63          /* Bad record number */
+#define TF_ERR_INVALID_PROPERTY 380   /* Invalid property value */
 #define TF_ERR_TOO_MANY_FILES 67      /* Too many files */
 #define TF_ERR_PERMISSION 70          /* Permission denied */
 #define TF_ERR_PATH_ACCESS 75         /* Path/File access error */
@@ -602,7 +603,11 @@ typedef enum tf_control_type
 {
     TF_CTL_FORM,
     TF_CTL_TEXTBOX,
-    TF_CTL_COMMANDBUTTON
+    TF_CTL_COMMANDBUTTON,
+    TF_CTL_LABEL,
+    TF_CTL_CHECKBOX,
+    TF_CTL_OPTIONBUTTON,
+    TF_CTL_FRAME
 } tf_control_type;
 
 /* Properties a control may have; the compiler checks which apply to which. */
@@ -613,7 +618,12 @@ typedef enum tf_prop
     TF_PROP_LEFT,
     TF_PROP_TOP,
     TF_PROP_WIDTH,
-    TF_PROP_HEIGHT
+    TF_PROP_HEIGHT,
+    TF_PROP_VALUE,   /* CheckBox: 0, 1 (checked), 2 (grey); OptionButton: True/False */
+    TF_PROP_DEFAULT, /* CommandButton: pressed by Enter anywhere on the form */
+    TF_PROP_CANCEL,  /* CommandButton: pressed by Esc */
+    TF_PROP_ENABLED,
+    TF_PROP_VISIBLE
 } tf_prop;
 
 typedef enum tf_event
@@ -631,6 +641,10 @@ tf_control *tf_form_new(const char *name);
 /* Creates a control on a form; tab order follows creation order. */
 tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *name);
 
+/* Puts a control inside a Frame (created before it): its Left and Top are
+   then inside the Frame, and OptionButtons in a Frame are a group. */
+void tf_control_container(tf_control *control, tf_control *frame);
+
 void tf_control_on(tf_control *control, tf_event event, tf_handler handler);
 
 /* Property access. Setters borrow the value; tf_get_str returns borrowed. */
@@ -641,7 +655,8 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop);
 
 /*
  * Shows the form and runs its event loop until the user closes it
- * (Ctrl+Q in this version) or the program executes End. Returns the exit code.
+ * (Ctrl+F4, or Alt+F4 where the terminal passes it on) or the program
+ * executes End. Returns the exit code.
  */
 int tf_form_run(tf_control *form);
 

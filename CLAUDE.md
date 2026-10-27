@@ -180,8 +180,14 @@ authoritative for design rationale.
   **Working mode (Jim, 28 Oct 2026, overnight):** proceed through Phase 4
   unattended, pushing each step once local checks pass and CI goes green;
   stop and wait at anything that needs Jim's decision.
-- **Next:** Phase 4 step 1: Label, CheckBox, OptionButton, Frame and the
-  keys above.
+  Step 4.1 done (28 Oct 2026): Label, CheckBox, OptionButton, Frame
+  (controls nest in the form block; `tf_control_container`; draw by
+  container areas), Value/Default/Cancel/Enabled/Visible, Tab stopping
+  once per option group, arrows within it, Space, Enter/Esc to the
+  Default/Cancel buttons, Alt access keys, Ctrl+F4/Alt+F4 closing. The
+  key decoder now gives Alt+key (ESC prefix), F1-F12 and modifiers; key
+  scripts take {ALT+x}, {F4}, {CTRL+F4}.
+- **Next:** Phase 4 step 2: ListBox (multi-select too).
 
 ## Settled design decisions (do not relitigate without Jim)
 

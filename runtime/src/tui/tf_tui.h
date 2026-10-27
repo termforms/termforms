@@ -71,14 +71,22 @@ typedef enum tf_key_kind
     TF_KEY_HOME,
     TF_KEY_END,
     TF_KEY_ESC,
+    TF_KEY_ALT, /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
+    TF_KEY_F,   /* function key; .ch is its number, 1-12; .mods as pressed */
     TF_KEY_RESIZE,
     TF_KEY_EOF /* headless script exhausted */
 } tf_key_kind;
+
+/* Modifiers, for function keys (as xterm reports them: 1 + this). */
+#define TF_MOD_SHIFT 1
+#define TF_MOD_ALT 2
+#define TF_MOD_CTRL 4
 
 typedef struct tf_key
 {
     tf_key_kind kind;
     uint32_t ch;
+    int mods;
 } tf_key;
 
 /* Byte-stream decoder state. */

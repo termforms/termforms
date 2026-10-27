@@ -1,0 +1,5 @@
+controls.bas:6:9: error: only a Frame can hold other controls, not a CommandButton
+controls.bas:10:9: error: Label has no property 'Value'
+controls.bas:13:9: error: property 'Value' needs an Integer, not a Boolean
+controls.bas:16:9: error: property 'Value' needs a Boolean, not an Integer
+controls.bas:22:1: warning: Frame 'fra' has no event 'Click'; Sub 'fra_Click' will not be called

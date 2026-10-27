@@ -17,29 +17,48 @@ using ast::Type;
 
 const std::vector<ControlType> &types()
 {
+    // Every control has a place and size, and Enabled and Visible.
+    auto placed = [](std::vector<Property> own) {
+        for (const Property &p : {Property{"Left", Type::Integer, "TF_PROP_LEFT"},
+                                  Property{"Top", Type::Integer, "TF_PROP_TOP"},
+                                  Property{"Width", Type::Integer, "TF_PROP_WIDTH"},
+                                  Property{"Height", Type::Integer, "TF_PROP_HEIGHT"},
+                                  Property{"Enabled", Type::Boolean, "TF_PROP_ENABLED"},
+                                  Property{"Visible", Type::Boolean, "TF_PROP_VISIBLE"}})
+        {
+            own.push_back(p);
+        }
+        return own;
+    };
+    const Property caption{"Caption", Type::String, "TF_PROP_CAPTION"};
+    const Event click{"Click", EventKind::Click, "TF_EVENT_CLICK"};
     static const std::vector<ControlType> kTypes = {
         {"Form",
          "TF_CTL_FORM",
-         {{"Caption", Type::String, "TF_PROP_CAPTION"},
+         {caption,
           {"Width", Type::Integer, "TF_PROP_WIDTH"},
           {"Height", Type::Integer, "TF_PROP_HEIGHT"}},
          {{"Load", EventKind::Load, nullptr}}},
         {"TextBox",
          "TF_CTL_TEXTBOX",
-         {{"Text", Type::String, "TF_PROP_TEXT"},
-          {"Left", Type::Integer, "TF_PROP_LEFT"},
-          {"Top", Type::Integer, "TF_PROP_TOP"},
-          {"Width", Type::Integer, "TF_PROP_WIDTH"},
-          {"Height", Type::Integer, "TF_PROP_HEIGHT"}},
+         placed({{"Text", Type::String, "TF_PROP_TEXT"}}),
          {{"Change", EventKind::Change, "TF_EVENT_CHANGE"}}},
         {"CommandButton",
          "TF_CTL_COMMANDBUTTON",
-         {{"Caption", Type::String, "TF_PROP_CAPTION"},
-          {"Left", Type::Integer, "TF_PROP_LEFT"},
-          {"Top", Type::Integer, "TF_PROP_TOP"},
-          {"Width", Type::Integer, "TF_PROP_WIDTH"},
-          {"Height", Type::Integer, "TF_PROP_HEIGHT"}},
-         {{"Click", EventKind::Click, "TF_EVENT_CLICK"}}},
+         placed({caption,
+                 {"Default", Type::Boolean, "TF_PROP_DEFAULT"},
+                 {"Cancel", Type::Boolean, "TF_PROP_CANCEL"}}),
+         {click}},
+        {"Label", "TF_CTL_LABEL", placed({caption}), {click}},
+        {"CheckBox",
+         "TF_CTL_CHECKBOX",
+         placed({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}),
+         {click}},
+        {"OptionButton",
+         "TF_CTL_OPTIONBUTTON",
+         placed({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}),
+         {click}},
+        {"Frame", "TF_CTL_FRAME", placed({caption}), {}},
     };
     return kTypes;
 }

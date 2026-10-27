@@ -51,6 +51,26 @@ static tf_key_kind letter_key(unsigned char c)
     }
 }
 
+/* F1-F4 as SS3 P-S, or CSI with a modifier ("ESC [ 1 ; 5 S"); 0 if not. */
+static int pqrs_function(unsigned char c)
+{
+    return c >= 'P' && c <= 'S' ? c - 'P' + 1 : 0;
+}
+
+/* F1-F12 as "ESC [ n ~": 11-15, 17-21, 23-24 (the gaps are xterm's). */
+static int tilde_function(int n)
+{
+    if (n >= 11 && n <= 15)
+    {
+        return n - 10;
+    }
+    if (n >= 17 && n <= 21)
+    {
+        return n - 11;
+    }
+    return n == 23 || n == 24 ? n - 12 : 0;
+}
+
 /* Maps "ESC [ n ~" sequences by their number. */
 static tf_key_kind tilde_key(int n)
 {
@@ -71,11 +91,12 @@ static tf_key_kind tilde_key(int n)
 
 /*
  * Decodes an escape sequence at the start of the buffer. Returns the number of
- * bytes it occupies, 0 if it is incomplete, and sets *kind (TF_KEY_NONE for
+ * bytes it occupies, 0 if it is incomplete, and sets key (kind TF_KEY_NONE for
  * sequences that are recognised as complete but ignored).
  */
-static int decode_escape(const tf_keys *keys, tf_key_kind *kind)
+static int decode_escape(const tf_keys *keys, tf_key *key)
 {
+    tf_key_kind *kind = &key->kind;
     const unsigned char *p = keys->pending;
     const int n = keys->count;
 
@@ -89,39 +110,61 @@ static int decode_escape(const tf_keys *keys, tf_key_kind *kind)
         {
             return 0;
         }
+        if (pqrs_function(p[2]) != 0)
+        {
+            *kind = TF_KEY_F;
+            key->ch = (uint32_t)pqrs_function(p[2]);
+            return 3;
+        }
         *kind = letter_key(p[2]);
         return 3;
     }
     if (p[1] != '[')
     {
-        /* ESC followed by an ordinary byte: Alt+key. Not used yet; drop the ESC. */
+        /* ESC followed by an ordinary byte: Alt+key (the terminal's Meta). */
+        if (p[1] >= 0x20 && p[1] < 0x7F)
+        {
+            *kind = TF_KEY_ALT;
+            key->ch = (uint32_t)(p[1] >= 'A' && p[1] <= 'Z' ? p[1] - 'A' + 'a' : p[1]);
+            return 2;
+        }
         *kind = TF_KEY_NONE;
         return 1;
     }
 
-    /* CSI: parameter bytes 0x30-0x3F, intermediates 0x20-0x2F, final 0x40-0x7E. */
-    /* Only the first parameter matters ("ESC [ 3 ; 5 ~" is Ctrl+Delete:
-     * still Delete); modifiers are ignored in this version. */
+    /* CSI: parameter bytes 0x30-0x3F, intermediates 0x20-0x2F, final 0x40-0x7E.
+       The first parameter picks the key, the second (if any) is 1 + the
+       modifiers ("ESC [ 1 ; 5 S" is Ctrl+F4); other keys ignore it. */
     int number = 0;
-    int first_parameter = 1;
+    int modifier = 0;
+    int parameter = 0;
     for (int i = 2; i < n; ++i)
     {
         const unsigned char c = p[i];
         if (c >= '0' && c <= '9')
         {
-            if (first_parameter && number < 10000)
+            int *target = parameter == 0 ? &number : parameter == 1 ? &modifier : NULL;
+            if (target != NULL && *target < 10000)
             {
-                number = number * 10 + (c - '0');
+                *target = *target * 10 + (c - '0');
             }
         }
         else if (c >= 0x40 && c <= 0x7E)
         {
+            const int function = c == '~' ? tilde_function(number) : pqrs_function(c);
+            if (function != 0)
+            {
+                *kind = TF_KEY_F;
+                key->ch = (uint32_t)function;
+                key->mods = modifier > 1 ? modifier - 1 : 0;
+                return i + 1;
+            }
             *kind = c == '~' ? tilde_key(number) : letter_key(c);
             return i + 1;
         }
         else if (c >= 0x20)
         {
-            first_parameter = 0; /* ';' or another parameter/intermediate byte */
+            ++parameter; /* ';' or another parameter/intermediate byte */
         }
         else
         {
@@ -140,25 +183,35 @@ int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape)
     {
         const unsigned char c = keys->pending[0];
         key->ch = 0;
+        key->mods = 0;
 
         if (c == 0x1B)
         {
-            tf_key_kind kind = TF_KEY_NONE;
-            const int used = decode_escape(keys, &kind);
+            tf_key decoded = {TF_KEY_NONE, 0, 0};
+            const int used = decode_escape(keys, &decoded);
             if (used == 0)
             {
                 if (!flush_escape)
                 {
                     return 0; /* wait for the rest of the sequence */
                 }
+                /* Quiet after ESC O or ESC [: that was Alt+O or Alt+[. */
+                if (keys->count >= 2)
+                {
+                    key->kind = TF_KEY_ALT;
+                    key->ch = keys->pending[1] == 'O' ? 'o' : keys->pending[1];
+                    key->mods = 0;
+                    consume(keys, 2);
+                    return 1;
+                }
                 consume(keys, 1);
                 key->kind = TF_KEY_ESC;
                 return 1;
             }
             consume(keys, used);
-            if (kind != TF_KEY_NONE)
+            if (decoded.kind != TF_KEY_NONE)
             {
-                key->kind = kind;
+                *key = decoded;
                 return 1;
             }
             continue;

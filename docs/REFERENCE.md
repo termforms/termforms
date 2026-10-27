@@ -270,7 +270,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 63 | Bad record number | a negative offset in Get, Put or Seek # | now |
 | 58 | File already exists | `Name` onto a file that is there | now |
 | 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
-| 380 | Invalid property value | a control property set out of range | forms |
+| 380 | Invalid property value | a control property set out of range (a CheckBox Value outside 0-2) | now |
 
 - **Not provided: 28 Out of stack space.** Portable C cannot detect
   running out of stack, so recursion that goes too deep crashes the
@@ -914,6 +914,30 @@ Module=lib/stock.bas
 - **Unicode width tables** are generated from Python's unicodedata by a
   script in tools/ (no download); the Unicode notice ships in
   runtime/THIRD_PARTY_NOTICES.
+
+### Controls (Proposed)
+
+| Control | Shows as | Properties beyond Left, Top, Width, Height, Enabled, Visible | Events |
+|---|---|---|---|
+| Label | its Caption (words wrapped if Height > 1) | Caption | Click |
+| TextBox | an edit field | Text | Change |
+| CommandButton | `< Caption >` | Caption, Default, Cancel | Click |
+| CheckBox | `[X] Caption` (`[ ]`, `[-]` for 2) | Caption, Value (0, 1, 2) | Click |
+| OptionButton | `(•) Caption` | Caption, Value (Boolean) | Click |
+| Frame | a box with its Caption in the top line | Caption | (none) |
+
+- Setting `Value` in code fires Click when it changes (as VB); a CheckBox
+  Value outside 0-2 is error 380. Selecting an OptionButton clears the
+  others of its group.
+- A disabled control is drawn dim and skipped by Tab; a hidden one is not
+  drawn. A Frame's Enabled and Visible apply to everything in it.
+- Only one Default and one Cancel button per form: setting one clears
+  the other's.
+- A Label's access key moves the focus to the next control in tab order
+  (put a Label just before the control it names, as in VB).
+- Enter and Esc in a TextBox go to the Default and Cancel buttons.
+- Tab order is the order the controls are written in the form block.
+- `Ctrl+Q` no longer closes a form (Ctrl+F4 or Alt+F4 does).
 
 ## Forms and events (Settled, 23 Oct 2026)
 

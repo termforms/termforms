@@ -353,7 +353,7 @@ private:
         {
             out << "/* Form and controls */\n";
             out << "static tf_control *c_" << form->name << ";\n";
-            for (const auto &child : form->children)
+            for (const ControlDef *child : controlsOf(*form))
             {
                 out << "static tf_control *c_" << child->name << ";\n";
             }
@@ -625,12 +625,18 @@ private:
         out << "    c_" << form->name << " = tf_form_new(" << cString(form->name) << ");\n";
         emitSettings(out, *form);
 
-        for (const auto &child : form->children)
+        // Each control after its Frame (tab order is this order, as written).
+        for (const ControlDef *child : controlsOf(*form))
         {
             const catalog::ControlType *type = catalog::findType(child->typeName);
             line(out, child->location);
             out << "    c_" << child->name << " = tf_control_new(c_" << form->name << ", "
-                << type->cName << ", " << cString(child->name) << ");\n";
+                << type->cName << ", " << cString(child->name) << ");";
+            if (const ControlDef *frame = frameOf(*form, *child))
+            {
+                out << " tf_control_container(c_" << child->name << ", c_" << frame->name << ");";
+            }
+            out << '\n';
             emitSettings(out, *child);
         }
 
@@ -666,6 +672,38 @@ private:
             }
         }
         out << "    return tf_form_run(c_" << form->name << ");\n}\n";
+    }
+
+    // A form's controls, those in Frames after their Frame, as written.
+    static std::vector<const ControlDef *> controlsOf(const ControlDef &container)
+    {
+        std::vector<const ControlDef *> all;
+        for (const auto &child : container.children)
+        {
+            all.push_back(child.get());
+            for (const ControlDef *inner : controlsOf(*child))
+            {
+                all.push_back(inner);
+            }
+        }
+        return all;
+    }
+
+    // The Frame a control is directly in, or null if it is on the form.
+    static const ControlDef *frameOf(const ControlDef &container, const ControlDef &control)
+    {
+        for (const auto &child : container.children)
+        {
+            if (child.get() == &control)
+            {
+                return container.isForm ? nullptr : &container;
+            }
+            if (const ControlDef *found = frameOf(*child, control))
+            {
+                return found;
+            }
+        }
+        return nullptr;
     }
 
     void emitSettings(std::ostringstream &out, const ControlDef &control)
@@ -1700,6 +1738,13 @@ private:
     static bool storeMayFail(const Expr &target)
     {
         if (target.rank > 0 || target.type == Type::Record || target.kind == ExprKind::Index)
+        {
+            return true;
+        }
+        // A CheckBox's Value outside 0-2 is error 380 (and setting Value runs
+        // the Click handler, which may fail).
+        if (target.kind == ExprKind::Member && target.left != nullptr &&
+            target.left->control != nullptr && target.text == "Value")
         {
             return true;
         }

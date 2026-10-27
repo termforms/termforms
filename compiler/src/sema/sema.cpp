@@ -445,13 +445,21 @@ private:
         own_[here_].controls[form->name] = form;
         checkSettings(*form);
 
-        for (auto &child : form->children)
+        registerChildren(*form);
+    }
+
+    // A form's or Frame's controls, and the controls in its Frames: names are
+    // the form's, wherever a control sits. Only a Frame holds controls.
+    void registerChildren(ControlDef &container)
+    {
+        for (auto &child : container.children)
         {
             if (catalog::findType(child->typeName) == nullptr || child->typeName == "Form")
             {
                 diagnostics_.error(child->location, "unknown control type '" + child->typeName +
-                                                        "' (this version has TextBox and "
-                                                        "CommandButton)");
+                                                        "' (this version has Label, TextBox, "
+                                                        "CommandButton, CheckBox, OptionButton "
+                                                        "and Frame)");
                 continue;
             }
             if (claimModuleName(child->name, child->location, "control"))
@@ -459,7 +467,32 @@ private:
                 own_[here_].controls[child->name] = child.get();
             }
             checkSettings(*child);
+            if (!child->children.empty() && child->typeName != "Frame")
+            {
+                diagnostics_.error(child->children.front()->location,
+                                   "only a Frame can hold other controls, not " +
+                                       std::string("a ") + child->typeName);
+                continue;
+            }
+            registerChildren(*child);
         }
+    }
+
+    // The control of a form called name, in a Frame or not; null if none.
+    static ControlDef *findChild(const ControlDef &container, const std::string &name)
+    {
+        for (auto &child : container.children)
+        {
+            if (child->name == name)
+            {
+                return child.get();
+            }
+            if (ControlDef *inner = findChild(*child, name))
+            {
+                return inner;
+            }
+        }
+        return nullptr;
     }
 
     void checkSettings(const ControlDef &control)
@@ -3817,15 +3850,12 @@ private:
         // modules reach it); it is then the control itself.
         if (object.control != nullptr && object.control->isForm)
         {
-            for (auto &child : object.control->children)
+            if (ControlDef *child = findChild(*object.control, e.text))
             {
-                if (child->name == e.text)
-                {
-                    e.kind = ExprKind::Name;
-                    e.left.reset();
-                    e.control = child.get();
-                    return Type::Control;
-                }
+                e.kind = ExprKind::Name;
+                e.left.reset();
+                e.control = child;
+                return Type::Control;
             }
         }
         if (object.control == nullptr)

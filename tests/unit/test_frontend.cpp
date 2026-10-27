@@ -667,3 +667,16 @@ TEST_CASE("Public and Private mark module-level declarations")
     CHECK(check(inClick(decl, "    Dim p As P\n    Helper\n    total = Twice(LIMIT)\n")) == "");
     CHECK(check(kForm + "Public Dim x As Integer\n") != "");
 }
+
+// -- Controls (Phase 4 step 1) ----------------------------------------------------
+
+TEST_CASE("Frames hold controls, and new controls have their properties")
+{
+    const std::string form = "Begin Form f\n    Begin Frame fra\n        Begin OptionButton o\n"
+                             "        End\n    End\n    Begin CheckBox c\n        Value = 2\n"
+                             "    End\n    Begin Label l\n    End\nEnd\n";
+    CHECK(check(form + "Sub o_Click()\n    c.Value = 1\n    l.Caption = \"x\"\n"
+                       "    fra.Visible = o.Value\nEnd Sub\n") == "");
+    CHECK(check("Begin Form f\n    Begin Label l\n        Begin Label m\n        End\n    End\n"
+                "End\n") != "");
+}

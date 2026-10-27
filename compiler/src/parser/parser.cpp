@@ -330,8 +330,7 @@ private:
         {
             if (peek().isKeyword("BEGIN"))
             {
-                error(peek().location, "controls cannot contain other controls in this version");
-                skipStatement();
+                control->children.push_back(parseControlBlock()); // a Frame's (sema checks)
             }
             else
             {

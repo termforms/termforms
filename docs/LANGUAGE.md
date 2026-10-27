@@ -67,6 +67,7 @@ End Sub
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
+| Controls | Label, TextBox, CommandButton, CheckBox, OptionButton, Frame (holding controls); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
 | System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
 | Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
@@ -425,14 +426,41 @@ Next
   dimensions: the first index changes fastest). A ReDim inside that
   shrinks the array ends the loop early.
 
+## Controls
+
+```vb
+Begin Form frmMain
+    Begin CheckBox chkBold
+        Caption = "&Bold"           ' Alt+B toggles it
+    End
+    Begin Frame fraSize
+        Caption = "Size"
+        Top = 1
+        Height = 4
+        Begin OptionButton optSmall  ' Left and Top are inside the Frame,
+            Caption = "&Small"       ' and the Frame's OptionButtons are a group
+        End
+    End
+    Begin CommandButton cmdOK
+        Caption = "OK"
+        Top = 6
+        Default = True               ' Enter presses it (Cancel = True: Esc)
+    End
+End
+```
+
 ## Keys in a running program
 
 | Key | Action |
 | --- | --- |
-| Tab, Shift+Tab | Next / previous control |
-| Enter or Space | Press the focused button |
+| Tab, Shift+Tab | Next / previous control (once into an OptionButton group) |
+| Arrows | Move within an OptionButton group, selecting |
+| Space | Press a button, toggle a CheckBox, select an OptionButton |
+| Enter | Press the focused button, or the Default button |
+| Esc | Press the Cancel button |
+| Alt+letter | The control whose Caption has &letter |
 | Left, Right, Home, End, Backspace, Delete | Edit in a TextBox |
-| Ctrl+Q | Close the form |
+| Ctrl+F4 (or Alt+F4) | Close the form |
 
 ## Building programs
 

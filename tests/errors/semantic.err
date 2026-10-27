@@ -1,6 +1,6 @@
 semantic.bas:3:5: error: property 'Caption' needs a String, not an Integer
 semantic.bas:5:9: error: TextBox has no property 'Colour'
-semantic.bas:7:5: error: unknown control type 'ListBox' (this version has TextBox and CommandButton)
+semantic.bas:7:5: error: unknown control type 'ListBox' (this version has Label, TextBox, CommandButton, CheckBox, OptionButton and Frame)
 semantic.bas:11:1: warning: Sub 'T_Change' looks like an event handler for 't' but the case differs; it will not be called
 semantic.bas:14:1: warning: Sub 't_change' will not be called: the event is 'Change', not 'change'
 semantic.bas:19:9: error: cannot assign an Integer to a String (Option Strict); use CStr(value) to convert
