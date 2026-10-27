@@ -459,7 +459,7 @@ private:
                 diagnostics_.error(child->location, "unknown control type '" + child->typeName +
                                                         "' (this version has Label, TextBox, "
                                                         "CommandButton, CheckBox, OptionButton, "
-                                                        "Frame and ListBox)");
+                                                        "Frame, ListBox and Timer)");
                 continue;
             }
             if (claimModuleName(child->name, child->location, "control"))

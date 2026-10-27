@@ -1,0 +1,3 @@
+timer.bas:6:9: error: Timer has no property 'Left'
+timer.bas:7:9: error: property 'Interval' needs an Integer, not a String
+timer.bas:11:1: warning: Timer 'tmr' has no event 'Click'; Sub 'tmr_Click' will not be called

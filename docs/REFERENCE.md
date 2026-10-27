@@ -953,6 +953,13 @@ Module=lib/stock.bas
   read).
 - Changing the selection (by key or in code) fires Click; removing the
   current item leaves no current item (ListIndex -1), as VB.
+- **A Timer** is never shown: it raises its Timer event every Interval
+  milliseconds while Enabled (Interval 0 stops it). It counts from when the
+  form is shown, and again from whenever Interval or Enabled is set. One
+  that falls behind (a long handler) fires once and counts on from then,
+  rather than catching up in a burst. Timers run only while the form waits
+  for keys (not while code runs). In a key script, `{WAIT n}` makes n ms
+  pass, so tests of Timers are exact.
 
 ## Forms and events (Settled, 23 Oct 2026)
 

@@ -538,6 +538,7 @@ enum class EventKind
     Click,
     Change,
     DblClick,
+    Timer,
     Load
 };
 

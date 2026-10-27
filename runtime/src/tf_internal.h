@@ -107,6 +107,9 @@ int tf_platform_system(const char *command, int32_t *code);
 /* The time now: seconds since 1970 (UTC) and the microseconds past them. */
 void tf_platform_clock(int64_t *seconds, int32_t *microseconds);
 
+/* Milliseconds from some fixed moment, never going back (for Timers). */
+int64_t tf_platform_monotonic_ms(void);
+
 /* Command$: the arguments after the program's name joined by single
    spaces (quotes as the system's rules take them), to free. */
 char *tf_platform_command(int argc, char **argv);

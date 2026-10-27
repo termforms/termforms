@@ -71,6 +71,12 @@ const std::vector<ControlType> &types()
                  {"SelCount", Type::Integer, "TF_PROP_SELCOUNT", true},
                  {"TopIndex", Type::Integer, "TF_PROP_TOPINDEX"}}),
          {click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}}},
+        // Never shown: it raises its Timer event every Interval ms.
+        {"Timer",
+         "TF_CTL_TIMER",
+         {{"Interval", Type::Integer, "TF_PROP_INTERVAL"},
+          {"Enabled", Type::Boolean, "TF_PROP_ENABLED"}},
+         {{"Timer", EventKind::Timer, "TF_EVENT_TIMER"}}},
     };
     return kTypes;
 }

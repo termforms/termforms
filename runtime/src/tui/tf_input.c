@@ -7,7 +7,8 @@
  *
  *   {ENTER} {TAB} {BACKTAB} {BKSP} {DEL} {LEFT} {RIGHT} {UP} {DOWN}
  *   {HOME} {END} {ESC} {F1}..{F12} {CTRL+<letter>} {ALT+<letter>}, CTRL+ /
- *   ALT+ / SHIFT+ before F<n> ({CTRL+F4}), and {{ (a literal brace)
+ *   ALT+ / SHIFT+ before F<n> ({CTRL+F4}), {WAIT n} (n ms pass, so Timers
+ *   run), and {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
@@ -107,6 +108,12 @@ static tf_key next_scripted(void)
             key.ch = (uint32_t)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
             return key;
         }
+        if (length > 5 && strncmp(name, "WAIT ", 5) == 0)
+        {
+            key.kind = TF_KEY_WAIT; /* {WAIT 1500}: time passes, for Timers */
+            key.ch = (uint32_t)atoi(name + 5);
+            return key;
+        }
         if (length >= 2 && length <= 3 && name[0] == 'F' && name[1] >= '1' && name[1] <= '9')
         {
             const int n = atoi(name + 1);
@@ -139,12 +146,18 @@ static tf_key next_scripted(void)
 
 tf_key tf_input_next(void)
 {
+    return tf_input_wait(-1);
+}
+
+tf_key tf_input_wait(int timeout_ms)
+{
     if (script != NULL)
     {
         return next_scripted();
     }
 
     tf_key key = {TF_KEY_NONE, 0, 0};
+    const int64_t deadline = timeout_ms >= 0 ? tf_platform_monotonic_ms() + timeout_ms : -1;
     for (;;)
     {
         if (tf_keys_next(&decoder, &key, 0))
@@ -153,10 +166,21 @@ tf_key tf_input_next(void)
         }
 
         /* A partial escape sequence gets a short grace period; otherwise
-         * wait indefinitely for the user. */
+         * wait for the user, or until the deadline (a Timer is due). */
         const int partial = decoder.count > 0;
+        int wait = partial ? TF_ESC_TIMEOUT_MS : -1;
+        if (deadline >= 0)
+        {
+            const int64_t left = deadline - tf_platform_monotonic_ms();
+            if (left <= 0 && !partial)
+            {
+                key.kind = TF_KEY_NONE;
+                return key;
+            }
+            wait = wait < 0 || left < wait ? (int)(left > 0 ? left : 0) : wait;
+        }
         unsigned char bytes[64];
-        const int n = tf_term_read(bytes, (int)sizeof bytes, partial ? TF_ESC_TIMEOUT_MS : -1);
+        const int n = tf_term_read(bytes, (int)sizeof bytes, wait);
 
         if (tf_term_take_resize())
         {

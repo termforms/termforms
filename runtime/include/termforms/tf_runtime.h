@@ -608,7 +608,8 @@ typedef enum tf_control_type
     TF_CTL_CHECKBOX,
     TF_CTL_OPTIONBUTTON,
     TF_CTL_FRAME,
-    TF_CTL_LISTBOX
+    TF_CTL_LISTBOX,
+    TF_CTL_TIMER
 } tf_control_type;
 
 /* Properties a control may have; the compiler checks which apply to which. */
@@ -630,7 +631,8 @@ typedef enum tf_prop
     TF_PROP_MULTISELECT, /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
     TF_PROP_SORTED,      /* ListBox: AddItem keeps the items in order, ignoring case */
     TF_PROP_SELCOUNT,    /* ListBox, read only: how many items are selected */
-    TF_PROP_TOPINDEX     /* ListBox: the first item shown */
+    TF_PROP_TOPINDEX,    /* ListBox: the first item shown */
+    TF_PROP_INTERVAL     /* Timer: milliseconds between Timer events; 0 stops it */
 } tf_prop;
 
 typedef enum tf_event
@@ -638,6 +640,7 @@ typedef enum tf_event
     TF_EVENT_CLICK,
     TF_EVENT_CHANGE,
     TF_EVENT_DBLCLICK,
+    TF_EVENT_TIMER,
     TF_EVENT_COUNT
 } tf_event;
 

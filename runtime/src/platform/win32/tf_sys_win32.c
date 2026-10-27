@@ -54,6 +54,11 @@ void tf_platform_clock(int64_t *seconds, int32_t *microseconds)
     *microseconds = (int32_t)(micros % 1000000);
 }
 
+int64_t tf_platform_monotonic_ms(void)
+{
+    return (int64_t)GetTickCount64();
+}
+
 /* Command$: the arguments after the program's name, split by the rules
    Windows programs use (CommandLineToArgvW's: quotes group, 2n backslashes
    before a quote are n and the quote counts, 2n+1 are n and a literal

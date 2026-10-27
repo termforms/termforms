@@ -63,7 +63,21 @@ struct tf_control
     int32_t top_index;
     int32_t multi;
     int sorted;
+
+    /* Timer only: milliseconds between events (0: stopped), and when the
+     * next is due on the runtime's clock (now_ms). */
+    int32_t interval;
+    int64_t due;
 };
+
+static int headless = 0;
+static int64_t virtual_now = 0; /* a key script's clock: moved only by {WAIT n} */
+
+/* Milliseconds on the clock Timers run by: real time, or a key script's. */
+static int64_t now_ms(void)
+{
+    return headless ? virtual_now : tf_platform_monotonic_ms();
+}
 
 /* ------------------------------------------------------------------------ */
 /* Creation and properties                                                  */
@@ -295,6 +309,11 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
             break;
         case TF_PROP_ENABLED:
             control->enabled = value != 0;
+            control->due = now_ms() + control->interval; /* a Timer starts counting again */
+            break;
+        case TF_PROP_INTERVAL:
+            control->interval = value < 0 ? 0 : value;
+            control->due = now_ms() + control->interval;
             break;
         case TF_PROP_VISIBLE:
             control->visible = value != 0;
@@ -362,6 +381,8 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
         }
         case TF_PROP_TOPINDEX:
             return control->top_index;
+        case TF_PROP_INTERVAL:
+            return control->interval;
         default:
             return 0;
     }
@@ -1391,6 +1412,64 @@ static int control_key(tf_control *form, tf_control *c, tf_key key)
     }
 }
 
+/* ------------------------------------------------------------------------ */
+/* Timers                                                                   */
+/* ------------------------------------------------------------------------ */
+
+static int running(const tf_control *c)
+{
+    return c->type == TF_CTL_TIMER && c->enabled && c->interval > 0;
+}
+
+/* When the next Timer is due, or -1 if none is running. */
+static int64_t next_due(const tf_control *form)
+{
+    int64_t next = -1;
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (running(c) && (next < 0 || c->due < next))
+        {
+            next = c->due;
+        }
+    }
+    return next;
+}
+
+/* Fires each Timer that is due, in the order they were made. One that has
+   fallen behind (a long handler) fires once and starts again from now,
+   rather than catching up in a burst. */
+static void fire_due(tf_control *form)
+{
+    const int64_t now = now_ms();
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        tf_control *c = form->children[i];
+        if (running(c) && now >= c->due)
+        {
+            c->due += c->interval;
+            if (c->due <= now)
+            {
+                c->due = now + c->interval;
+            }
+            fire(c, TF_EVENT_TIMER);
+        }
+    }
+}
+
+/* {WAIT n} in a key script: the clock moves n ms, stopping at each due
+   Timer on the way. */
+static void wait_scripted(tf_control *form, int64_t ms)
+{
+    const int64_t until = virtual_now + ms;
+    for (int64_t next = next_due(form); next >= 0 && next <= until; next = next_due(form))
+    {
+        virtual_now = next > virtual_now ? next : virtual_now;
+        fire_due(form);
+    }
+    virtual_now = until;
+}
+
 /* One key for the form. Returns 1 if the form is to close. */
 static int form_key(tf_control *form, tf_key key)
 {
@@ -1431,7 +1510,6 @@ static int form_key(tf_control *form, tf_key key)
 /* Showing the form                                                         */
 /* ------------------------------------------------------------------------ */
 
-static int headless = 0;
 static tf_control *running_form = NULL; /* the form tf_form_run is showing */
 
 static void parse_size(const char *text, int *cols, int *rows)
@@ -1532,16 +1610,35 @@ int tf_form_run(tf_control *form)
     running_form = form;
     ui_open();
     move_focus(form, 1);
+    /* Timers count from when the form is shown (the settings and Form_Load
+       ran before the clock was chosen). */
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        tf_control *c = form->children[i];
+        c->due = now_ms() + c->interval;
+    }
 
     for (;;)
     {
         draw_form(form);
         tf_screen_flush();
 
-        const tf_key key = tf_input_next();
+        const int64_t due = next_due(form);
+        const int64_t wait = due < 0 ? -1 : due - now_ms();
+        const tf_key key = tf_input_wait(due < 0 ? -1 : wait < 0 ? 0 : (int)wait);
         if (key.kind == TF_KEY_EOF)
         {
             break;
+        }
+        if (key.kind == TF_KEY_NONE)
+        {
+            fire_due(form); /* the wait ended: a Timer is due */
+            continue;
+        }
+        if (key.kind == TF_KEY_WAIT)
+        {
+            wait_scripted(form, key.ch);
+            continue;
         }
         if (key.kind == TF_KEY_RESIZE)
         {

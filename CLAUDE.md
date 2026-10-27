@@ -190,7 +190,11 @@ authoritative for design rationale.
   Step 4.2 done: ListBox (items in the runtime's tf_control; methods and
   List(i)/Selected(i) are library routines with a ListBox parameter, kind
   C; read-only properties flagged in the catalog; PgUp/PgDn decoded).
-- **Next:** Phase 4 step 3: Timer.
+  Step 4.3 done: Timer (the form loop waits with tf_input_wait until the
+  next due Timer; tf_platform_monotonic_ms; key scripts' {WAIT n} moves a
+  virtual clock, so headless Timer tests are exact).
+- **Next:** Phase 4 step 4: MsgBox, InputBox, the modal stack, VB's named
+  constants.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -300,7 +304,8 @@ tests/
   run/        .bas + .keys -> .screen     just new files (re-run cmake)
               (+ .stderr = must fail with that message;
               + .args = command-line arguments, one a line;
-              + .with = further modules, paths one a line)
+              + .with = further modules, paths one a line;
+              key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4})
   runtime/    C tests linked against tfrt
 examples/hello.bas                         the vertical-slice program
 ```

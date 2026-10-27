@@ -73,8 +73,9 @@ typedef enum tf_key_kind
     TF_KEY_PGUP,
     TF_KEY_PGDN,
     TF_KEY_ESC,
-    TF_KEY_ALT, /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
-    TF_KEY_F,   /* function key; .ch is its number, 1-12; .mods as pressed */
+    TF_KEY_ALT,  /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
+    TF_KEY_F,    /* function key; .ch is its number, 1-12; .mods as pressed */
+    TF_KEY_WAIT, /* key scripts only: {WAIT n}, n ms in .ch, for Timers */
     TF_KEY_RESIZE,
     TF_KEY_EOF /* headless script exhausted */
 } tf_key_kind;
@@ -161,5 +162,9 @@ void tf_input_start(const char *headless_script);
 
 /* Waits for the next key. */
 tf_key tf_input_next(void);
+
+/* As tf_input_next, but gives TF_KEY_NONE once timeout_ms pass with no
+   key (-1: wait for ever). A key script never times out. */
+tf_key tf_input_wait(int timeout_ms);
 
 #endif /* TERMFORMS_TF_TUI_H */

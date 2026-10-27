@@ -34,6 +34,13 @@ void tf_platform_clock(int64_t *seconds, int32_t *microseconds)
     *microseconds = (int32_t)(now.tv_nsec / 1000);
 }
 
+int64_t tf_platform_monotonic_ms(void)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
 char *tf_platform_command(int argc, char **argv)
 {
     size_t length = 1;
