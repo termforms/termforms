@@ -1,0 +1,14 @@
+ ┌──────────────────────── Menus ─────────────────────────┐
+ │ File  Edit  Options                                    │
+ │┌───────────────────┐                                   │
+ ││   New    Ctrl+N   │                                   │
+ ││   Save   Ctrl+S   │                                   │
+ │├───────────────────┤                                   │
+ ││   Print           │                                   │
+ ││   Quit   Shift+F5 │                                   │
+ │└───────────────────┘                                   │
+ │bad:380:Ctrl+S file new edit wrap:True save options     │
+ │options quit options file quit file edit file           │
+ │                                                        │
+ │                                                        │
+ └────────────────────────────────────────────────────────┘

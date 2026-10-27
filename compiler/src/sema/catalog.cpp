@@ -84,6 +84,16 @@ const std::vector<ControlType> &types()
          {{"Interval", Type::Integer, "TF_PROP_INTERVAL"},
           {"Enabled", Type::Boolean, "TF_PROP_ENABLED"}},
          {{"Timer", EventKind::Timer, "TF_EVENT_TIMER"}}},
+        // On the form's menu bar, or in a menu's drop-down (sema keeps them
+        // to those two levels, as VB-DOS). A Caption of "-" is a separator.
+        {"Menu",
+         "TF_CTL_MENU",
+         {caption,
+          {"Enabled", Type::Boolean, "TF_PROP_ENABLED"},
+          {"Visible", Type::Boolean, "TF_PROP_VISIBLE"},
+          {"Checked", Type::Boolean, "TF_PROP_CHECKED"},
+          {"Shortcut", Type::String, "TF_PROP_SHORTCUT"}},
+         {click}},
     };
     return kTypes;
 }

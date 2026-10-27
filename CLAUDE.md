@@ -208,8 +208,16 @@ authoritative for design rationale.
   take it ByRef; tf_control_on_ref / _on_key, no casts), KeyPress and
   KeyDown with VB's codes (vbKey* constants), control C names given the
   form when two forms share one.
-- **Next:** Phase 4 step 6: menus (F10, Alt+letter, Ctrl alternatives for
-  function keys).
+  Step 4.6 done: menus (TF_CTL_MENU controls in the form's children, a
+  bar menu's container the form, an item's its menu; the form's menu_on/
+  menu_top/menu_down/menu_item state; `menu_first` takes the bar key,
+  menu access keys and Shortcuts before the focused control; the bar is
+  the form's first inside row and the client area starts below it; the
+  drop-down drawn last in draw_one). Ctrl+B is F10's alternative
+  (Proposed, for Jim). Shortcut text is checked in sema
+  (`shortcutProblem`) and read in the runtime (`parse_shortcut`): keep the
+  two alike. A ListIndex or Shortcut store is fallible (storeMayFail).
+- **Next:** Phase 4 step 7: the TextBox edit buffer.
 
 ## Settled design decisions (do not relitigate without Jim)
 

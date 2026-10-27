@@ -1,0 +1,12 @@
+menus.bas:7:9: error: a menu on the menu bar has no Checked (only the items in its drop-down do)
+menus.bas:10:13: error: menus go two levels deep in this version: 'mnuOpen' is already in a drop-down
+menus.bas:13:9: error: a Menu holds only Menus, not a Label
+menus.bas:16:24: error: Ctrl+M cannot be a Shortcut: a terminal sends it as Enter
+menus.bas:19:24: error: F10 cannot be a Shortcut: it opens the menu bar
+menus.bas:22:24: error: Ctrl+F4 cannot be a Shortcut: it closes the form
+menus.bas:25:24: error: a Shortcut is Ctrl+letter, F1 to F12 (with Shift+, Ctrl+ or Alt+ before it if wanted) or Del, not "Ctrl+Shift+X"
+menus.bas:28:24: error: a Shortcut is Ctrl+letter, F1 to F12 (with Shift+, Ctrl+ or Alt+ before it if wanted) or Del, not "F13"
+menus.bas:31:24: error: Ctrl+B cannot be a Shortcut: it opens the menu bar (as F10 does)
+menus.bas:35:13: error: Menu has no property 'Left'
+menus.bas:39:9: error: a menu on the menu bar has no Shortcut (only the items in its drop-down do)
+menus.bas:42:9: error: a Menu belongs to the form, not to a Frame

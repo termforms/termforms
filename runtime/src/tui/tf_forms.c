@@ -17,6 +17,13 @@
  * and selects an OptionButton. Enter presses the focused button, or else
  * the Default one; Esc presses the Cancel one. Alt+letter is the access
  * key of a Caption with &letter. Ctrl+F4 (Alt+F4) closes the form.
+ *
+ * Menus (as VB-DOS): a form with Menus has a menu bar on its first row
+ * inside the border, and its client area starts below it. F10 (or Ctrl+B,
+ * for keyboards whose function keys the system takes) moves to the bar;
+ * Alt+letter opens a menu straight away, before any control's access key.
+ * An item's Shortcut works whenever the form is on top. Opening a menu
+ * fires its Click (so the program can update its items first), as VB.
  */
 #include "tf_tui.h"
 
@@ -73,6 +80,19 @@ struct tf_control
      * next is due on the runtime's clock (now_ms). */
     int32_t interval;
     int64_t due;
+
+    /* Menu only: the check mark, and the Shortcut (its text in `text`)
+     * as the key it is (kind TF_KEY_NONE for none). */
+    int checked;
+    tf_key shortcut;
+
+    /* Form only, while the menu bar is in use: the bar menu highlighted
+     * (an index into children), whether its drop-down is open, and the
+     * item highlighted there (-1 none). */
+    int menu_on;
+    int menu_top;
+    int menu_down;
+    int menu_item;
 };
 
 static int headless = 0;
@@ -260,10 +280,45 @@ static void make_only(tf_control *button, tf_prop prop)
     }
 }
 
+static int parse_shortcut(const char *text, tf_key *key);
+
 void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
 {
     /* Retain before releasing, in case value is the current string. */
     tf_string *v = (tf_string *)value;
+    if (prop == TF_PROP_SHORTCUT)
+    {
+        tf_key key;
+        if (!parse_shortcut(tf_str_cstr(v), &key))
+        {
+            tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
+            return;
+        }
+        /* Shown as Windows writes it, however it was typed. */
+        char shown_as[32] = "";
+        if (key.kind != TF_KEY_NONE)
+        {
+            const int mods = key.kind == TF_KEY_CTRL ? TF_MOD_CTRL : key.mods;
+            snprintf(shown_as, sizeof shown_as, "%s%s%s", (mods & TF_MOD_CTRL) ? "Ctrl+" : "",
+                     (mods & TF_MOD_ALT) ? "Alt+" : "", (mods & TF_MOD_SHIFT) ? "Shift+" : "");
+            const size_t used = strlen(shown_as);
+            if (key.kind == TF_KEY_CTRL)
+            {
+                snprintf(shown_as + used, sizeof shown_as - used, "%c", (char)(key.ch - 'a' + 'A'));
+            }
+            else if (key.kind == TF_KEY_F)
+            {
+                snprintf(shown_as + used, sizeof shown_as - used, "F%u", (unsigned)key.ch);
+            }
+            else
+            {
+                snprintf(shown_as + used, sizeof shown_as - used, "Del");
+            }
+        }
+        control->shortcut = key;
+        tf_str_assign(&control->text, tf_str_from_utf8(shown_as, (int32_t)strlen(shown_as)));
+        return;
+    }
     tf_str_retain(v);
     if (prop == TF_PROP_TEXT)
     {
@@ -285,7 +340,7 @@ tf_string *tf_get_str(const tf_control *control, tf_prop prop)
         const int32_t i = control->list_index;
         return i >= 0 && i < control->item_count ? control->items[i] : NULL;
     }
-    return prop == TF_PROP_TEXT ? control->text : control->caption;
+    return prop == TF_PROP_TEXT || prop == TF_PROP_SHORTCUT ? control->text : control->caption;
 }
 
 void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
@@ -375,6 +430,9 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_TOPINDEX:
             control->top_index = value < 0 ? 0 : value;
             break;
+        case TF_PROP_CHECKED:
+            control->checked = value != 0;
+            break;
         default:
             break;
     }
@@ -423,6 +481,8 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->top_index;
         case TF_PROP_INTERVAL:
             return control->interval;
+        case TF_PROP_CHECKED:
+            return control->checked;
         default:
             return 0;
     }
@@ -1010,6 +1070,498 @@ static area inside(const tf_control *container)
     return a;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Menus                                                                    */
+/* ------------------------------------------------------------------------ */
+
+static int lower_ascii(int c)
+{
+    return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c;
+}
+
+/* Whether text starts with prefix, ASCII case ignored. */
+static int starts_with(const char *text, const char *prefix)
+{
+    for (; *prefix != '\0'; ++text, ++prefix)
+    {
+        if (lower_ascii((unsigned char)*text) != lower_ascii((unsigned char)*prefix))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/* A Shortcut's text as the key it names: Ctrl+letter, F1-F12 with Shift+,
+   Ctrl+ or Alt+ before it, or Del; "" is none. Returns 0 for anything else
+   or a key the runtime keeps for itself (the compiler's shortcutProblem
+   says why, for the form block). */
+static int parse_shortcut(const char *text, tf_key *key)
+{
+    key->kind = TF_KEY_NONE;
+    key->ch = 0;
+    key->mods = 0;
+    if (*text == '\0')
+    {
+        return 1;
+    }
+    for (int more = 1; more;)
+    {
+        more = 0;
+        static const struct
+        {
+            const char *prefix;
+            int mod;
+        } kPrefixes[] = {{"Shift+", TF_MOD_SHIFT}, {"Ctrl+", TF_MOD_CTRL}, {"Alt+", TF_MOD_ALT}};
+        for (size_t i = 0; i < sizeof kPrefixes / sizeof kPrefixes[0]; ++i)
+        {
+            const size_t n = strlen(kPrefixes[i].prefix);
+            if (strlen(text) > n && starts_with(text, kPrefixes[i].prefix))
+            {
+                key->mods |= kPrefixes[i].mod;
+                text += n;
+                more = 1;
+            }
+        }
+    }
+    const int letter = lower_ascii((unsigned char)text[0]);
+    if (letter >= 'a' && letter <= 'z' && text[1] == '\0')
+    {
+        /* Ctrl+H, I and M are Backspace, Tab and Enter; Ctrl+B is the bar. */
+        if (key->mods != TF_MOD_CTRL || letter == 'h' || letter == 'i' || letter == 'm' ||
+            letter == 'b')
+        {
+            return 0;
+        }
+        key->kind = TF_KEY_CTRL;
+        key->ch = (uint32_t)letter;
+        key->mods = 0;
+        return 1;
+    }
+    if ((starts_with(text, "Del") && text[3] == '\0') ||
+        (starts_with(text, "Delete") && text[6] == '\0'))
+    {
+        key->kind = TF_KEY_DELETE;
+        return key->mods == 0;
+    }
+    if (letter == 'f' && text[1] >= '1' && text[1] <= '9' &&
+        (text[2] == '\0' || (text[2] >= '0' && text[2] <= '9' && text[3] == '\0')))
+    {
+        const int n = text[2] == '\0' ? text[1] - '0' : (text[1] - '0') * 10 + text[2] - '0';
+        if (n > 12 || (n == 10 && key->mods == 0) ||
+            (n == 4 && (key->mods & (TF_MOD_CTRL | TF_MOD_ALT)) != 0))
+        {
+            return 0; /* F10 opens the bar; Ctrl+F4 and Alt+F4 close the form */
+        }
+        key->kind = TF_KEY_F;
+        key->ch = (uint32_t)n;
+        return 1;
+    }
+    return 0;
+}
+
+static int is_menu_bar_key(tf_key key)
+{
+    return (key.kind == TF_KEY_F && key.ch == 10 && key.mods == 0) ||
+           (key.kind == TF_KEY_CTRL && key.ch == 'b');
+}
+
+static int on_bar(const tf_control *form, const tf_control *c)
+{
+    return c->type == TF_CTL_MENU && c->parent == form;
+}
+
+static int has_menu_bar(const tf_control *form)
+{
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        if (on_bar(form, form->children[i]))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int is_separator(const tf_control *item)
+{
+    return strcmp(tf_str_cstr(item->caption), "-") == 0;
+}
+
+/* The next bar menu after index from (-1: the first) in the direction step,
+   round the ends, that can be opened; -1 if none can. */
+static int next_on_bar(const tf_control *form, int from, int step)
+{
+    const int n = form->child_count;
+    int i = from < 0 ? (step > 0 ? -1 : n) : from;
+    for (int tried = 0; tried < n; ++tried)
+    {
+        i = (i + step + n) % n;
+        if (on_bar(form, form->children[i]) && usable(form->children[i]))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* The same, among the items of the bar menu at index top that can be
+   chosen (separators and disabled items are passed over). */
+static int next_item(const tf_control *form, int top, int from, int step)
+{
+    const int n = form->child_count;
+    int i = from < 0 ? (step > 0 ? -1 : n) : from;
+    for (int tried = 0; tried < n; ++tried)
+    {
+        i = (i + step + n) % n;
+        const tf_control *c = form->children[i];
+        if (c->parent == form->children[top] && usable(c) && !is_separator(c))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static int has_items(const tf_control *form, int top)
+{
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        if (form->children[i]->parent == form->children[top] && shown(form->children[i]))
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void menu_close(tf_control *form)
+{
+    form->menu_on = 0;
+    form->menu_down = 0;
+    form->menu_item = -1;
+}
+
+/* Chooses an item, or a bar menu with no items: the menu closes first, so
+   its Click handler sees the form as the user will. */
+static void menu_choose(tf_control *form, int index)
+{
+    menu_close(form);
+    fire(form->children[index], TF_EVENT_CLICK);
+}
+
+/* Opens the bar menu at index top: its Click first (VB's chance to set
+   Checked and Enabled on the items), then the drop-down, on its first
+   item. A bar menu without items is chosen instead. */
+static void menu_open(tf_control *form, int top)
+{
+    if (!has_items(form, top))
+    {
+        menu_choose(form, top);
+        return;
+    }
+    form->menu_on = 1;
+    form->menu_top = top;
+    form->menu_down = 1;
+    fire(form->children[top], TF_EVENT_CLICK);
+    form->menu_item = next_item(form, top, -1, 1);
+}
+
+/* The bar menu or item at index whose access key is letter, among the bar
+   (parent the form) or one menu's items; -1 if none. */
+static int menu_access(const tf_control *form, const tf_control *parent, uint32_t letter)
+{
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (c->type == TF_CTL_MENU && c->parent == parent && usable(c) &&
+            access_key(c->caption) == letter)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* A key while the bar is in use: every key stays with the menus, except
+   Ctrl+F4 (Alt+F4), which closes them and goes on to close the form.
+   Returns 1 if the key was used up. */
+static int menu_key(tf_control *form, tf_key key)
+{
+    const int top = form->menu_top;
+    switch (key.kind)
+    {
+        case TF_KEY_ESC:
+            if (form->menu_down)
+            {
+                form->menu_down = 0; /* back to the bar, as CUA */
+            }
+            else
+            {
+                menu_close(form);
+            }
+            return 1;
+        case TF_KEY_LEFT:
+        case TF_KEY_RIGHT:
+        {
+            const int next = next_on_bar(form, top, key.kind == TF_KEY_RIGHT ? 1 : -1);
+            if (form->menu_down && next >= 0 && has_items(form, next))
+            {
+                menu_open(form, next);
+            }
+            else if (next >= 0)
+            {
+                form->menu_top = next;
+                form->menu_down = 0;
+            }
+            return 1;
+        }
+        case TF_KEY_UP:
+        case TF_KEY_DOWN:
+            if (!form->menu_down)
+            {
+                if (has_items(form, top))
+                {
+                    menu_open(form, top);
+                }
+            }
+            else
+            {
+                form->menu_item =
+                    next_item(form, top, form->menu_item, key.kind == TF_KEY_DOWN ? 1 : -1);
+            }
+            return 1;
+        case TF_KEY_ENTER:
+            if (!form->menu_down)
+            {
+                menu_open(form, top);
+            }
+            else if (form->menu_item >= 0)
+            {
+                menu_choose(form, form->menu_item);
+            }
+            return 1;
+        case TF_KEY_CHAR:
+        case TF_KEY_ALT:
+        {
+            const uint32_t letter = key.ch < 0x80 ? (uint32_t)lower_ascii((int)key.ch) : key.ch;
+            if (form->menu_down)
+            {
+                const int item = menu_access(form, form->children[top], letter);
+                if (item >= 0)
+                {
+                    menu_choose(form, item);
+                }
+            }
+            else
+            {
+                const int menu = menu_access(form, form, letter);
+                if (menu >= 0)
+                {
+                    menu_open(form, menu);
+                }
+            }
+            return 1;
+        }
+        case TF_KEY_F:
+            if (key.ch == 4 && (key.mods & (TF_MOD_CTRL | TF_MOD_ALT)) != 0)
+            {
+                menu_close(form);
+                return 0;
+            }
+            if (is_menu_bar_key(key))
+            {
+                menu_close(form);
+            }
+            return 1;
+        case TF_KEY_CTRL:
+            if (is_menu_bar_key(key))
+            {
+                menu_close(form);
+            }
+            return 1;
+        default:
+            return 1;
+    }
+}
+
+/* A key before the focused control sees it: the menu bar key, a bar
+   menu's access key (ahead of the controls', as VB) and the items'
+   Shortcuts. Returns 1 if the key was used up. */
+static int menu_first(tf_control *form, tf_key key)
+{
+    if (form->menu_on)
+    {
+        return menu_key(form, key);
+    }
+    if (!has_menu_bar(form))
+    {
+        return 0;
+    }
+    if (is_menu_bar_key(key))
+    {
+        form->menu_top = next_on_bar(form, -1, 1);
+        form->menu_on = form->menu_top >= 0;
+        form->menu_down = 0;
+        form->menu_item = -1;
+        return 1;
+    }
+    if (key.kind == TF_KEY_ALT)
+    {
+        const int menu = menu_access(form, form, key.ch);
+        if (menu >= 0)
+        {
+            menu_open(form, menu);
+            return 1;
+        }
+        return 0;
+    }
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        tf_control *c = form->children[i];
+        const tf_key want = c->shortcut;
+        if (c->type == TF_CTL_MENU && want.kind != TF_KEY_NONE && want.kind == key.kind &&
+            want.ch == key.ch && (want.kind == TF_KEY_CTRL || want.mods == key.mods) && usable(c))
+        {
+            fire(c, TF_EVENT_CLICK);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* The bar menus' places: each " Caption " in turn from the bar's left. */
+static int bar_x(const tf_control *form, int index, int bar_left)
+{
+    int x = bar_left;
+    for (int i = 0; i < index; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (on_bar(form, c) && shown(c))
+        {
+            char caption[256];
+            strip_accelerator(tf_str_cstr(c->caption), caption, sizeof caption);
+            x += utf8_cells(caption) + 2;
+        }
+    }
+    return x;
+}
+
+static void draw_menu_bar(const tf_control *form, int x, int y, int w)
+{
+    tf_screen_fill(x, y, w, 1, ' ', TF_BLACK, TF_GREY);
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (!on_bar(form, c) || !shown(c))
+        {
+            continue;
+        }
+        const int at = bar_x(form, i, x);
+        char caption[256];
+        strip_accelerator(tf_str_cstr(c->caption), caption, sizeof caption);
+        const int cells = utf8_cells(caption) + 2;
+        if (at + cells > x + w)
+        {
+            break; /* the rest do not fit */
+        }
+        const int lit = form->menu_on && form->menu_top == i;
+        const int fg = usable(c) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+        const int bg = lit ? TF_CYAN : TF_GREY;
+        tf_screen_fill(at, y, cells, 1, ' ', fg, bg);
+        draw_caption(at + 1, y, c->caption, cells - 2, fg, bg, usable(c) ? TF_WHITE : fg);
+    }
+}
+
+/* The open drop-down, under its bar menu, over whatever is below (it may
+   reach past the form). Rows: check mark, caption, then the Shortcut in a
+   column of its own. */
+static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
+{
+    const tf_control *menu = form->children[form->menu_top];
+    int caption_cells = 0;
+    int shortcut_cells = 0;
+    int rows = 0;
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (c->parent != menu || !shown(c))
+        {
+            continue;
+        }
+        char caption[256];
+        strip_accelerator(tf_str_cstr(c->caption), caption, sizeof caption);
+        const int cells = utf8_cells(caption);
+        const int keys = utf8_cells(tf_str_cstr(c->text));
+        caption_cells = cells > caption_cells ? cells : caption_cells;
+        shortcut_cells = keys > shortcut_cells ? keys : shortcut_cells;
+        ++rows;
+    }
+    /* "│ ✓ Caption  Shortcut │" */
+    const int inner = 3 + caption_cells + (shortcut_cells > 0 ? 2 + shortcut_cells : 0) + 1;
+    const int w = inner + 2;
+    const int h = rows + 2;
+    int cols = 0;
+    int screen_rows = 0;
+    tf_screen_size(&cols, &screen_rows);
+    int x = bar_x(form, form->menu_top, bar_left);
+    x = x + w > cols ? (cols - w < 0 ? 0 : cols - w) : x;
+    const int y = bar_y + 1;
+
+    tf_screen_fill(x, y, w, h, ' ', TF_BLACK, TF_GREY);
+    for (int i = 1; i < w - 1; ++i)
+    {
+        tf_screen_put(x + i, y, box(0x2500, '-'), TF_BLACK, TF_GREY);
+        tf_screen_put(x + i, y + h - 1, box(0x2500, '-'), TF_BLACK, TF_GREY);
+    }
+    for (int j = 1; j < h - 1; ++j)
+    {
+        tf_screen_put(x, y + j, box(0x2502, '|'), TF_BLACK, TF_GREY);
+        tf_screen_put(x + w - 1, y + j, box(0x2502, '|'), TF_BLACK, TF_GREY);
+    }
+    tf_screen_put(x, y, box(0x250C, '+'), TF_BLACK, TF_GREY);
+    tf_screen_put(x + w - 1, y, box(0x2510, '+'), TF_BLACK, TF_GREY);
+    tf_screen_put(x, y + h - 1, box(0x2514, '+'), TF_BLACK, TF_GREY);
+    tf_screen_put(x + w - 1, y + h - 1, box(0x2518, '+'), TF_BLACK, TF_GREY);
+
+    int row = y + 1;
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        const tf_control *c = form->children[i];
+        if (c->parent != menu || !shown(c))
+        {
+            continue;
+        }
+        if (is_separator(c))
+        {
+            tf_screen_put(x, row, box(0x251C, '+'), TF_BLACK, TF_GREY);
+            for (int k = 1; k < w - 1; ++k)
+            {
+                tf_screen_put(x + k, row, box(0x2500, '-'), TF_BLACK, TF_GREY);
+            }
+            tf_screen_put(x + w - 1, row, box(0x2524, '+'), TF_BLACK, TF_GREY);
+            ++row;
+            continue;
+        }
+        const int on = usable(c);
+        const int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+        const int bg = i == form->menu_item ? TF_CYAN : TF_GREY;
+        tf_screen_fill(x + 1, row, inner, 1, ' ', fg, bg);
+        if (c->checked)
+        {
+            tf_screen_put(x + 2, row, box(0x2713, 'x'), fg, bg);
+        }
+        draw_caption(x + 4, row, c->caption, caption_cells, fg, bg, on ? TF_WHITE : fg);
+        const char *keys = tf_str_cstr(c->text);
+        const int key_cells = utf8_cells(keys);
+        if (key_cells > 0)
+        {
+            tf_screen_text(x + 4 + caption_cells + 2, row, keys, key_cells, fg, bg);
+        }
+        ++row;
+    }
+}
+
 /* One form, centred on the screen (the backdrop is already drawn). */
 static void draw_one(tf_control *form)
 {
@@ -1053,10 +1605,18 @@ static void draw_one(tf_control *form)
     /* Controls, in tab order (a Frame before what it holds), each placed in
        its container and cut to what that shows. */
     form_area = (area){ox + 1, oy + 1, fw - 2, fh - 2};
+    const int bar = has_menu_bar(form);
+    if (bar)
+    {
+        draw_menu_bar(form, ox + 1, oy + 1, fw - 2);
+        form_area.y++;
+        form_area.h--;
+    }
+    const int on_top = depth > 0 && form == stack[depth - 1];
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
-        if (!shown(c))
+        if (!shown(c) || c->type == TF_CTL_MENU)
         {
             continue;
         }
@@ -1069,7 +1629,7 @@ static void draw_one(tf_control *form)
         const int y = a.y + (int)c->top;
         const int room = a.w - (int)c->left;
         const int rows_left = a.h - (int)c->top;
-        const int focused = i == form->focus && depth > 0 && form == stack[depth - 1];
+        const int focused = i == form->focus && on_top && !form->menu_on;
         const int h = (int)c->height < rows_left ? (int)c->height : rows_left;
         const int w = (int)c->width < room ? (int)c->width : room;
         switch (c->type)
@@ -1096,6 +1656,10 @@ static void draw_one(tf_control *form)
             default:
                 break;
         }
+    }
+    if (bar && on_top && form->menu_on && form->menu_down)
+    {
+        draw_drop_down(form, ox + 1, oy + 1); /* last: over the controls */
     }
 }
 
@@ -1652,6 +2216,10 @@ static int32_t key_ascii(tf_key key)
 /* One key for the form. Returns 1 if the form is to close. */
 static int form_key(tf_control *form, tf_key key)
 {
+    if (menu_first(form, key))
+    {
+        return 0;
+    }
     if (key.kind == TF_KEY_F && key.ch == 4 && (key.mods & (TF_MOD_CTRL | TF_MOD_ALT)) != 0)
     {
         return 1; /* Ctrl+F4 or Alt+F4 */

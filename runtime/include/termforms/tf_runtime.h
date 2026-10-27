@@ -609,7 +609,8 @@ typedef enum tf_control_type
     TF_CTL_OPTIONBUTTON,
     TF_CTL_FRAME,
     TF_CTL_LISTBOX,
-    TF_CTL_TIMER
+    TF_CTL_TIMER,
+    TF_CTL_MENU /* in the menu bar (its container the form) or in a menu */
 } tf_control_type;
 
 /* Properties a control may have; the compiler checks which apply to which. */
@@ -632,7 +633,9 @@ typedef enum tf_prop
     TF_PROP_SORTED,      /* ListBox: AddItem keeps the items in order, ignoring case */
     TF_PROP_SELCOUNT,    /* ListBox, read only: how many items are selected */
     TF_PROP_TOPINDEX,    /* ListBox: the first item shown */
-    TF_PROP_INTERVAL     /* Timer: milliseconds between Timer events; 0 stops it */
+    TF_PROP_INTERVAL,    /* Timer: milliseconds between Timer events; 0 stops it */
+    TF_PROP_CHECKED,     /* Menu: a check mark before the item */
+    TF_PROP_SHORTCUT     /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
 } tf_prop;
 
 typedef enum tf_event
@@ -664,7 +667,8 @@ tf_control *tf_form_new(const char *name);
 tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *name);
 
 /* Puts a control inside a Frame (created before it): its Left and Top are
-   then inside the Frame, and OptionButtons in a Frame are a group. */
+   then inside the Frame, and OptionButtons in a Frame are a group. A Menu
+   put inside another Menu is an item of that menu's drop-down. */
 void tf_control_container(tf_control *control, tf_control *frame);
 
 void tf_control_on(tf_control *control, tf_event event, tf_handler handler);

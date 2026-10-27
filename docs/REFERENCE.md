@@ -1039,6 +1039,55 @@ End Sub
   first control the focus (GotFocus), as VB. Moving the focus raises
   LostFocus on one control and GotFocus on the next.
 
+### Menus (Proposed)
+
+The handover settled F10 and Alt+letter, and a Ctrl alternative for every
+function key; the rest follows VB-DOS and VB6's `.frm` form.
+
+```vb
+Begin Menu mnuFile
+    Caption = "&File"
+    Begin Menu mnuSave
+        Caption = "&Save"
+        Shortcut = "Ctrl+S"
+    End
+End
+```
+
+- **Two levels, as VB-DOS**: a `Begin Menu` in the form block is on the
+  menu bar; one inside it is an item of its drop-down. A third level, a
+  Menu in a Frame, or another control in a Menu is a compile error.
+- A Menu has Caption, Enabled, Visible, Checked, Shortcut and the Click
+  event. A Caption of `-` is a separator line. Only items have Checked
+  and Shortcut (a bar menu with either is a compile error).
+- **The menu bar is the form's first row inside the border**, and the
+  client area starts below it: with a menu bar, Top 0 is the row under
+  the bar (as VB, whose menu is outside the client area).
+- **F10 goes to the menu bar; so does Ctrl+B**, the Ctrl alternative the
+  handover asks for (macOS and many keyboards take the function keys).
+  Ctrl+B is taken only on forms with a menu bar.
+- **Alt+letter opens the menu** with that access key, ahead of a
+  control with the same one (as VB).
+- On the bar: Left/Right move round the ends, Down or Enter opens, a
+  letter opens that menu, Esc (or F10/Ctrl+B) leaves. In a drop-down:
+  Up/Down move (passing over separators and disabled items), Enter or an
+  item's letter chooses it, Left/Right open the next menu, Esc goes back
+  to the bar. Other keys are ignored while the menus are in use, except
+  Ctrl+F4 (Alt+F4), which leaves them and closes the form.
+- **Opening a menu fires its Click** first (VB's chance to set the items'
+  Checked and Enabled); choosing an item closes the menus, then fires the
+  item's Click. A bar menu with no items is chosen like an item.
+  Choosing never changes Checked: the program does (as VB).
+- **Shortcut** is text: `Ctrl+letter`, `F1`-`F12` with any of `Shift+`,
+  `Ctrl+`, `Alt+` before it, or `Del`, case ignored, shown as Windows
+  writes it (`ctrl+s` shows as Ctrl+S). Not allowed: Ctrl+H, Ctrl+I,
+  Ctrl+M (a terminal sends Backspace, Tab, Enter), Ctrl+B, F10, Ctrl+F4,
+  Alt+F4 — a compile error in the form block, error 380 when set in code.
+  A Shortcut works while its form is on top and the item and its menu
+  are enabled and visible, before the focused control sees the key (no
+  KeyDown).
+- The drop-down is drawn over the form and may reach past its edge.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

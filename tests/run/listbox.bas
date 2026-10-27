@@ -3,6 +3,7 @@
 ' MultiSelect one too short for its items (scrolling, the arrows in its
 ' border), the caret moved and Space toggling; then code reading and
 ' changing items: List(i), Selected(i), RemoveItem, ListCount, SelCount.
+' A ListIndex out of range is error 380, caught by a Try (E380).
 Begin Form frmMain
     Caption = "Lists"
     Width = 50
@@ -44,6 +45,11 @@ Sub Form_Load()
     For Each w In Split("one two three four five")
         lstPick.AddItem w
     Next
+    Try
+        lstFruit.ListIndex = 9
+    Catch
+        Note "E" & Err.Number
+    End Try
 End Sub
 
 Sub lstFruit_Click()

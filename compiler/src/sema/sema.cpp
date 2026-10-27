@@ -603,7 +603,7 @@ private:
                 diagnostics_.error(child->location, "unknown control type '" + child->typeName +
                                                         "' (this version has Label, TextBox, "
                                                         "CommandButton, CheckBox, OptionButton, "
-                                                        "Frame, ListBox and Timer)");
+                                                        "Frame, ListBox, Timer and Menu)");
                 continue;
             }
             if (claimModuleName(child->name, child->location, "control"))
@@ -611,6 +611,11 @@ private:
                 own_[here_].controls[child->name] = child.get();
             }
             checkSettings(*child);
+            if (child->typeName == "Menu" || container.typeName == "Menu")
+            {
+                checkMenu(container, *child);
+                continue;
+            }
             if (!child->children.empty() && child->typeName != "Frame")
             {
                 diagnostics_.error(child->children.front()->location,
@@ -620,6 +625,128 @@ private:
             }
             registerChildren(*child);
         }
+    }
+
+    // A menu is on the form's menu bar or in a drop-down under one: two
+    // levels, as VB-DOS (VB6's cascading menus would need more keys and
+    // drawing than v1 has). Only a bar menu holds items; only an item has
+    // a check mark or a shortcut.
+    void checkMenu(const ControlDef &container, ControlDef &menu)
+    {
+        if (menu.typeName != "Menu")
+        {
+            diagnostics_.error(menu.location, "a Menu holds only Menus, not a " + menu.typeName);
+            return;
+        }
+        if (!container.isForm && container.typeName != "Menu")
+        {
+            diagnostics_.error(menu.location,
+                               "a Menu belongs to the form, not to a " + container.typeName);
+            return;
+        }
+        const bool onBar = container.isForm;
+        if (!onBar && !menu.children.empty())
+        {
+            diagnostics_.error(menu.children.front()->location,
+                               "menus go two levels deep in this version: '" + menu.name +
+                                   "' is already in a drop-down");
+        }
+        for (const PropertySetting &s : menu.properties)
+        {
+            if (onBar && (s.name == "Checked" || s.name == "Shortcut"))
+            {
+                diagnostics_.error(s.location, "a menu on the menu bar has no " + s.name +
+                                                   " (only the items in its drop-down do)");
+            }
+            else if (s.name == "Shortcut" && s.value->kind == ExprKind::StringLiteral)
+            {
+                if (const std::string problem = shortcutProblem(s.value->text); !problem.empty())
+                {
+                    diagnostics_.error(s.value->location, problem);
+                }
+            }
+        }
+        if (onBar)
+        {
+            registerChildren(menu);
+        }
+    }
+
+    // Why a Shortcut's text cannot be used, or "" if it can. The runtime's
+    // tf_forms.c (parse_shortcut) reads the same forms; keep them alike.
+    static std::string shortcutProblem(const std::string &text)
+    {
+        std::string rest = text;
+        bool shift = false;
+        bool ctrl = false;
+        bool alt = false;
+        for (bool more = true; more;)
+        {
+            more = false;
+            for (auto [prefix, flag] : {std::pair<const char *, bool *>{"Shift+", &shift},
+                                        {"Ctrl+", &ctrl},
+                                        {"Alt+", &alt}})
+            {
+                const std::size_t n = std::strlen(prefix);
+                if (rest.size() > n &&
+                    catalog::equalsIgnoringCase(std::string_view(rest).substr(0, n), prefix))
+                {
+                    *flag = true;
+                    rest.erase(0, n);
+                    more = true;
+                }
+            }
+        }
+        const std::string usage = "a Shortcut is Ctrl+letter, F1 to F12 (with Shift+, Ctrl+ or "
+                                  "Alt+ before it if wanted) or Del, not \"" +
+                                  text + "\"";
+        if (rest.size() == 1 && std::isalpha(static_cast<unsigned char>(rest[0])))
+        {
+            const char letter =
+                static_cast<char>(std::toupper(static_cast<unsigned char>(rest[0])));
+            if (!ctrl || shift || alt)
+            {
+                return usage;
+            }
+            if (letter == 'H' || letter == 'I' || letter == 'M')
+            {
+                return std::string("Ctrl+") + letter +
+                       " cannot be a Shortcut: a terminal sends it as " +
+                       (letter == 'H'   ? "Backspace"
+                        : letter == 'I' ? "Tab"
+                                        : "Enter");
+            }
+            if (letter == 'B')
+            {
+                return "Ctrl+B cannot be a Shortcut: it opens the menu bar (as F10 does)";
+            }
+            return "";
+        }
+        if (catalog::equalsIgnoringCase(rest, "Del") || catalog::equalsIgnoringCase(rest, "Delete"))
+        {
+            return shift || ctrl || alt ? usage : "";
+        }
+        if (rest.size() >= 2 && rest.size() <= 3 && (rest[0] == 'F' || rest[0] == 'f') &&
+            std::all_of(rest.begin() + 1, rest.end(),
+                        [](char c) { return std::isdigit(static_cast<unsigned char>(c)); }))
+        {
+            const int n = std::stoi(rest.substr(1));
+            if (n < 1 || n > 12 || rest[1] == '0')
+            {
+                return usage;
+            }
+            if (n == 10 && !shift && !ctrl && !alt)
+            {
+                return "F10 cannot be a Shortcut: it opens the menu bar";
+            }
+            if (n == 4 && (ctrl || alt))
+            {
+                return std::string(ctrl ? "Ctrl" : "Alt") +
+                       "+F4 cannot be a Shortcut: it closes the form";
+            }
+            return "";
+        }
+        return usage;
     }
 
     // The control of a form called name, in a Frame or not; null if none.

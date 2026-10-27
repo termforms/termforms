@@ -69,6 +69,7 @@ End Sub
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
 | Controls | Label, TextBox, CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
 | Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`; events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
+| Menus | `Begin Menu` blocks: a menu bar with drop-downs (two levels); Caption (`-` a separator), Enabled, Visible, Checked, Shortcut; the Click event; F10 or Ctrl+B, Alt+letter |
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
 | System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
@@ -451,6 +452,33 @@ Begin Form frmMain
 End
 ```
 
+## Menus
+
+```vb
+Begin Form frmMain
+    Begin Menu mnuFile               ' on the menu bar (the form's first row)
+        Caption = "&File"
+        Begin Menu mnuSave           ' an item in File's drop-down
+            Caption = "&Save"
+            Shortcut = "Ctrl+S"      ' also Ctrl+letter, F1-F12 with Shift/Ctrl/Alt, Del
+        End
+        Begin Menu mnuSep1
+            Caption = "-"            ' a separator line
+        End
+        Begin Menu mnuWrap
+            Caption = "&Wrap"
+            Checked = True
+        End
+    End
+End
+
+Sub mnuFile_Click()                  ' runs as File opens: update the items here
+    mnuSave.Enabled = dirty
+End Sub
+```
+
+With a menu bar, controls' Top counts from the row below it.
+
 ## Keys in a running program
 
 | Key | Action |
@@ -463,6 +491,9 @@ End
 | Alt+letter | The control whose Caption has &letter |
 | Left, Right, Home, End, Backspace, Delete | Edit in a TextBox |
 | Ctrl+F4 (or Alt+F4) | Close the form |
+| F10 or Ctrl+B | Go to the menu bar (again, or Esc: leave it) |
+| Alt+letter | Open the menu whose Caption has &letter (before a control's) |
+| In the menus | Left/Right: menu to menu; Down/Enter: open; Up/Down: item to item; Enter or a letter: choose; Esc: back |
 
 ## Building programs
 

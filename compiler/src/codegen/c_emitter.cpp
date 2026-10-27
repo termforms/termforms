@@ -1787,10 +1787,12 @@ private:
         {
             return true;
         }
-        // A CheckBox's Value outside 0-2 is error 380 (and setting Value runs
-        // the Click handler, which may fail).
+        // A CheckBox's Value outside 0-2, a ListIndex out of range and a
+        // Shortcut the runtime cannot read are error 380 (and setting Value
+        // or ListIndex runs the Click handler, which may fail).
         if (target.kind == ExprKind::Member && target.left != nullptr &&
-            target.left->control != nullptr && target.text == "Value")
+            target.left->control != nullptr &&
+            (target.text == "Value" || target.text == "ListIndex" || target.text == "Shortcut"))
         {
             return true;
         }
