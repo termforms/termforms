@@ -7,6 +7,7 @@
 #include "sema/catalog.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -159,7 +160,7 @@ public:
     {
         for (std::size_t i = 0; i < modules_.size(); ++i)
         {
-            moduleIndex_[modules_[i]->name] = i;
+            moduleIndex_[moduleKey(modules_[i]->name)] = i;
         }
         forEachModule(false, [this] {
             registerEnums();
@@ -289,6 +290,18 @@ private:
         return true;
     }
 
+    // A module's name as matched: ignoring case, since it comes from a file
+    // name and Windows and macOS find Stock.bas as stock.bas (settled with
+    // Jim, 28 Oct 2026; an exception to names being case-sensitive).
+    static std::string moduleKey(std::string name)
+    {
+        for (char &c : name)
+        {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return name;
+    }
+
     // The module an object names (Utils in Utils.Clean), or -1: only with
     // several modules, and only if the name is not a variable or control
     // this module sees.
@@ -300,7 +313,7 @@ private:
         {
             return -1;
         }
-        auto it = moduleIndex_.find(object.text);
+        auto it = moduleIndex_.find(moduleKey(object.text));
         return it == moduleIndex_.end() ? -1 : static_cast<int>(it->second);
     }
 
@@ -408,10 +421,14 @@ private:
             return false;
         }
         // With several modules, Module.Name qualifies: a module's name is
-        // taken. (One file's name never clashes: it is not needed.)
-        if (modules_.size() > 1 && moduleIndex_.count(name) != 0)
+        // taken, in any case (stock would be read as the module Stock).
+        // (One file's name never clashes: it is not needed.)
+        if (auto m = moduleIndex_.find(moduleKey(name));
+            modules_.size() > 1 && m != moduleIndex_.end())
         {
-            diagnostics_.error(where, "'" + name + "' is the name of a module");
+            diagnostics_.error(where, "'" + name + "' is the name of a module (" +
+                                          modules_[m->second]->name +
+                                          "; module names ignore case)");
             return false;
         }
         return true;

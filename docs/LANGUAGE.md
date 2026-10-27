@@ -282,7 +282,9 @@ Module=stock.bas
   Functions, Types and Enums are Public (seen by every module) unless
   marked `Private`; its `Dim`s and `Const`s are Private unless declared
   `Public x As T`.
-- `stock.Label()` names one module's `Label` when two have one.
+- `stock.Label()` names one module's `Label` when two have one. Module
+  names ignore case (`Stock.Label()` is the same), as file names do on
+  Windows and macOS.
 - Other modules reach the form's controls through the form:
   `frmMain.txtName.Text`.
 

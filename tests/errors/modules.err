@@ -1,4 +1,4 @@
-modules/one.bas:10:5: error: 'two' is the name of a module
+modules/one.bas:10:5: error: 'TWO' is the name of a module (two; module names ignore case)
 modules.bas:12:9: error: 'Shared' is Public in the modules one and two; write one.Shared (or another module's) to say which
 modules.bas:13:13: error: 'Secret' is Private to the module one
 modules.bas:14:13: error: the module one has no 'Missing'

@@ -835,13 +835,19 @@ End Sub
 
 - A module is a `.bas` file; **its name is the file's name without
   `.bas`**, so with several modules each file name must be a BASIC name.
+- **Module names ignore case** (settled, Jim, 28 Oct 2026): `Stock.x`,
+  `stock.x` and `STOCK.x` name the same module, as Windows and macOS find
+  `Stock.bas` as `stock.bas`; two files whose names differ only in case
+  cannot be modules of one program. This is the one exception to names
+  being case-sensitive: a module's name comes from a file name, whose
+  case is not dependable.
 - Each module sees its own names and every other module's Public ones.
   **`Module.Name`** names one explicitly (a variable, Const, Function,
   array element, or a Sub called as a statement); a name Public in two
   other modules must be written that way (it is an error otherwise), and
   a module's own name wins over another's Public one.
-- A name that is a module's name cannot also be declared (with several
-  modules).
+- A name that is a module's name, in any case, cannot also be declared
+  (with several modules).
 - **The form is known everywhere**; another module reaches its controls
   through it: `frmMain.txtName.Text = "x"`.
 - The program starts at its form, or at `Sub Main` (one in the program).

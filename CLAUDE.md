@@ -183,7 +183,9 @@ authoritative for design rationale.
   default (widening implicit; narrowing needs CInt/CLng; String↔number
   always explicit, except `&` which converts operands to text).
 - **Case:** keywords case-insensitive; *everything else case-sensitive*
-  (user identifiers, built-in names, properties, events). Warn when a Sub
+  (user identifiers, built-in names, properties, events), except module
+  names, which ignore case (Jim, 28 Oct 2026: they come from file names,
+  and Windows and macOS file names ignore case). Warn when a Sub
   matches an event handler name except for case.
 - **Arrays:** 0-based, `Dim a(10)` = 11 elements, no Option Base (document
   prominently). Dynamic arrays with ReDim Preserve, bounds-checked.

@@ -7,4 +7,4 @@ Private Function Secret() As Integer
     Return 2
 End Function
 
-Dim two As Integer            ' the name of a module
+Dim TWO As Integer            ' the name of a module, in another case

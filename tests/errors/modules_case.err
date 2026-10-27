@@ -1,0 +1,1 @@
+tfc: error: 'modules_case/a/twin.bas' and 'modules_case/b/Twin.bas' would both be the module 'Twin' (module names ignore case, as file names do on Windows and macOS)

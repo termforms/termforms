@@ -16,7 +16,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
-#include <set>
+#include <map>
 #include <sstream>
 #include <system_error>
 
@@ -374,7 +374,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     // set up in this order too.
     Diagnostics diagnostics(input);
     std::vector<ast::Module> modules;
-    std::set<std::string> names;
+    std::map<std::string, std::string> names; // a module's name, any case -> its file
     for (std::size_t i = 0; i < inputs.size(); ++i)
     {
         const std::string &file = inputs[i];
@@ -391,10 +391,19 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
                 << "(letters, digits and _, starting with a letter), as it names the module\n";
             return kExitUsage;
         }
-        if (!names.insert(name).second)
+        // Module names ignore case, as the file names they come from do on
+        // Windows and macOS: Stock.bas and stock.bas would be one module.
+        std::string key = name;
+        for (char &c : key)
         {
-            err << "tfc: error: two modules are called '" << name << "'\n";
-            return kExitUsage;
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (auto [it, added] = names.emplace(key, file); !added)
+        {
+            err << "tfc: error: '" << it->second << "' and '" << file
+                << "' would both be the module '" << name
+                << "' (module names ignore case, as file names do on Windows and macOS)\n";
+            return kExitCompile;
         }
         const int index = i == 0 ? 0 : diagnostics.addFile(file);
         const std::vector<Token> tokens = tokenize(source, diagnostics, index);
