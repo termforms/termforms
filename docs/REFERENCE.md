@@ -237,22 +237,23 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 7 | Out of memory | running out of memory (always fatal, never caught) | now |
 | 11 | Division by zero | `/`, `\`, `Mod` by zero | now |
 | 13 | Type mismatch | CInt/CLng/CDbl of text that is not a number | now |
+| 14 | Out of string space | joining strings into one longer than a string can hold (about 2 GB); catchable, the result is "" | now |
 | 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
 | 9 | Subscript out of range | array index outside its bounds | arrays |
 | 10 | This array is fixed or temporarily locked | ReDim of a fixed array | arrays |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing | Types and Ref |
 | 457 | This key is already associated with an element of this collection | adding a Dictionary key twice | Dictionary |
-| 14 | Out of string space | a string longer than the runtime allows | strings |
 | 52-76 | VB6's file errors (53 File not found, 62 Input past end of file, 70 Permission denied, 76 Path not found, ...) | file I/O, mapped from the operating system's error | file I/O |
 | 380 | Invalid property value | a control property set out of range | forms |
 
 - **Not provided: 28 Out of stack space.** Portable C cannot detect
   running out of stack, so recursion that goes too deep crashes the
   program instead of raising an error.
-- **Open:** whether 14 (a string too long, today reported as 7 and fatal)
-  should be catchable; and named constants for these numbers
-  (`Catch When Err.Number = errFileNotFound`), which need `Const` or
-  `Enum`, not yet in the v1 plan.
+- A string too long is error 14 and can be caught (Jim, 27 Oct 2026: 14 if
+  the program can carry on, else 7). It is detected before anything is
+  allocated, so it can; genuinely running out of memory stays 7 and fatal.
+- Named constants for these numbers (`Catch When Err.Number =
+  errFileNotFound`) come with `Const`/`Enum` (below).
 
 ### Errors (Proposed)
 
@@ -272,6 +273,15 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 - A Try needs at least one Catch or a Finally. Catch clauses are tried in
   order; the first whose When is True (or that has no When) handles the
   error, and if none does, the error goes on after the Finally.
+
+## Constants and enumerations (Settled, 27 Oct 2026: in v1)
+
+- `Const` is in v1, and `Enum` too unless it proves complex. Most
+  programmers expect at least Const, and they give error numbers and
+  other magic values names.
+- The detailed rules (Const types and expressions, scope, whether an Enum
+  is a distinct type under Option Strict, qualified `Color.Red` or bare
+  `Red`) are to be settled with Jim before they are built.
 
 ## References and Types (Settled, 23 Oct 2026)
 

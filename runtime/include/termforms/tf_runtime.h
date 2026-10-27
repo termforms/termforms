@@ -68,13 +68,14 @@ TF_NORETURN void tf_end(int exit_code);
  * tf_error_text gives each number's standard text, VB6's wording where VB6
  * has the number.
  */
-#define TF_ERR_INVALID_ARGUMENT 5  /* Invalid procedure call or argument */
-#define TF_ERR_OVERFLOW 6          /* Overflow */
-#define TF_ERR_OUT_OF_MEMORY 7     /* Out of memory (always fatal) */
-#define TF_ERR_DIVISION_BY_ZERO 11 /* Division by zero */
-#define TF_ERR_TYPE_MISMATCH 13    /* Type mismatch */
-#define TF_ERR_TERMINAL 900        /* Terminal error (always fatal) */
-#define TF_ERR_FIRST_USER 1000     /* the first number left to programs */
+#define TF_ERR_INVALID_ARGUMENT 5     /* Invalid procedure call or argument */
+#define TF_ERR_OVERFLOW 6             /* Overflow */
+#define TF_ERR_OUT_OF_MEMORY 7        /* Out of memory (always fatal) */
+#define TF_ERR_DIVISION_BY_ZERO 11    /* Division by zero */
+#define TF_ERR_TYPE_MISMATCH 13       /* Type mismatch */
+#define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
+#define TF_ERR_TERMINAL 900           /* Terminal error (always fatal) */
+#define TF_ERR_FIRST_USER 1000        /* the first number left to programs */
 
 /* The standard text for an error number (static); for a number with no
    meaning of its own, VB's "Application-defined or object-defined error". */
@@ -169,7 +170,7 @@ tf_string *tf_str_ref(tf_string *s);
 /* Stores an owned (+1) value into a variable, releasing the previous value. */
 void tf_str_assign(tf_string **slot, tf_string *owned);
 
-/* a & b. +1 */
+/* a & b. +1. A result longer than a string can hold is error 14. */
 tf_string *tf_str_concat(const tf_string *a, const tf_string *b);
 
 /* Decimal text of an Integer, as & and Str$ produce it. +1 */

@@ -973,8 +973,9 @@ private:
 
     // Can evaluating e raise an error, apart from the Functions it calls
     // (which are checked where they are hoisted)? Arithmetic can overflow
-    // or divide by zero, conversions can fail; text, comparisons and logic
-    // cannot (running out of memory ends the program).
+    // or divide by zero, conversions can fail, and joining strings can make
+    // one too long (error 14); comparisons and logic cannot (running out of
+    // memory ends the program).
     static bool mayFail(const Expr &e)
     {
         for (const auto &arg : e.args)
@@ -993,7 +994,7 @@ private:
             case ExprKind::Unary:
                 return e.text == "-" && (e.type == Type::Integer || e.type == Type::Long);
             case ExprKind::Binary:
-                return isNumeric(e.type) && e.text != "&";
+                return isNumeric(e.type) || e.type == Type::String; // arithmetic, & and +
             case ExprKind::Call:
                 switch (e.builtin)
                 {

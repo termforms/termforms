@@ -88,7 +88,10 @@ tf_string *tf_str_concat(const tf_string *a, const tf_string *b)
 
     if ((int64_t)la + (int64_t)lb > TF_STR_MAX_LENGTH)
     {
-        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "String too long");
+        /* Caught before anything is allocated, so a Try can carry on
+           (VB6's error 14); give back "" as the harmless result. */
+        tf_raise(TF_ERR_OUT_OF_STRING_SPACE, NULL);
+        return NULL;
     }
     if (la + lb == 0)
     {

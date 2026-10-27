@@ -69,10 +69,12 @@ authoritative for design rationale.
   1-899 (VB6) and 900-999 (TermForms-only, e.g. 900 Terminal error);
   programs from 1000. Texts live only in `tf_error_text`; raise sites pass
   NULL. `docs/REFERENCE.md` "Error numbers" lists which numbers each
-  coming step adds (9, 10, 91, 457, 14, 52-76, 380). Open with Jim: should
-  14 (string too long) be catchable, and `Const`/`Enum` for named numbers.
-- **Next:** Phase 3 step 4 (arrays, Types and Ref, Dictionary), or Phase 4
-  work; ask Jim.
+  coming step adds (9, 10, 91, 457, 52-76, 380). A string too long is 14,
+  catchable (checked before allocating); out of memory stays 7, fatal.
+  **Const (and Enum unless complex) added to v1 scope** (Jim, 27 Oct
+  2026); their detailed rules are still to be settled with him.
+- **Next:** Phase 3 step 4 (Const and Enum: settle their rules with Jim
+  first), then arrays/Types/Dictionary, or Phase 4 work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -137,6 +139,8 @@ authoritative for design rationale.
   ChDir, CurDir$; Open/Line Input/Print #/Close; Command$, Environ$, Shell;
   Now, Timer, Date$, Time$. Proper Date type deferred.
 - **C interop:** `Declare Function … Lib` maps to C prototypes.
+- **Constants (27 Oct 2026):** `Const` is in v1; `Enum` too unless it
+  proves complex. Rules to settle with Jim first (see REFERENCE.md).
 - **Debugging:** `#line` before every statement (one C line per BASIC
   statement); pretty-printers for gdb, lldb, .natvis. DAP debugger later.
 - **Toolchain:** v1 bundles nothing; driver uses `--cc`, `$TFC_CC`, else
@@ -317,9 +321,11 @@ Phase 3, language core:
 1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
 2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
 3. ~~Try/Catch/Finally, Err, Throw~~ (done 27 Oct 2026).
-4. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
-5. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
-6. Multiple modules and the `.vbp` project file.
+4. Const, and Enum unless complex (settle the rules with Jim first);
+   before arrays, so array sizes can be named (`Dim a(MAX_ITEMS)`).
+5. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
+6. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
+7. Multiple modules and the `.vbp` project file.
 
 Phase 4, TUI runtime: Label, CheckBox, OptionButton, ListBox, Frame, Timer;
 menus (F10, Alt+letter); MsgBox/InputBox and a modal form stack; overlay
