@@ -6,7 +6,7 @@ each phase; the full design lives in the project's design documents.
 Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
 language core step by step; so far: Sub and Function with parameters, the
-loops, Long and Double, Try/Catch, Const and Enum, and arrays.
+loops, Long and Double, Try/Catch, Const and Enum, arrays, and Types.
 `docs/REFERENCE.md` has every rule
 as decided, including the ones not built yet.
 
@@ -61,6 +61,7 @@ End Sub
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
 | Constants | `Const` (module level or in a procedure), `Enum ... End Enum` (Integer or `As Long`), `CType(value, type)` |
 | Arrays | fixed `Dim a(9)`, `Dim g(24, 79)`; dynamic `Dim a()`, `Dim t(,)` with `ReDim [Preserve]`; `Erase`, `UBound`, `LBound`; array parameters |
+| Types | `Type ... End Type` records with scalar, array and Type members; arrays of Types; Type parameters and Function results |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
 | Controls | `Form` (Caption, Width, Height; event Load), `TextBox` (Text, Left, Top, Width, Height; event Change), `CommandButton` (Caption, Left, Top, Width, Height; event Click) |
@@ -139,6 +140,31 @@ End Function
   ReDim'd; a fixed array's size is a constant. `b = a` copies the elements.
 - An index outside the array is error 9. An array parameter is read-only
   unless it is ByRef.
+
+## Types
+
+```vb
+Type Point
+    X As Integer
+    Y As Integer
+End Type
+
+Type Shape
+    Name As String
+    Corners() As Point                  ' an array member
+End Type
+
+Dim s As Shape, copy As Shape
+s.Name = "square"
+ReDim s.Corners(3)
+s.Corners(2).X = 10
+copy = s                                ' copies everything: they share nothing
+```
+
+- A Type is a value: assignment copies the record, arrays and nested Types
+  included. A ByVal Type parameter is the callee's own copy; ByRef shares.
+- Types cannot be compared with `=`; compare their members.
+- `Ref`, `New`, `Nothing` and `With ... End With` come next.
 
 ## Errors
 

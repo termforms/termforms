@@ -30,6 +30,7 @@ enum class Type
     String,
     Boolean,
     Enum,   // a user Enum; which one is in the Expr's or Variable's enumDef
+    Record, // a value of a user Type; which one is in typeDef
     Control // a form or control used as an object
 };
 
@@ -78,6 +79,17 @@ struct EnumMember
     std::unique_ptr<Expr> value; // null: one more than the member before
     std::int64_t resolved = 0;   // set by the semantic pass
     bool ready = false;          // resolved has been set (members are set in order)
+};
+
+struct Variable;
+
+// Type Name ... End Type: a record type, a value like any other (copied on
+// assignment). Its members are Variables with isMember set.
+struct TypeDef
+{
+    std::string name;
+    Location location;
+    std::vector<std::unique_ptr<Variable>> members;
 };
 
 // Enum Name [As Integer | As Long] ... End Enum. A distinct type whose
@@ -136,7 +148,9 @@ struct Expr
     // Resolved by the semantic pass.
     bool isErr = false;               // Name: the built-in Err object
     const EnumDef *enumDef = nullptr; // when type is Enum
-    int rank = 0; // a Name that is a whole array: its dimensions (0: not an array)
+    const TypeDef *typeDef = nullptr; // when type is Record
+    const Variable *field = nullptr;  // Member of a record: the Type's member
+    int rank = 0; // a whole array (a Name or a record's array member): its dimensions
     // CType(value, type): the target type, written as convertTo or, for an
     // Enum, by name. The semantic pass turns it into a CInt/CLng/... call.
     Type convertTo = Type::Error;
@@ -263,8 +277,10 @@ struct Variable
     Type type = Type::Error;
     std::string typeName;             // As <name> for an Enum, until resolved
     const EnumDef *enumDef = nullptr; // when type is Enum
+    const TypeDef *typeDef = nullptr; // when type is Record
     Location location;
-    bool isConst = false; // a Const: never stored, its uses become its value
+    bool isMember = false; // a member of a Type
+    bool isConst = false;  // a Const: never stored, its uses become its value
     std::int64_t constInteger = 0;
     double constReal = 0;
     std::string constText;
@@ -334,6 +350,7 @@ struct Module
     std::vector<std::unique_ptr<Variable>> globals;
     Block moduleStatements; // module-level Dim and Const statements, in order
     std::vector<std::unique_ptr<EnumDef>> enums;
+    std::vector<std::unique_ptr<TypeDef>> types;
     std::vector<std::unique_ptr<Procedure>> procedures;
 };
 

@@ -44,7 +44,7 @@ static int32_t p_Sum(tf_array *v_values)
 static void p_Grow(tf_array *v_values, int32_t v_extra)
 {
 #line 24 "arrays.bas"
-    TF_LINE(24); tf_array_redim(v_values, TF_ELEM_I32, 1, 1, (const int32_t[]){tf_i32_add(tf_array_ubound(v_values, 1), v_extra)});
+    TF_LINE(24); tf_array_redim(v_values, TF_ELEM_I32, NULL, 1, 1, (const int32_t[]){tf_i32_add(tf_array_ubound(v_values, 1), v_extra)});
 }
 
 #line 27 "arrays.bas"
@@ -64,10 +64,10 @@ static void p_Form_Load(void)
     tf_array v_copy = {0};
     int32_t v_i = 0;
     tf_array v_row = {0};
-    tf_array_init(&v_a, TF_ELEM_I32, 1, (const int32_t[]){3});
-    tf_array_init(&v_grid, TF_ELEM_STRING, 2, (const int32_t[]){2, 3});
-    tf_array_init(&v_cube, TF_ELEM_F64, 3, (const int32_t[]){1, 1, 1});
-    tf_array_init(&v_row, TF_ELEM_I32, 1, (const int32_t[]){2});
+    tf_array_init(&v_a, TF_ELEM_I32, NULL, 1, (const int32_t[]){3});
+    tf_array_init(&v_grid, TF_ELEM_STRING, NULL, 2, (const int32_t[]){2, 3});
+    tf_array_init(&v_cube, TF_ELEM_F64, NULL, 3, (const int32_t[]){1, 1, 1});
+    tf_array_init(&v_row, TF_ELEM_I32, NULL, 1, (const int32_t[]){2});
 #line 34 "arrays.bas"
     TF_LINE(34); *(int32_t *)tf_array_at1(&v_a, 0) = 5;
 #line 35 "arrays.bas"
@@ -77,7 +77,7 @@ static void p_Form_Load(void)
 #line 37 "arrays.bas"
     TF_LINE(37); *(double *)tf_array_atn(&v_cube, 3, (const int64_t[]){1, 0, 1}) = 1.5;
 #line 38 "arrays.bas"
-    TF_LINE(38); tf_array_redim(&v_d, TF_ELEM_I32, 0, 1, (const int32_t[]){2});
+    TF_LINE(38); tf_array_redim(&v_d, TF_ELEM_I32, NULL, 0, 1, (const int32_t[]){2});
 #line 39 "arrays.bas"
     TF_LINE(39); { int32_t t1 = p_Sum(&v_a); *(int32_t *)tf_array_at1(&v_d, 1) = t1; }
 #line 40 "arrays.bas"
@@ -87,7 +87,7 @@ static void p_Form_Load(void)
 #line 42 "arrays.bas"
     TF_LINE(42); tf_array_copy(&v_copy, &v_d);
 #line 43 "arrays.bas"
-    TF_LINE(43); tf_array_redim(&g_names, TF_ELEM_STRING, 0, 1, (const int32_t[]){1});
+    TF_LINE(43); tf_array_redim(&g_names, TF_ELEM_STRING, NULL, 0, 1, (const int32_t[]){1});
 #line 44 "arrays.bas"
     TF_LINE(44); { tf_string *t1 = tf_str_from_i32(tf_array_ubound(&v_grid, 2)); tf_str_assign((tf_string **)tf_array_at1(&g_names, 1), tf_str_concat((*(tf_string **)tf_array_at2(&v_grid, 2, 3)), t1)); tf_str_release(t1); }
 #line 45 "arrays.bas"
@@ -117,7 +117,7 @@ int main(void)
 {
     tf_runtime_init("arrays.bas");
 #line 13 "arrays.bas"
-    tf_array_init(&g_totals, TF_ELEM_I64, 1, (const int32_t[]){4});
+    tf_array_init(&g_totals, TF_ELEM_I64, NULL, 1, (const int32_t[]){4});
 #line 4 "arrays.bas"
     c_frmMain = tf_form_new("frmMain");
 #line 5 "arrays.bas"

@@ -287,29 +287,48 @@ tf_string *tf_str_str_f64(double value);
 
 typedef enum tf_elem
 {
-    TF_ELEM_I32,   /* Integer, Integer-based Enum */
-    TF_ELEM_I64,   /* Long, Long-based Enum */
-    TF_ELEM_F64,   /* Double */
-    TF_ELEM_BOOL,  /* Boolean (int) */
-    TF_ELEM_STRING /* tf_string *, released when replaced or freed */
+    TF_ELEM_I32,    /* Integer, Integer-based Enum */
+    TF_ELEM_I64,    /* Long, Long-based Enum */
+    TF_ELEM_F64,    /* Double */
+    TF_ELEM_BOOL,   /* Boolean (int) */
+    TF_ELEM_STRING, /* tf_string *, released when replaced or freed */
+    TF_ELEM_RECORD  /* a user Type, handled through its tf_record_ops */
 } tf_elem;
+
+/*
+ * What the runtime needs to know about a user Type to keep records in
+ * arrays: generated code supplies one of these per Type. init makes a
+ * zeroed record ready (fixed arrays inside sized); free releases what it
+ * holds; copy makes `to` (already initialised) a deep copy of `from`.
+ */
+typedef struct tf_record_ops
+{
+    size_t size;
+    void (*init)(void *record);
+    void (*free)(void *record);
+    void (*copy)(void *to, const void *from);
+} tf_record_ops;
 
 typedef struct tf_array
 {
-    void *data;    /* NULL when empty */
-    int64_t count; /* elements */
-    int32_t rank;  /* dimensions, 0 when empty */
-    int32_t elem;  /* tf_elem */
-    int32_t fixed; /* Dim a(10): cannot be ReDim'd or Erased away */
-    int32_t locks; /* elements currently passed ByRef */
+    void *data;               /* NULL when empty */
+    int64_t count;            /* elements */
+    int32_t rank;             /* dimensions, 0 when empty */
+    int32_t elem;             /* tf_elem */
+    int32_t fixed;            /* Dim a(10): cannot be ReDim'd or Erased away */
+    int32_t locks;            /* elements currently passed ByRef */
+    const tf_record_ops *ops; /* TF_ELEM_RECORD only */
     int32_t upper[TF_ARRAY_MAX_RANK];
 } tf_array;
 
-/* A fixed array, all elements 0 / "" / False. */
-void tf_array_init(tf_array *a, tf_elem elem, int32_t rank, const int32_t *upper);
+/* A fixed array, all elements 0 / "" / False (records: their init). ops is
+   NULL except for TF_ELEM_RECORD. */
+void tf_array_init(tf_array *a, tf_elem elem, const tf_record_ops *ops, int32_t rank,
+                   const int32_t *upper);
 
 /* ReDim [Preserve]: an upper bound of -1 gives an empty dimension. */
-void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const int32_t *upper);
+void tf_array_redim(tf_array *a, tf_elem elem, const tf_record_ops *ops, int preserve, int32_t rank,
+                    const int32_t *upper);
 
 /* Erase: a dynamic array becomes empty; a fixed one keeps its size and has
    its elements reset. A Dim of the array inside a loop, run again, does
@@ -319,8 +338,13 @@ void tf_array_erase(tf_array *a);
 /* Releases everything the array holds (at the procedure's end). */
 void tf_array_free(tf_array *a);
 
-/* to = from: to (dynamic) becomes a copy; strings are shared by reference. */
+/* to = from: to (dynamic) becomes a copy; strings are shared by reference,
+   records deep-copied. */
 void tf_array_copy(tf_array *to, const tf_array *from);
+
+/* The same, for an array inside a record being copied: to may be fixed (it
+   then has from's shape already). */
+void tf_array_assign(tf_array *to, const tf_array *from);
 
 /* The address of an element, after checking each index (error 9). */
 void *tf_array_at1(tf_array *a, int64_t i);

@@ -397,6 +397,58 @@ Erase names                       ' a dynamic array becomes empty
   `Dim c As New Customer` does both. No `Set` keyword. Compare with
   `Is Nothing` / `IsNot Nothing`. Reference cycles are never freed.
 
+### Types (Settled, 27 Oct 2026)
+
+```vb
+Type Line
+    Item As String
+    Qty As Integer
+End Type
+
+Type Order
+    Customer As String
+    Lines() As Line          ' a dynamic array member
+    Totals(3) As Double      ' a fixed array member
+    Shipping As Address      ' another Type, held by value
+End Type
+
+Function NewOrder(who As String) As Order   ' a Function may return a Type
+    NewOrder.Customer = who
+    ReDim NewOrder.Lines(0)
+End Function
+
+Dim o As Order, copy As Order
+o = NewOrder("Ann")
+o.Lines(0).Qty = 2
+copy = o                     ' a deep copy: copy.Lines is a separate array
+```
+
+- **A Type is a value**: assignment copies the whole record, strings,
+  arrays and nested records included, so after `copy = o` the two share
+  nothing. A ByVal Type parameter is the callee's own copy (it may change
+  it freely); ByRef lets the callee change the caller's record.
+- **Types may contain arrays**, fixed and dynamic; `ReDim o.Lines(n)`,
+  `UBound(o.Lines)` and the rest work on them.
+- **A Function may return a Type**; the caller gets its own copy.
+- **Values and Refs convert by copying** (when Ref arrives): `r = c` makes r
+  refer to a new copy of c; `c = r` copies the record r refers to (error 91
+  if r is Nothing).
+- **`With ... End With` is in v1**, for Types (coming with Ref).
+
+### Types: details (Proposed)
+
+- Types are declared at module level. Members need a type (`As` or a
+  suffix). A Type cannot contain itself by value, directly or through
+  other Types (it would be infinitely large); a dynamic array of itself,
+  or a Ref, is fine.
+- Types cannot be compared with `=` or `<>` (compare members), joined
+  with `&`, or converted with CType.
+- A member of a Function's result can be read (`Make().Name`) but not
+  assigned to.
+- Copying into a record while one of its arrays is locked (an element
+  of it is being passed ByRef) is error 10, as ReDim of that array would
+  be.
+
 ## Forms and events (Settled, 23 Oct 2026)
 
 - A form's `Begin Form ... End` block of `Property = value` lines sits at the

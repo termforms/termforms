@@ -37,7 +37,7 @@ int main(void)
     /* A fixed 2-D array is column-major: (1,0) follows (0,0). */
     tf_array grid;
     const int32_t shape[2] = {2, 3}; /* Dim grid(2, 3): 3 x 4 elements */
-    tf_array_init(&grid, TF_ELEM_I32, 2, shape);
+    tf_array_init(&grid, TF_ELEM_I32, NULL, 2, shape);
     EXPECT(grid.count == 12, "Dim grid(2, 3) has 12 elements");
     *i32(&grid, 1, 0) = 7;
     EXPECT(((int32_t *)grid.data)[1] == 7, "column-major: (1,0) is the second element");
@@ -49,10 +49,10 @@ int main(void)
     /* ReDim Preserve of the last dimension keeps every element in place. */
     tf_array dyn;
     memset(&dyn, 0, sizeof dyn);
-    tf_array_redim(&dyn, TF_ELEM_I32, 0, 2, shape);
+    tf_array_redim(&dyn, TF_ELEM_I32, NULL, 0, 2, shape);
     *i32(&dyn, 2, 1) = 42;
     const int32_t wider[2] = {2, 9};
-    tf_array_redim(&dyn, TF_ELEM_I32, 1, 2, wider);
+    tf_array_redim(&dyn, TF_ELEM_I32, NULL, 1, 2, wider);
     EXPECT(*i32(&dyn, 2, 1) == 42, "Preserve keeps (2,1)");
     EXPECT(*i32(&dyn, 2, 9) == 0, "new elements are 0");
 
@@ -60,7 +60,7 @@ int main(void)
     tf_array names;
     memset(&names, 0, sizeof names);
     const int32_t five[1] = {4};
-    tf_array_redim(&names, TF_ELEM_STRING, 0, 1, five);
+    tf_array_redim(&names, TF_ELEM_STRING, NULL, 0, 1, five);
     for (int i = 0; i <= 4; ++i)
     {
         tf_str_assign((tf_string **)tf_array_at1(&names, i), text(i % 2 ? "odd" : "even"));
@@ -72,7 +72,7 @@ int main(void)
     EXPECT(strcmp(tf_str_cstr(*(tf_string **)tf_array_at1(&names, 0)), "even") == 0,
            "changing a copy leaves the original alone");
     const int32_t two[1] = {1};
-    tf_array_redim(&names, TF_ELEM_STRING, 1, 1, two);
+    tf_array_redim(&names, TF_ELEM_STRING, NULL, 1, 1, two);
     EXPECT(names.count == 2, "Preserve can shrink");
     EXPECT(strcmp(tf_str_cstr(*(tf_string **)tf_array_at1(&names, 1)), "odd") == 0,
            "shrinking keeps the front");
@@ -93,11 +93,11 @@ int main(void)
     EXPECT(tf_error_pending && tf_err_number() == 9, "index past UBound is error 9");
     tf_err_catch();
     tf_array_lock(&dyn);
-    tf_array_redim(&dyn, TF_ELEM_I32, 0, 2, shape);
+    tf_array_redim(&dyn, TF_ELEM_I32, NULL, 0, 2, shape);
     EXPECT(tf_error_pending && tf_err_number() == 10, "ReDim of a locked array is error 10");
     tf_err_catch();
     tf_array_unlock(&dyn);
-    tf_array_redim(&grid, TF_ELEM_I32, 0, 2, shape);
+    tf_array_redim(&grid, TF_ELEM_I32, NULL, 0, 2, shape);
     EXPECT(tf_error_pending && tf_err_number() == 10, "ReDim of a fixed array is error 10");
     tf_err_catch();
     (void)tf_array_ubound(&names, 1);

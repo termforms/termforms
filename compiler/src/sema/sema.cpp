@@ -58,18 +58,22 @@ struct TypeInfo
 {
     Type type;
     const EnumDef *def = nullptr;
+    const TypeDef *record = nullptr; // when type is Record
 
-    TypeInfo(Type t, const EnumDef *d = nullptr) : type(t), def(d) {}
+    TypeInfo(Type t, const EnumDef *d = nullptr, const TypeDef *r = nullptr)
+        : type(t), def(d), record(r)
+    {
+    }
 };
 
 TypeInfo infoOf(const Expr &e)
 {
-    return {e.type, e.enumDef};
+    return {e.type, e.enumDef, e.typeDef};
 }
 
 TypeInfo infoOf(const Variable &v)
 {
-    return {v.type, v.enumDef};
+    return {v.type, v.enumDef, v.typeDef};
 }
 
 // An Enum value as a number: its underlying Integer or Long.
@@ -93,10 +97,12 @@ public:
         }
         moduleNames_["Err"] = "built-in object";
         registerEnums();
+        registerTypes();
         registerControls();
         registerGlobals();
         registerProcedures();
         evaluateModuleConstants();
+        resolveTypeMembers();           // their array bounds may use the module's Consts
         for (auto &v : module_.globals) // bounds may use the module's Consts
         {
             if (v->rank > 0 && !v->isDynamic && v->type != Type::Error)
@@ -500,25 +506,27 @@ private:
         Expr &target = *s.target;
         if (target.kind == ExprKind::Name)
         {
-            if (Variable *v = lookupVariable(target.text); v != nullptr && v->rank > 0)
+            const Variable *v = lookupVariable(target.text);
+            if (v != nullptr && v->rank > 0)
             {
-                checkArrayAssignment(s, *v);
+                checkArrayAssignment(s); // b = a
                 return;
             }
-        }
-        checkExpr(*s.value);
-        if (target.kind == ExprKind::Name)
-        {
-            const Variable *v = lookupLocal(target.text);
-            v = v != nullptr ? v : globals_.count(target.text) ? globals_[target.text] : nullptr;
             if (v != nullptr && v->isConst)
             {
+                checkExpr(*s.value);
                 diagnostics_.error(target.location,
                                    "'" + target.text + "' is a Const and cannot be assigned to");
                 return;
             }
         }
         checkExpr(target);
+        if (target.kind == ExprKind::Member && target.field != nullptr && target.rank > 0)
+        {
+            checkArrayAssignment(s); // o.Lines = other
+            return;
+        }
+        checkExpr(*s.value);
 
         if (target.kind == ExprKind::Name && target.control != nullptr)
         {
@@ -538,9 +546,16 @@ private:
             diagnostics_.error(target.location, "an Enum member cannot be assigned to");
             return;
         }
-        if (target.kind == ExprKind::Index)
+        if (target.kind == ExprKind::Member && target.field != nullptr && !isLvalue(target))
         {
-            if (!readOnlyArray(*target.variable, target.location))
+            diagnostics_.error(target.location, "cannot assign to a member of a Function's "
+                                                "result; store the result in a variable first");
+            return;
+        }
+        if (target.kind == ExprKind::Index ||
+            (target.kind == ExprKind::Member && target.field != nullptr))
+        {
+            if (!readOnlyPath(target, target.location))
             {
                 requireAssignable(infoOf(target), infoOf(*s.value), s.value->location);
             }
@@ -571,6 +586,10 @@ private:
         if (target.type == Type::Enum)
         {
             return value.type == Type::Enum && value.def == target.def;
+        }
+        if (target.type == Type::Record || value.type == Type::Record)
+        {
+            return target.type == value.type && target.record == value.record;
         }
         const Type v = lowered(value);
         if (target.type == v)
@@ -720,15 +739,15 @@ private:
                 "argument " + std::to_string(i + 1) + " of '" + callee.name + "'";
             if (param.byRef)
             {
-                const bool element = arg.kind == ExprKind::Index;
-                if ((arg.kind != ExprKind::Name || arg.variable == nullptr) && !element)
+                if (!isLvalue(arg))
                 {
                     diagnostics_.error(arg.location, which + " is ByRef, so it must be a variable");
                 }
-                else if (element && readOnlyArray(*arg.variable, arg.location))
+                else if (readOnlyPath(arg, arg.location))
                 {
                 }
-                else if (arg.type != param.type || arg.enumDef != param.enumDef)
+                else if (arg.type != param.type || arg.enumDef != param.enumDef ||
+                         arg.typeDef != param.typeDef)
                 {
                     diagnostics_.error(arg.location, which + " is ByRef " + name(infoOf(param)) +
                                                          ", so it must be " +
@@ -789,6 +808,7 @@ private:
         }
         checkArguments(*e.procedure, e.args, e.location);
         e.enumDef = e.procedure->result->enumDef;
+        e.typeDef = e.procedure->result->typeDef;
         return e.procedure->result->type;
     }
 
@@ -876,8 +896,8 @@ private:
         }
     }
 
-    // Gives an "As <name>" variable its Enum; false (and an error) if there is
-    // no such type.
+    // Gives an "As <name>" variable its Enum or Type; false (and an error)
+    // if there is no such type.
     bool resolveType(Variable &v)
     {
         if (v.type != Type::Enum || v.enumDef != nullptr)
@@ -889,8 +909,88 @@ private:
             v.enumDef = it->second;
             return true;
         }
+        if (auto it = types_.find(v.typeName); it != types_.end())
+        {
+            v.type = Type::Record;
+            v.typeDef = it->second;
+            return true;
+        }
         unknownType(v.typeName, v.location);
         v.type = Type::Error;
+        return false;
+    }
+
+    void registerTypes()
+    {
+        for (auto &def : module_.types)
+        {
+            if (!def->name.empty() && claimModuleName(def->name, def->location, "Type"))
+            {
+                types_[def->name] = def.get();
+            }
+            std::set<std::string> seen;
+            for (const auto &m : def->members)
+            {
+                if (!seen.insert(m->name).second)
+                {
+                    diagnostics_.error(m->location, "Type " + def->name +
+                                                        " has two members named '" + m->name + "'");
+                }
+            }
+        }
+    }
+
+    // Member types and fixed array sizes; then no Type may contain itself
+    // by value (it would be infinitely large): through a Ref, or a dynamic
+    // array, it may.
+    void resolveTypeMembers()
+    {
+        for (auto &def : module_.types)
+        {
+            for (auto &m : def->members)
+            {
+                if (m->type != Type::Error && resolveType(*m) && m->rank > 0 && !m->isDynamic)
+                {
+                    resolveShape(*m);
+                }
+            }
+        }
+        for (auto &def : module_.types)
+        {
+            std::vector<const TypeDef *> path;
+            if (containsByValue(*def, *def, path))
+            {
+                std::string chain = def->name;
+                for (const TypeDef *t : path)
+                {
+                    chain += " -> " + t->name;
+                }
+                diagnostics_.error(def->location,
+                                   "Type " + def->name + " contains itself (" + chain +
+                                       "); use a Ref member, or a dynamic array, to point to "
+                                       "another " +
+                                       def->name);
+            }
+        }
+    }
+
+    static bool containsByValue(const TypeDef &outer, const TypeDef &inner,
+                                std::vector<const TypeDef *> &path)
+    {
+        for (const auto &m : inner.members)
+        {
+            if (m->type != Type::Record || m->typeDef == nullptr || m->isDynamic)
+            {
+                continue;
+            }
+            path.push_back(m->typeDef);
+            if (m->typeDef == &outer ||
+                (path.size() < 64 && containsByValue(outer, *m->typeDef, path)))
+            {
+                return true;
+            }
+            path.pop_back();
+        }
         return false;
     }
 
@@ -1376,6 +1476,11 @@ private:
             auto it = enums_.find(e.convertToName);
             if (it == enums_.end())
             {
+                if (types_.count(e.convertToName) != 0)
+                {
+                    diagnostics_.error(e.location, "CType cannot convert to a Type");
+                    return Type::Error;
+                }
                 unknownType(e.convertToName, e.location);
                 return Type::Error;
             }
@@ -1423,11 +1528,107 @@ private:
         }
     }
 
-    // "Integer", "Color".
+    // "Integer", "Color", "Customer".
     static std::string name(const TypeInfo &info)
     {
-        return info.type == Type::Enum && info.def != nullptr ? info.def->name
-                                                              : typeName(info.type);
+        if (info.type == Type::Enum && info.def != nullptr)
+        {
+            return info.def->name;
+        }
+        if (info.type == Type::Record && info.record != nullptr)
+        {
+            return info.record->name;
+        }
+        return typeName(info.type);
+    }
+
+    // -- Types ---------------------------------------------------------------
+
+    // record.Member: its type, and its rank if it is an array member.
+    Type resolveField(Expr &e, const TypeDef &def)
+    {
+        for (const auto &m : def.members)
+        {
+            if (m->name == e.text)
+            {
+                e.field = m.get();
+                e.enumDef = m->enumDef;
+                e.typeDef = m->typeDef;
+                e.rank = m->rank;
+                return m->type;
+            }
+        }
+        std::string message = "Type " + def.name + " has no member '" + e.text + "'";
+        for (const auto &m : def.members)
+        {
+            if (catalog::equalsIgnoringCase(m->name, e.text))
+            {
+                message += " (did you mean '" + m->name + "'? names are case-sensitive)";
+            }
+        }
+        diagnostics_.error(e.location, message);
+        return Type::Error;
+    }
+
+    // o.Lines(i): an element of an array member.
+    Type checkMemberIndex(Expr &e)
+    {
+        checkExpr(*e.left);
+        if (e.left->type == Type::Error)
+        {
+            for (auto &index : e.args)
+            {
+                checkExpr(*index);
+            }
+            return Type::Error;
+        }
+        if (e.left->field == nullptr || e.left->rank == 0)
+        {
+            for (auto &index : e.args)
+            {
+                checkExpr(*index);
+            }
+            diagnostics_.error(e.location, "'" + e.left->text + "' is not an array");
+            return Type::Error;
+        }
+        e.field = e.left->field; // marks it checked
+        return checkIndexArgs(e, *e.left->field, e.left->text);
+    }
+
+    // The variable an lvalue path starts from: c in c.Home.City, a in
+    // a(i).Name; null for a Function's result or anything else.
+    static const Variable *rootVariable(const Expr &e)
+    {
+        switch (e.kind)
+        {
+            case ExprKind::Name:
+                return e.variable;
+            case ExprKind::Index:
+                return e.left != nullptr ? rootVariable(*e.left) : e.variable;
+            case ExprKind::Member:
+                return e.field != nullptr ? rootVariable(*e.left) : nullptr;
+            default:
+                return nullptr;
+        }
+    }
+
+    // Can e be stored to or passed ByRef: a variable, an element, or a member
+    // of one (not a Function's result, a property or a constant)?
+    static bool isLvalue(const Expr &e)
+    {
+        return rootVariable(e) != nullptr && !(e.kind == ExprKind::Name && e.variable->isConst);
+    }
+
+    // A ByVal array parameter is read-only, and so is everything inside it.
+    bool readOnlyPath(const Expr &e, Location where)
+    {
+        const Variable *root = rootVariable(e);
+        return root != nullptr && root->rank > 0 && readOnlyArray(*root, where);
+    }
+
+    static std::string describeObject(const Expr &e)
+    {
+        return e.kind == ExprKind::Name || e.kind == ExprKind::Member ? "'" + e.text + "'" : "this";
     }
 
     // -- Arrays ------------------------------------------------------------
@@ -1490,29 +1691,35 @@ private:
         }
     }
 
-    // A bare array name where a whole array is wanted (b = a, ReDim, Erase,
-    // UBound, an array argument). Null, after an error, if it is not one.
-    Variable *wholeArray(Expr &e, const char *context)
+    // A whole array where one is wanted (b = a, ReDim, Erase, UBound, an
+    // array argument): an array variable, or a record's array member
+    // (o.Lines). Returns its declaration (the variable or the member), or
+    // null after an error.
+    const Variable *wholeArray(Expr &e, const char *context)
     {
-        Variable *v = e.kind == ExprKind::Name ? lookupVariable(e.text) : nullptr;
-        if (v == nullptr || v->rank == 0)
+        if (e.kind == ExprKind::Name)
         {
-            if (v == nullptr && e.kind == ExprKind::Name)
+            Variable *v = lookupVariable(e.text);
+            if (v != nullptr && v->rank > 0)
             {
-                checkExpr(e); // reports the undeclared name
+                e.variable = v;
+                e.type = v->type;
+                e.enumDef = v->enumDef;
+                e.typeDef = v->typeDef;
+                e.rank = v->rank;
+                return v;
             }
-            else
-            {
-                checkExpr(e);
-                diagnostics_.error(e.location, std::string(context) + " needs an array here");
-            }
-            return nullptr;
         }
-        e.variable = v;
-        e.type = v->type;
-        e.enumDef = v->enumDef;
-        e.rank = v->rank;
-        return v;
+        const Type t = checkExpr(e); // reports an undeclared name, and so on
+        if (e.kind == ExprKind::Member && e.field != nullptr && e.rank > 0)
+        {
+            return e.field;
+        }
+        if (t != Type::Error)
+        {
+            diagnostics_.error(e.location, std::string(context) + " needs an array here");
+        }
+        return nullptr;
     }
 
     // "the array 'a' is ByVal here": its elements and size cannot change.
@@ -1538,7 +1745,15 @@ private:
     {
         e.kind = ExprKind::Index;
         e.variable = &v;
-        e.enumDef = v.enumDef;
+        return checkIndexArgs(e, v, v.name);
+    }
+
+    // The indexes of a(i, j) or o.Lines(i, j), checked against the array's
+    // declaration; the element's type.
+    Type checkIndexArgs(Expr &e, const Variable &array, const std::string &arrayName)
+    {
+        e.enumDef = array.enumDef;
+        e.typeDef = array.typeDef;
         bool ok = true;
         for (auto &index : e.args)
         {
@@ -1552,51 +1767,51 @@ private:
                 ok = false;
             }
         }
-        if (static_cast<int>(e.args.size()) != v.rank)
+        if (static_cast<int>(e.args.size()) != array.rank)
         {
-            diagnostics_.error(e.location, "'" + v.name + "' has " + dimensions(v.rank) +
-                                               ", so it needs " + std::to_string(v.rank) +
-                                               (v.rank == 1 ? " index" : " indexes") + ", not " +
-                                               std::to_string(e.args.size()));
+            diagnostics_.error(e.location, "'" + arrayName + "' has " + dimensions(array.rank) +
+                                               ", so it needs " + std::to_string(array.rank) +
+                                               (array.rank == 1 ? " index" : " indexes") +
+                                               ", not " + std::to_string(e.args.size()));
             ok = false;
         }
-        return ok ? v.type : Type::Error;
+        return ok ? array.type : Type::Error;
     }
 
     // b = a: copies the elements; b must be dynamic (or an array parameter
     // passed ByRef) and of the same element type and dimensions.
-    void checkArrayAssignment(Stmt &s, Variable &target)
+    void checkArrayAssignment(Stmt &s)
     {
-        wholeArray(*s.target, "assignment");
-        Variable *source = wholeArray(*s.value, "assigning to an array");
-        if (source == nullptr || readOnlyArray(target, s.target->location))
+        const Variable *target = wholeArray(*s.target, "assignment");
+        const Variable *source = wholeArray(*s.value, "assigning to an array");
+        if (target == nullptr || source == nullptr || readOnlyPath(*s.target, s.target->location))
         {
             return;
         }
-        if (!target.isDynamic)
+        if (!target->isDynamic)
         {
-            diagnostics_.error(s.target->location, "'" + target.name +
-                                                       "' is a fixed array and cannot be assigned "
-                                                       "to; declare it Dim " +
-                                                       target.name + "() to copy arrays into it");
+            diagnostics_.error(
+                s.target->location,
+                "'" + target->name + "' is a fixed array and cannot be assigned to; declare it " +
+                    (target->isMember ? "" : "Dim ") + target->name + "() to copy arrays into it");
             return;
         }
-        if (source->type != target.type || source->enumDef != target.enumDef ||
-            source->rank != target.rank)
+        if (source->type != target->type || source->enumDef != target->enumDef ||
+            source->typeDef != target->typeDef || source->rank != target->rank)
         {
             diagnostics_.error(s.value->location,
                                "cannot assign an array of " + name(infoOf(*source)) + " with " +
                                    dimensions(source->rank) + " to an array of " +
-                                   name(infoOf(target)) + " with " + dimensions(target.rank));
+                                   name(infoOf(*target)) + " with " + dimensions(target->rank));
         }
     }
 
-    // ReDim [Preserve] a(n, m), ...
+    // ReDim [Preserve] a(n, m), o.Lines(n), ...: each target was parsed as
+    // a Call (a(n)) or a member Index (o.Lines(n)); its arguments are bounds.
     void checkReDim(Stmt &s)
     {
         for (auto &target : s.args)
         {
-            Variable *v = lookupVariable(target->text);
             for (auto &bound : target->args)
             {
                 checkExpr(*bound);
@@ -1609,29 +1824,52 @@ private:
                             (t == Type::Long || t == Type::Double ? "; use CInt" : ""));
                 }
             }
-            if (v == nullptr || v->rank == 0)
+            const Variable *v = nullptr;
+            std::string arrayName = target->text;
+            if (target->kind == ExprKind::Call)
             {
-                diagnostics_.error(target->location, "ReDim needs an array, declared with Dim " +
-                                                         target->text + "()");
+                Variable *found = lookupVariable(target->text);
+                if (found == nullptr || found->rank == 0)
+                {
+                    diagnostics_.error(target->location,
+                                       "ReDim needs an array, declared with Dim " + target->text +
+                                           "()");
+                    continue;
+                }
+                target->variable = found;
+                v = found;
+            }
+            else if (target->kind == ExprKind::Index && target->left != nullptr)
+            {
+                v = wholeArray(*target->left, "ReDim");
+                arrayName = target->left->text;
+                if (v == nullptr)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                diagnostics_.error(target->location, "ReDim needs an array and its new bounds");
                 continue;
             }
-            target->variable = v;
-            if (readOnlyArray(*v, target->location))
+            if ((target->left != nullptr ? readOnlyPath(*target->left, target->location)
+                                         : readOnlyArray(*v, target->location)))
             {
                 continue;
             }
             if (!v->isDynamic)
             {
                 diagnostics_.error(target->location,
-                                   "'" + v->name +
-                                       "' is a fixed array; only a dynamic array (Dim " + v->name +
-                                       "()) can be ReDim'd");
+                                   "'" + arrayName +
+                                       "' is a fixed array; only a dynamic array (Dim " +
+                                       arrayName + "()) can be ReDim'd");
                 continue;
             }
             if (static_cast<int>(target->args.size()) != v->rank)
             {
                 diagnostics_.error(target->location,
-                                   "'" + v->name + "' has " + dimensions(v->rank) +
+                                   "'" + arrayName + "' has " + dimensions(v->rank) +
                                        ", so ReDim needs " + std::to_string(v->rank) +
                                        (v->rank == 1 ? " bound" : " bounds") + ", not " +
                                        std::to_string(target->args.size()));
@@ -1641,11 +1879,11 @@ private:
 
     void checkErase(Stmt &s)
     {
-        for (auto &name : s.args)
+        for (auto &array : s.args)
         {
-            if (Variable *v = wholeArray(*name, "Erase"))
+            if (wholeArray(*array, "Erase") != nullptr)
             {
-                readOnlyArray(*v, name->location);
+                readOnlyPath(*array, array->location);
             }
         }
     }
@@ -1664,7 +1902,7 @@ private:
                                                "' takes an array and, optionally, a dimension");
             return Type::Error;
         }
-        Variable *v = wholeArray(*e.args[0], b.name);
+        const Variable *v = wholeArray(*e.args[0], b.name);
         if (e.args.size() == 2)
         {
             checkExpr(*e.args[1]);
@@ -1694,12 +1932,13 @@ private:
                             Expr &arg)
     {
         const std::string which = "argument " + std::to_string(i + 1) + " of '" + callee.name + "'";
-        Variable *v = wholeArray(arg, which.c_str());
+        const Variable *v = wholeArray(arg, which.c_str());
         if (v == nullptr || param.type == Type::Error)
         {
             return;
         }
-        if (v->type != param.type || v->enumDef != param.enumDef || v->rank != param.rank)
+        if (v->type != param.type || v->enumDef != param.enumDef || v->typeDef != param.typeDef ||
+            v->rank != param.rank)
         {
             diagnostics_.error(arg.location, which + " must be an array of " + name(infoOf(param)) +
                                                  " with " + dimensions(param.rank) + ", not of " +
@@ -1708,7 +1947,7 @@ private:
         }
         if (param.byRef)
         {
-            readOnlyArray(*v, arg.location);
+            readOnlyPath(arg, arg.location);
         }
     }
 
@@ -1951,7 +2190,9 @@ private:
             case ExprKind::Constant:
                 return e.type; // set when the Const or member was replaced
             case ExprKind::Index:
-                return e.type; // already checked as a Call, which it was parsed as
+                // a(i) was a Call the checks turned into an Index; o.Lines(i)
+                // was parsed as one and is checked here.
+                return e.left != nullptr && e.field == nullptr ? checkMemberIndex(e) : e.type;
             case ExprKind::StringLiteral:
                 return Type::String;
             case ExprKind::BooleanLiteral:
@@ -2012,6 +2253,7 @@ private:
         {
             e.variable = v;
             e.enumDef = v->enumDef;
+            e.typeDef = v->typeDef;
             if (e.suffix != 0 && suffixType(e.suffix) != v->type)
             {
                 diagnostics_.error(e.location, "'" + e.text + e.suffix + "' does not match '" +
@@ -2040,6 +2282,14 @@ private:
         if (e.text == "Err")
         {
             diagnostics_.error(e.location, "Err is used through its properties, as in Err.Number");
+            return Type::Error;
+        }
+        if (types_.count(e.text) != 0)
+        {
+            diagnostics_.error(e.location, "'" + e.text +
+                                               "' is a Type; declare a variable of it, "
+                                               "as in Dim x As " +
+                                               e.text);
             return Type::Error;
         }
         if (auto it = enums_.find(e.text); it != enums_.end())
@@ -2127,10 +2377,15 @@ private:
         {
             return Type::Error;
         }
+        if (objectType == Type::Record && object.rank == 0)
+        {
+            return resolveField(e, *object.typeDef);
+        }
         if (object.control == nullptr)
         {
-            diagnostics_.error(object.location, "'" + object.text + "' is " + article(objectType) +
-                                                    " and has no properties");
+            diagnostics_.error(object.location, describeObject(object) + " is " +
+                                                    article(infoOf(object)) +
+                                                    " and has no members or properties");
             return Type::Error;
         }
         const catalog::ControlType *type = catalog::findType(object.control->typeName);
@@ -2192,6 +2447,12 @@ private:
         {
             return operandError(e, l, r);
         }
+        if (comparison && (l == Type::Record || r == Type::Record))
+        {
+            diagnostics_.error(e.location,
+                               "Types cannot be compared with '" + op + "'; compare their members");
+            return Type::Error;
+        }
         l = lowered(infoOf(*e.left));
         r = lowered(infoOf(*e.right));
         const bool numeric = isNumeric(l) && isNumeric(r);
@@ -2199,7 +2460,7 @@ private:
         if (op == "&")
         {
             // The one implicit conversion: numbers and Booleans become text.
-            if (l == Type::Control || r == Type::Control)
+            if (l == Type::Control || r == Type::Control || l == Type::Record || r == Type::Record)
             {
                 return operandError(e, l, r);
             }
@@ -2294,11 +2555,15 @@ private:
     // "an Integer", "a Color" (an Enum by its name).
     static std::string article(const TypeInfo &info)
     {
-        if (info.type == Type::Enum && info.def != nullptr)
+        const std::string *named = info.type == Type::Enum && info.def != nullptr ? &info.def->name
+                                   : info.type == Type::Record && info.record != nullptr
+                                       ? &info.record->name
+                                       : nullptr;
+        if (named != nullptr)
         {
-            const char c = info.def->name.empty() ? 'x' : info.def->name[0];
+            const char c = named->empty() ? 'x' : (*named)[0];
             const bool vowel = std::string("AEIOUaeiou").find(c) != std::string::npos;
-            return (vowel ? "an " : "a ") + info.def->name;
+            return (vowel ? "an " : "a ") + *named;
         }
         switch (info.type)
         {
@@ -2332,6 +2597,7 @@ private:
     std::vector<std::map<std::string, Variable *>> scopes_;
     std::vector<const Stmt *> loops_;
     std::map<std::string, EnumDef *> enums_;
+    std::map<std::string, TypeDef *> types_;
     bool foldReported_ = false; // fold() has reported why a constant failed
     int catchDepth_ = 0;        // Catch blocks around the statement (for a bare Throw)
     // For each Finally around the statement, how many loops were already

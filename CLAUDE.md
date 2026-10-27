@@ -81,8 +81,12 @@ authoritative for design rationale.
   Step 5a done (27 Oct 2026): arrays (multi-dimensional, 0-based, fixed vs
   dynamic, ReDim [Preserve], Erase, UBound/LBound, copies on assignment,
   array parameters, element ByRef locks its array).
-- **Next:** step 5b (Types and Ref: settle the open details with Jim
-  first), then 5c (Dictionary: settle its design first).
+  Step 5b-1 done (27 Oct 2026): Types (value records; arrays of and in
+  Types; Type parameters, ByVal copied; Functions returning Types). Jim
+  settled: values and Refs convert by copying, arrays in Types, Type
+  results, With in v1.
+- **Next:** 5b-2 Ref/New/Nothing/Is (design settled), 5b-3 With, then 5c
+  Dictionary (settle its design with Jim first).
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -251,6 +255,16 @@ Key mechanisms:
   ByRef: its address is taken and checked first, then the array is
   locked around the call (`lockedAround`). Sema turns `a(i)` Calls into
   `ExprKind::Index`; a bare array name is accepted only via `wholeArray`.
+- **Types in C:** a struct `t_<Type>` (members `f_<name>`) with generated
+  `_init/_free/_copy` (void * signatures; copy builds a fresh record then
+  moves it in, so copying from inside itself is safe) and `_busy` (an
+  array in it is locked: copy raises 10); `t_<Type>_ops` (tf_record_ops)
+  only for Types some array holds (TF_ELEM_RECORD). ByVal record params
+  arrive as `const t_X *a_<name>` and are copied into local `v_<name>`;
+  Functions return records by value (caller frees the temporary). The
+  per-statement `releases` list holds whole C statements
+  (`tf_str_release(t1);`, `t_X_free(&t2);`). Codegen paths: `lvalue()`,
+  `address()`, `wholeArrayRef()`; a ByRef path through arrays locks each.
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in

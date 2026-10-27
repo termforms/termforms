@@ -92,7 +92,7 @@ struct TryContext
 struct StatementScope
 {
     std::vector<std::string> prelude;  // "tf_string *t1 = ...;", run first
-    std::vector<std::string> releases; // string temporaries to release afterwards
+    std::vector<std::string> releases; // "tf_str_release(t1);": run after the statement
     int temps = 0;                     // temporaries so far, for t1, t2, ...
 
     // Function calls in the statement not yet made, and locals the
@@ -127,6 +127,229 @@ public:
     }
 
 private:
+    // -- Types (records) -----------------------------------------------------
+
+    // Each Type becomes a C struct (members f_<name>) and four helpers the
+    // runtime and generated code share through its tf_record_ops: init (a
+    // zeroed record, its fixed arrays sized), free, copy (deep: strings
+    // retained, arrays and nested records copied) and, if it holds arrays,
+    // busy (an array in it is locked, so it must not be overwritten).
+    void emitTypes(std::ostringstream &out)
+    {
+        if (module_.types.empty())
+        {
+            return;
+        }
+        out << "/* Types */\n";
+        for (const auto &def : module_.types)
+        {
+            out << "typedef struct t_" << def->name << " t_" << def->name << ";\n";
+        }
+        // Types some array holds: those need a tf_record_ops for the runtime.
+        std::set<const TypeDef *> inArrays;
+        auto note = [&inArrays](const Variable &v) {
+            if (v.rank > 0 && v.type == Type::Record)
+            {
+                inArrays.insert(v.typeDef);
+            }
+        };
+        for (const auto &v : module_.globals)
+        {
+            note(*v);
+        }
+        for (const auto &proc : module_.procedures)
+        {
+            for (const auto &v : proc->locals)
+            {
+                note(*v);
+            }
+            for (const auto &v : proc->parameters)
+            {
+                note(*v);
+            }
+        }
+        for (const auto &def : module_.types)
+        {
+            for (const auto &m : def->members)
+            {
+                note(*m);
+            }
+        }
+        out << '\n';
+        std::set<const TypeDef *> done;
+        for (const auto &def : module_.types)
+        {
+            emitStruct(out, *def, done);
+        }
+        for (const auto &def : module_.types)
+        {
+            const std::string t = "t_" + def->name;
+            out << "static void " << t << "_init(void *record);\n"
+                << "static void " << t << "_free(void *record);\n"
+                << "static void " << t << "_copy(void *to, const void *from);\n";
+            if (holdsArrays(*def))
+            {
+                out << "static int " << t << "_busy(const " << t << " *x);\n";
+            }
+            if (inArrays.count(def.get()) != 0) // only arrays of the Type need it
+            {
+                out << "static const tf_record_ops " << t << "_ops = {sizeof(" << t << "), " << t
+                    << "_init, " << t << "_free, " << t << "_copy};\n";
+            }
+        }
+        out << '\n';
+        for (const auto &def : module_.types)
+        {
+            emitTypeHelpers(out, *def);
+        }
+    }
+
+    // A struct after the structs it holds by value.
+    void emitStruct(std::ostringstream &out, const TypeDef &def, std::set<const TypeDef *> &done)
+    {
+        if (!done.insert(&def).second)
+        {
+            return;
+        }
+        for (const auto &m : def.members)
+        {
+            if (m->type == Type::Record && m->rank == 0)
+            {
+                emitStruct(out, *m->typeDef, done);
+            }
+        }
+        out << "struct t_" << def.name << "\n{\n";
+        for (const auto &m : def.members)
+        {
+            out << "    "
+                << (m->rank > 0 ? "tf_array f_" + m->name : declarationOf(*m, "f_" + m->name))
+                << ";\n";
+        }
+        out << "};\n\n";
+    }
+
+    // Does a record of this Type hold any array, directly or in a member?
+    static bool holdsArrays(const TypeDef &def)
+    {
+        for (const auto &m : def.members)
+        {
+            if (m->rank > 0 || (m->type == Type::Record && holdsArrays(*m->typeDef)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void emitTypeHelpers(std::ostringstream &out, const TypeDef &def)
+    {
+        const std::string t = "t_" + def.name;
+
+        out << "static void " << t << "_init(void *record)\n{\n"
+            << "    " << t << " *x = record;\n"
+            << "    const " << t << " empty = {0};\n"
+            << "    *x = empty;\n";
+        for (const auto &m : def.members)
+        {
+            if (m->rank > 0 && !m->isDynamic)
+            {
+                out << "    " << arrayInit(*m, "&x->f_" + m->name) << '\n';
+            }
+            else if (m->rank == 0 && m->type == Type::Record)
+            {
+                out << "    t_" << m->typeDef->name << "_init(&x->f_" << m->name << ");\n";
+            }
+        }
+        out << "}\n\n";
+
+        out << "static void " << t << "_free(void *record)\n{\n"
+            << "    " << t << " *x = record;\n";
+        bool freed = false;
+        for (const auto &m : def.members)
+        {
+            const std::string f = "x->f_" + m->name;
+            if (m->rank > 0)
+            {
+                out << "    tf_array_free(&" << f << ");\n";
+            }
+            else if (m->type == Type::String)
+            {
+                out << "    tf_str_release(" << f << ");\n";
+            }
+            else if (m->type == Type::Record)
+            {
+                out << "    t_" << m->typeDef->name << "_free(&" << f << ");\n";
+            }
+            else
+            {
+                continue;
+            }
+            freed = true;
+        }
+        if (!freed)
+        {
+            out << "    (void)x;\n";
+        }
+        out << "}\n\n";
+
+        // Built in a fresh record, then moved in, so copying a record into
+        // one that holds it (c = c.Kids(0)) never reads freed memory.
+        out << "static void " << t << "_copy(void *to, const void *from)\n{\n"
+            << "    " << t << " *x = to;\n"
+            << "    const " << t << " *y = from;\n"
+            << "    " << t << " fresh;\n"
+            << "    if (x == y)\n    {\n        return;\n    }\n";
+        if (holdsArrays(def))
+        {
+            out << "    if (" << t << "_busy(x))\n    {\n"
+                << "        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);\n        return;\n    }\n";
+        }
+        out << "    " << t << "_init(&fresh);\n";
+        for (const auto &m : def.members)
+        {
+            const std::string to = "fresh.f_" + m->name;
+            const std::string from = "y->f_" + m->name;
+            if (m->rank > 0)
+            {
+                out << "    tf_array_assign(&" << to << ", &" << from << ");\n";
+            }
+            else if (m->type == Type::String)
+            {
+                out << "    " << to << " = tf_str_ref(" << from << ");\n";
+            }
+            else if (m->type == Type::Record)
+            {
+                out << "    t_" << m->typeDef->name << "_copy(&" << to << ", &" << from << ");\n";
+            }
+            else
+            {
+                out << "    " << to << " = " << from << ";\n";
+            }
+        }
+        out << "    " << t << "_free(x);\n"
+            << "    *x = fresh;\n}\n\n";
+
+        if (holdsArrays(def))
+        {
+            std::string busy;
+            for (const auto &m : def.members)
+            {
+                if (m->rank > 0)
+                {
+                    busy += (busy.empty() ? "" : " || ") + std::string("x->f_") + m->name +
+                            ".locks > 0";
+                }
+                else if (m->type == Type::Record && holdsArrays(*m->typeDef))
+                {
+                    busy += (busy.empty() ? "" : " || ") + std::string("t_") + m->typeDef->name +
+                            "_busy(&x->f_" + m->name + ")";
+                }
+            }
+            out << "static int " << t << "_busy(const " << t << " *x)\n{\n"
+                << "    return " << busy << ";\n}\n\n";
+        }
+    }
+
     // -- File-level parts --------------------------------------------------
 
     void emitHeader(std::ostringstream &out)
@@ -135,6 +358,7 @@ private:
             << ".\n"
             << " * Do not edit: changes are lost on the next build. */\n"
             << "#include \"termforms/tf_runtime.h\"\n\n";
+        emitTypes(out);
 
         if (module_.form != nullptr)
         {
@@ -157,7 +381,7 @@ private:
                 {
                     out << "static "
                         << (v->rank > 0 ? "tf_array g_" + v->name
-                                        : declaration(storage(*v), "g_" + v->name))
+                                        : declarationOf(*v, "g_" + v->name))
                         << ";\n";
                 }
             }
@@ -189,7 +413,7 @@ private:
     static std::string signature(const Procedure &proc)
     {
         std::string out = "static ";
-        out += proc.isFunction ? cType(storage(*proc.result)) : "void";
+        out += proc.isFunction ? cTypeOf(*proc.result) : "void";
         if (out.back() != '*')
         {
             out += ' ';
@@ -202,10 +426,13 @@ private:
         for (std::size_t i = 0; i < proc.parameters.size(); ++i)
         {
             const Variable &p = *proc.parameters[i];
+            // A ByVal record comes by pointer (a_<name>) and is copied into the
+            // local v_<name> on entry.
             out += (i == 0 ? "" : ", ") +
-                   (p.rank > 0
-                        ? "tf_array *v_" + p.name
-                        : declaration(storage(p), std::string(p.byRef ? "*" : "") + "v_" + p.name));
+                   (p.rank > 0 ? "tf_array *v_" + p.name
+                    : p.type == Type::Record && !p.byRef
+                        ? "const " + cTypeOf(p) + " *a_" + p.name
+                        : declarationOf(p, std::string(p.byRef ? "*" : "") + "v_" + p.name));
         }
         return out + ")";
     }
@@ -228,10 +455,18 @@ private:
             if (v->type != Type::Error && !v->isConst)
             {
                 out << "    "
-                    << (v->rank > 0
-                            ? "tf_array " + names_.at(v.get()) + " = {0}"
-                            : declaration(storage(*v), names_.at(v.get())) + " = " + zero(v->type))
+                    << (v->rank > 0 ? "tf_array " + names_.at(v.get()) + " = {0}"
+                        : v->type == Type::Record
+                            ? declarationOf(*v, names_.at(v.get()))
+                            : declarationOf(*v, names_.at(v.get())) + " = " + zero(v->type))
                     << ";\n";
+            }
+        }
+        for (const auto &p : proc.parameters) // a ByVal record: the callee's own copy
+        {
+            if (p->type == Type::Record && !p->byRef && p->rank == 0)
+            {
+                out << "    t_" << p->typeDef->name << " v_" << p->name << ";\n";
             }
         }
         for (const auto &v : proc.locals) // fixed arrays get their size at once
@@ -240,10 +475,29 @@ private:
             {
                 out << "    " << arrayInit(*v, "&" + names_.at(v.get())) << '\n';
             }
+            else if (v->rank == 0 && v->type == Type::Record && !v->isConst)
+            {
+                out << "    t_" << v->typeDef->name << "_init(&" << names_.at(v.get()) << ");\n";
+            }
         }
-        if (proc.isFunction)
+        for (const auto &p : proc.parameters)
         {
-            out << "    " << declaration(storage(*proc.result), "r_" + proc.name) << " = "
+            if (p->type == Type::Record && !p->byRef && p->rank == 0)
+            {
+                const std::string t = "t_" + p->typeDef->name;
+                out << "    " << t << "_init(&v_" << p->name << "); " << t << "_copy(&v_" << p->name
+                    << ", a_" << p->name << ");\n";
+            }
+        }
+        if (proc.isFunction && proc.result->type == Type::Record)
+        {
+            // Returned by value: the caller owns (and frees) what it gets.
+            out << "    " << declarationOf(*proc.result, "r_" + proc.name) << ";\n"
+                << "    t_" << proc.result->typeDef->name << "_init(&r_" << proc.name << ");\n";
+        }
+        else if (proc.isFunction)
+        {
+            out << "    " << declarationOf(*proc.result, "r_" + proc.name) << " = "
                 << zero(proc.result->type) << ";\n";
         }
         for (const auto &p : proc.parameters)
@@ -262,12 +516,20 @@ private:
             {
                 cleanup_ += " tf_str_release(v_" + p->name + ");";
             }
+            else if (p->type == Type::Record && !p->byRef && p->rank == 0)
+            {
+                cleanup_ += " t_" + p->typeDef->name + "_free(&v_" + p->name + ");";
+            }
         }
         for (const auto &v : proc.locals)
         {
             if (v->rank > 0 && v->type != Type::Error)
             {
                 cleanup_ += " tf_array_free(&" + names_.at(v.get()) + ");";
+            }
+            else if (v->type == Type::Record && !v->isConst)
+            {
+                cleanup_ += " t_" + v->typeDef->name + "_free(&" + names_.at(v.get()) + ");";
             }
             else if (v->type == Type::String && !v->isConst)
             {
@@ -317,6 +579,11 @@ private:
             {
                 line(out, v->location);
                 out << "    " << arrayInit(*v, "&g_" + v->name) << '\n';
+            }
+            else if (v->rank == 0 && v->type == Type::Record && !v->isConst)
+            {
+                line(out, v->location);
+                out << "    t_" << v->typeDef->name << "_init(&g_" << v->name << ");\n";
             }
         }
 
@@ -420,11 +687,14 @@ private:
                     std::string code;
                     for (const Variable *v : s.declared)
                     {
+                        const std::string n = names_.at(v);
                         code += (code.empty() ? "" : " ") +
-                                (v->rank > 0 ? "tf_array_erase(&" + names_.at(v) + ");"
-                                 : v->type == Type::String
-                                     ? "tf_str_assign(&" + names_.at(v) + ", NULL);"
-                                     : names_.at(v) + " = 0;");
+                                (v->rank > 0 ? "tf_array_erase(&" + n + ");"
+                                 : v->type == Type::Record
+                                     ? "t_" + v->typeDef->name + "_free(&" + n + "); t_" +
+                                           v->typeDef->name + "_init(&" + n + ");"
+                                 : v->type == Type::String ? "tf_str_assign(&" + n + ", NULL);"
+                                                           : n + " = 0;");
                     }
                     emitLine(out, s.location, depth, code);
                 }
@@ -459,7 +729,7 @@ private:
             case StmtKind::Assign:
                 code = wrap(scope, assignment(s, scope));
                 // An element or whole-array store fails in the store itself.
-                if (checks_ && (s.target->kind == ExprKind::Index || s.target->rank > 0))
+                if (checks_ && storeMayFail(*s.target))
                 {
                     code += " if (tf_error_pending) " + failJump();
                 }
@@ -472,7 +742,7 @@ private:
                 for (const auto &name : s.args)
                 {
                     code += (code.empty() ? "" : " ") + std::string("tf_array_erase(") +
-                            arrayRef(*name->variable) + ");";
+                            wholeArrayRef(*name, scope) + ");";
                 }
                 code += checks_ ? " if (tf_error_pending) " + failJump() : "";
                 break;
@@ -998,9 +1268,9 @@ private:
             return;
         }
         std::string releases;
-        for (const std::string &t : scope.releases)
+        for (const std::string &r : scope.releases)
         {
-            releases += "tf_str_release(" + t + "); ";
+            releases += r + " ";
         }
         scope.prelude.push_back(releases.empty()
                                     ? "if (tf_error_pending) " + failJump()
@@ -1016,10 +1286,17 @@ private:
             return v;
         }
         const std::string temp = scope.newTemp();
-        scope.prelude.push_back(declaration(storage(e), temp) + " = " + v.code + ";");
+        if (e.type == Type::Record) // a record: park its address, not a copy
+        {
+            scope.prelude.push_back(cTypeOf(e) + " *" + temp + " = &" + parenthesised(v.code) +
+                                    ";");
+            checkpoint(scope);
+            return {"(*" + temp + ")", false};
+        }
+        scope.prelude.push_back(declarationOf(e, temp) + " = " + v.code + ";");
         if (v.owned)
         {
-            scope.releases.push_back(temp);
+            scope.releases.push_back("tf_str_release(" + temp + ");");
         }
         checkpoint(scope);
         return {temp, false};
@@ -1161,22 +1438,33 @@ private:
     {
         const Expr &target = *s.target;
 
-        if (target.rank > 0) // b = a: copy the whole array
+        if (target.rank > 0) // b = a, o.Lines = other: copy the whole array
         {
-            return "tf_array_copy(" + arrayRef(*target.variable) + ", " +
-                   arrayRef(*s.value->variable) + ");";
+            const std::string to = wholeArrayRef(target, scope);
+            return "tf_array_copy(" + to + ", " + wholeArrayRef(*s.value, scope) + ");";
         }
-        if (target.kind == ExprKind::Index)
+        if (target.kind == ExprKind::Index ||
+            (target.kind == ExprKind::Member && target.field != nullptr))
         {
-            // Indexes first (left to right), then the value; the element's
-            // address is taken last, after any call that might ReDim.
-            const std::string at = elementAddress(target, scope);
-            const Value v = settle(*s.value, expr(*s.value, scope), scope);
-            if (target.type == Type::String)
+            // The target's indexes first (left to right), then the value; any
+            // element's address is taken last, after a call that might ReDim.
+            if (target.type == Type::Record || target.type == Type::String ||
+                target.kind == ExprKind::Index)
             {
-                return "tf_str_assign((tf_string **)" + at + ", " + ownedCode(v) + ");";
+                const std::string at = address(target, scope);
+                const Value v = settle(*s.value, expr(*s.value, scope), scope);
+                if (target.type == Type::Record)
+                {
+                    return copyRecord(target, at, v);
+                }
+                if (target.type == Type::String)
+                {
+                    return "tf_str_assign(" + at + ", " + ownedCode(v) + ");";
+                }
+                return "*" + at + " = " + v.code + ";";
             }
-            return "*" + pointerCast(storage(target)) + at + " = " + v.code + ";";
+            const std::string to = lvalue(target, scope);
+            return to + " = " + settle(*s.value, expr(*s.value, scope), scope).code + ";";
         }
 
         if (target.kind == ExprKind::Member)
@@ -1196,11 +1484,146 @@ private:
 
         const Variable &var = *target.variable;
         const Value v = settle(*s.value, expr(*s.value, scope), scope);
+        if (target.type == Type::Record)
+        {
+            return copyRecord(target, variableAddress(var), v);
+        }
         if (target.type == Type::String)
         {
             return "tf_str_assign(" + variableAddress(var) + ", " + ownedCode(v) + ");";
         }
         return variableValue(var) + " = " + v.code + ";";
+    }
+
+    // to = value for records: a deep copy (an owned value, a Function's
+    // result, is freed after the statement like any temporary).
+    std::string copyRecord(const Expr &target, const std::string &to, const Value &v)
+    {
+        return "t_" + target.typeDef->name + "_copy(" + to + ", &" + parenthesised(v.code) + ");";
+    }
+
+    // Does storing into this target do work that can fail: find an element,
+    // copy an array or a record (which may be locked)?
+    static bool storeMayFail(const Expr &target)
+    {
+        if (target.rank > 0 || target.type == Type::Record || target.kind == ExprKind::Index)
+        {
+            return true;
+        }
+        return target.kind == ExprKind::Member && target.field != nullptr &&
+               storeMayFail(*target.left);
+    }
+
+    // -- Paths: variables, elements, members -------------------------------------
+
+    // The C lvalue of a variable, an element or a member path, as stored to
+    // (never snapshotted). arrays, if given, collects the arrays the path's
+    // elements live in, for locking around a call that receives it ByRef.
+    std::string lvalue(const Expr &e, StatementScope &scope,
+                       std::vector<std::string> *arrays = nullptr)
+    {
+        switch (e.kind)
+        {
+            case ExprKind::Name:
+                return variableValue(*e.variable);
+            case ExprKind::Index:
+                return "(*" + address(e, scope, arrays) + ")";
+            case ExprKind::Member:
+                return parenthesised(lvalue(*e.left, scope, arrays)) + ".f_" + e.text;
+            default:
+                return expr(e, scope).code; // a Function's result, read through
+        }
+    }
+
+    // The address of a path: &v_c, (int32_t *)tf_array_at1(&v_a, i), &v_o.f_Name.
+    std::string address(const Expr &e, StatementScope &scope,
+                        std::vector<std::string> *arrays = nullptr)
+    {
+        switch (e.kind)
+        {
+            case ExprKind::Name:
+                return variableAddress(*e.variable);
+            case ExprKind::Index:
+            {
+                const std::string ref = elementArray(e, scope, arrays);
+                if (arrays != nullptr)
+                {
+                    arrays->push_back(ref);
+                }
+                return pointerCastOf(e) + elementAt(e, ref, scope);
+            }
+            default:
+                return "&" + parenthesised(lvalue(e, scope, arrays));
+        }
+    }
+
+    // The tf_array * an element of e (a(i) or o.Lines(i)) is looked up in.
+    std::string elementArray(const Expr &e, StatementScope &scope,
+                             std::vector<std::string> *arrays = nullptr)
+    {
+        return e.left != nullptr ? "&" + parenthesised(lvalue(*e.left, scope, arrays))
+                                 : arrayRef(*e.variable);
+    }
+
+    // A whole array (a Name or a record's array member) as a tf_array *.
+    std::string wholeArrayRef(const Expr &e, StatementScope &scope)
+    {
+        return e.kind == ExprKind::Name ? arrayRef(*e.variable)
+                                        : "&" + parenthesised(lvalue(e, scope));
+    }
+
+    // The variable a path starts from, or null (a Function's result).
+    static const Variable *rootVariable(const Expr &e)
+    {
+        switch (e.kind)
+        {
+            case ExprKind::Name:
+                return e.variable;
+            case ExprKind::Index:
+                return e.left != nullptr ? rootVariable(*e.left) : e.variable;
+            case ExprKind::Member:
+                return e.field != nullptr ? rootVariable(*e.left) : nullptr;
+            default:
+                return nullptr;
+        }
+    }
+
+    // "&v_a", "v_values": an array variable or parameter, not a path.
+    static bool isSimpleRef(const std::string &ref)
+    {
+        const std::size_t start = !ref.empty() && ref[0] == '&' ? 1 : 0;
+        return ref.size() > start &&
+               std::all_of(ref.begin() + static_cast<std::ptrdiff_t>(start), ref.end(), [](char c) {
+                   return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+               });
+    }
+
+    static bool pathHasIndex(const Expr &e)
+    {
+        if (e.kind == ExprKind::Index)
+        {
+            return true;
+        }
+        return e.kind == ExprKind::Member && e.field != nullptr && pathHasIndex(*e.left);
+    }
+
+    // Can a call later in the statement change what this path reads?
+    static bool reachable(const Variable &v, const StatementScope &scope)
+    {
+        return v.isModuleLevel || v.byRef || (v.isParameter && v.rank > 0) ||
+               scope.passedByRef.count(&v) != 0;
+    }
+
+    static std::string parenthesised(const std::string &code)
+    {
+        const bool simple =
+            std::all_of(code.begin(), code.end(),
+                        [](char c) {
+                            return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_' ||
+                                   c == '.';
+                        }) ||
+            (code.size() > 2 && code.front() == '(' && unparenthesised(code) != code);
+        return simple ? code : "(" + code + ")";
     }
 
     // Hand over an owned value; take a reference to a borrowed one.
@@ -1216,6 +1639,14 @@ private:
         std::vector<std::string> locks;
         const std::string call =
             "p_" + callee.name + "(" + arguments(callee, s.args, scope, locks) + ")";
+        if (callee.isFunction && callee.result->type == Type::Record)
+        {
+            // A record result is still the caller's to free.
+            const std::string temp = scope.newTemp();
+            scope.prelude.push_back(declarationOf(*callee.result, temp) + ";");
+            scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
+            return lockedAround(locks, temp + " = " + call + ";");
+        }
         const std::string statement = !callee.isFunction ? call + ";"
                                       : callee.result->type == Type::String
                                           ? "tf_str_release(" + call + ");"
@@ -1236,23 +1667,42 @@ private:
             std::string code;
             if (param.rank > 0)
             {
-                code = arrayRef(*args[i]->variable); // arrays always go by pointer
+                code = wholeArrayRef(*args[i], scope); // arrays always go by pointer
             }
-            else if (param.byRef && args[i]->kind == ExprKind::Index)
+            else if (param.byRef && pathHasIndex(*args[i]))
             {
-                // An element ByRef: find it (index checked) before the call,
-                // and lock its array meanwhile so a ReDim cannot move it.
+                // An element (or a member of one) ByRef: find it, indexes
+                // checked, before the call, and lock each array on the way
+                // meanwhile so a ReDim cannot move it.
+                std::vector<std::string> arrays;
+                const std::string at = address(*args[i], scope, &arrays);
+                for (const std::string &array : arrays)
+                {
+                    // A variable's array stays put; one inside an element is
+                    // captured, so the unlock reaches the array just locked.
+                    if (isSimpleRef(array))
+                    {
+                        locks.push_back(array);
+                        continue;
+                    }
+                    const std::string held = scope.newTemp();
+                    scope.prelude.push_back("tf_array *" + held + " = " + array + ";");
+                    locks.push_back(held);
+                }
                 const std::string temp = scope.newTemp();
-                const std::string cast = pointerCast(storage(*args[i])); // "(int32_t *)"
-                scope.prelude.push_back(cast.substr(1, cast.size() - 2) + temp + " = " + cast +
-                                        elementAddress(*args[i], scope) + ";");
+                const std::string cast = pointerCastOf(*args[i]); // "(int32_t *)"
+                scope.prelude.push_back(cast.substr(1, cast.size() - 2) + temp + " = " + at + ";");
                 checkpoint(scope);
-                locks.push_back(arrayRef(*args[i]->variable));
                 code = temp;
             }
             else if (param.byRef)
             {
-                code = variableAddress(*args[i]->variable);
+                code = address(*args[i], scope);
+            }
+            else if (param.type == Type::Record)
+            {
+                // ByVal: the callee copies it; pass where it is.
+                code = "&" + parenthesised(settle(*args[i], expr(*args[i], scope), scope).code);
             }
             else if (param.type == Type::String)
             {
@@ -1286,9 +1736,9 @@ private:
             out += ' ' + p;
         }
         out += ' ' + code;
-        for (const std::string &t : scope.releases)
+        for (const std::string &r : scope.releases)
         {
-            out += " tf_str_release(" + t + ");";
+            out += ' ' + r;
         }
         return out;
     }
@@ -1342,7 +1792,7 @@ private:
         if (type == Type::String)
         {
             scope.prelude.push_back("tf_string *" + temp + " = tf_str_ref(" + code + ");");
-            scope.releases.push_back(temp);
+            scope.releases.push_back("tf_str_release(" + temp + ");");
         }
         else
         {
@@ -1368,8 +1818,7 @@ private:
             case ExprKind::Name:
             {
                 const Variable &v = *e.variable;
-                const bool reachable = v.isModuleLevel || v.byRef || scope.passedByRef.count(&v);
-                if (scope.pendingCalls > 0 && reachable)
+                if (scope.pendingCalls > 0 && v.type != Type::Record && reachable(v, scope))
                 {
                     return snapshot(storage(v), variableValue(v), scope);
                 }
@@ -1377,23 +1826,29 @@ private:
             }
             case ExprKind::Index:
             {
-                const Variable &v = *e.variable;
-                const std::string read =
-                    "(*" + pointerCast(storage(e)) + elementAddress(e, scope) + ")";
-                const bool reachable =
-                    v.isModuleLevel || v.byRef || v.isParameter || scope.passedByRef.count(&v);
-                if (scope.pendingCalls > 0 && reachable)
+                const std::string read = "(*" + pointerCastOf(e) + elementAddress(e, scope) + ")";
+                const Variable *root = rootVariable(e);
+                if (scope.pendingCalls > 0 && e.type != Type::Record && root != nullptr &&
+                    (reachable(*root, scope) || root->isParameter))
                 {
                     return snapshot(storage(e), read, scope);
                 }
                 return {read, false};
             }
             case ExprKind::Member:
-                if (scope.pendingCalls > 0)
+            {
+                // A property (a call could set it), or a member of a record a
+                // later call could change; a whole record is never copied here.
+                const Variable *root = e.field != nullptr ? rootVariable(e) : nullptr;
+                const bool changeable =
+                    e.field == nullptr ||
+                    (root != nullptr && (reachable(*root, scope) || root->isParameter));
+                if (scope.pendingCalls > 0 && changeable && e.type != Type::Record && e.rank == 0)
                 {
-                    return snapshot(e.type, member(e).code, scope);
+                    return snapshot(storage(e), member(e, scope).code, scope);
                 }
-                return member(e);
+                return member(e, scope);
+            }
             case ExprKind::Call:
                 return e.builtin != Builtin::None ? builtin(e, scope) : call(e, scope);
             case ExprKind::Unary:
@@ -1427,27 +1882,34 @@ private:
         const std::string temp = scope.newTemp();
         if (locks.empty())
         {
-            scope.prelude.push_back(declaration(storage(*callee.result), temp) + " = " + code +
-                                    ";");
+            scope.prelude.push_back(declarationOf(*callee.result, temp) + " = " + code + ";");
         }
         else
         {
-            scope.prelude.push_back(declaration(storage(*callee.result), temp) + ";");
+            scope.prelude.push_back(declarationOf(*callee.result, temp) + ";");
             scope.prelude.push_back(lockedAround(locks, temp + " = " + code + ";"));
         }
         if (callee.result->type == Type::String)
         {
-            scope.releases.push_back(temp);
+            scope.releases.push_back("tf_str_release(" + temp + ");");
+        }
+        else if (callee.result->type == Type::Record)
+        {
+            scope.releases.push_back("t_" + callee.result->typeDef->name + "_free(&" + temp + ");");
         }
         checkpoint(scope); // nothing after a failed call may run
         return {temp, false};
     }
 
-    Value member(const Expr &e)
+    Value member(const Expr &e, StatementScope &scope)
     {
         if (e.left->isErr)
         {
             return {"tf_err_" + lowerCase(e.text) + "()", false}; // tf_err_number() ...
+        }
+        if (e.field != nullptr) // a record's member
+        {
+            return {parenthesised(expr(*e.left, scope).code) + ".f_" + e.text, false};
         }
         const ControlDef *control = e.left->control;
         const catalog::ControlType *type = catalog::findType(control->typeName);
@@ -1538,7 +2000,7 @@ private:
                 e.args.size() > 1 ? settle(*e.args[1], expr(*e.args[1], scope), scope).code : "1";
             return {std::string(e.builtin == Builtin::LBound ? "tf_array_lbound("
                                                              : "tf_array_ubound(") +
-                        arrayRef(*e.args[0]->variable) + ", " + dimension + ")",
+                        wholeArrayRef(*e.args[0], scope) + ", " + dimension + ")",
                     false};
         }
         const Expr &arg = *e.args[0];
@@ -1602,7 +2064,7 @@ private:
         }
         const std::string name = scope.newTemp();
         scope.prelude.push_back("tf_string *" + name + " = " + v.code + ";");
-        scope.releases.push_back(name);
+        scope.releases.push_back("tf_str_release(" + name + ");");
         return {name, false};
     }
 
@@ -1710,16 +2172,47 @@ private:
                 return "TF_ELEM_BOOL";
             case Type::String:
                 return "TF_ELEM_STRING";
+            case Type::Record:
+                return "TF_ELEM_RECORD";
             default:
                 return "TF_ELEM_I32";
         }
     }
 
-    // "(int32_t *)", "(tf_string **)": an element address as its type.
-    static std::string pointerCast(Type t)
+    // "(int32_t *)", "(tf_string **)", "(t_Customer *)": an address as its type.
+    static std::string pointerCastOf(const Expr &e)
     {
-        const std::string type = cType(t);
+        const std::string type = cTypeOf(e);
         return "(" + type + (type.back() == '*' ? "*" : " *") + ")";
+    }
+
+    // The C type of a variable's or an expression's value.
+    static std::string cTypeOf(const Variable &v)
+    {
+        return v.type == Type::Record ? "t_" + v.typeDef->name : cType(storage(v));
+    }
+
+    static std::string cTypeOf(const Expr &e)
+    {
+        return e.type == Type::Record ? "t_" + e.typeDef->name : cType(storage(e));
+    }
+
+    static std::string declarationOf(const Variable &v, const std::string &name)
+    {
+        const std::string type = cTypeOf(v);
+        return type + (type.back() == '*' ? "" : " ") + name;
+    }
+
+    static std::string declarationOf(const Expr &e, const std::string &name)
+    {
+        const std::string type = cTypeOf(e);
+        return type + (type.back() == '*' ? "" : " ") + name;
+    }
+
+    // The tf_record_ops of a record array's element Type, else NULL.
+    static std::string elemOps(const Variable &v)
+    {
+        return v.type == Type::Record ? "&t_" + v.typeDef->name + "_ops" : "NULL";
     }
 
     // "(const int32_t[]){10, 20}": a shape for the runtime.
@@ -1740,19 +2233,24 @@ private:
         {
             bounds.push_back(std::to_string(u));
         }
-        return "tf_array_init(" + ref + ", " + elemKind(v) + ", " + std::to_string(v.rank) + ", " +
-               shapeList(bounds) + ");";
+        return "tf_array_init(" + ref + ", " + elemKind(v) + ", " + elemOps(v) + ", " +
+               std::to_string(v.rank) + ", " + shapeList(bounds) + ");";
     }
 
     // The address of an element, its indexes checked: tf_array_at1(&v_a, i).
     std::string elementAddress(const Expr &e, StatementScope &scope)
+    {
+        return elementAt(e, elementArray(e, scope), scope);
+    }
+
+    // tf_array_at1(ref, i) and its kin, the indexes evaluated left to right.
+    std::string elementAt(const Expr &e, const std::string &ref, StatementScope &scope)
     {
         std::vector<std::string> indexes;
         for (const auto &index : e.args)
         {
             indexes.push_back(settle(*index, expr(*index, scope), scope).code);
         }
-        const std::string ref = arrayRef(*e.variable);
         if (indexes.size() == 1)
         {
             return "tf_array_at1(" + ref + ", " + indexes[0] + ")";
@@ -1780,10 +2278,13 @@ private:
             {
                 bounds.push_back(settle(*bound, expr(*bound, scope), scope).code);
             }
-            const Variable &v = *target->variable;
-            out += (out.empty() ? "" : " ") + std::string("tf_array_redim(") + arrayRef(v) + ", " +
-                   elemKind(v) + ", " + (s.preserve ? "1" : "0") + ", " + std::to_string(v.rank) +
-                   ", " + shapeList(bounds) + ");";
+            // a(n) is the variable; o.Lines(n) the member array.
+            const Variable &v = target->left != nullptr ? *target->left->field : *target->variable;
+            const std::string ref =
+                target->left != nullptr ? wholeArrayRef(*target->left, scope) : arrayRef(v);
+            out += (out.empty() ? "" : " ") + std::string("tf_array_redim(") + ref + ", " +
+                   elemKind(v) + ", " + elemOps(v) + ", " + (s.preserve ? "1" : "0") + ", " +
+                   std::to_string(v.rank) + ", " + shapeList(bounds) + ");";
         }
         return out;
     }

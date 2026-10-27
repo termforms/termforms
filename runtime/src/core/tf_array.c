@@ -3,8 +3,10 @@
  * tf_array.c -- arrays: 0-based, column-major, bounds-checked, fixed or
  * dynamic (see tf_runtime.h for the rules).
  *
- * Every element type is valid when its bytes are zero (0, 0.0, False, the
- * NULL that is ""), so new elements are made with calloc or memset.
+ * Every scalar element type is valid when its bytes are zero (0, 0.0,
+ * False, the NULL that is ""), so new elements are made with calloc or
+ * memset; a record element is then also given its Type's init, and is
+ * freed and copied through its tf_record_ops.
  *
  * After tf_raise the program may carry on to its error check (inside a
  * Try), so a failed element lookup returns a scratch element instead of
@@ -15,10 +17,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-static size_t elem_size(int32_t elem)
+static size_t elem_size(int32_t elem, const tf_record_ops *ops)
 {
     switch (elem)
     {
+        case TF_ELEM_RECORD:
+            return ops->size;
         case TF_ELEM_I32:
             return sizeof(int32_t);
         case TF_ELEM_I64:
@@ -32,28 +36,47 @@ static size_t elem_size(int32_t elem)
     }
 }
 
-/* The element handed out after an index error, and whether it may hold a
-   string the program stored into it (released when it is handed out again). */
-static unsigned char scratch[sizeof(double) > sizeof(void *) ? sizeof(double) : sizeof(void *)];
-static int scratch_has_string = 0;
+/* The element handed out after an index error. The program may store into
+   it (a string, a record's strings), so whatever it holds is released when
+   it is handed out again. Global state, as tf_error.c's: one program,
+   one thread. */
+static unsigned char *scratch = NULL;
+static size_t scratch_size = 0;
+static int32_t scratch_elem = TF_ELEM_I32;
+static const tf_record_ops *scratch_ops = NULL;
 
-static void *scratch_element(int32_t elem)
+void *tf_scratch_element(int32_t elem, const tf_record_ops *ops)
 {
-    if (scratch_has_string)
+    if (scratch_elem == TF_ELEM_STRING && scratch != NULL)
     {
         tf_string *held = NULL;
         memcpy(&held, scratch, sizeof held);
         tf_str_release(held);
     }
-    memset(scratch, 0, sizeof scratch);
-    scratch_has_string = elem == TF_ELEM_STRING;
+    else if (scratch_elem == TF_ELEM_RECORD && scratch != NULL)
+    {
+        scratch_ops->free(scratch);
+    }
+    const size_t size = elem_size(elem, ops);
+    if (size > scratch_size)
+    {
+        scratch = tf_xrealloc(scratch, size);
+        scratch_size = size;
+    }
+    memset(scratch, 0, scratch_size);
+    scratch_elem = elem;
+    scratch_ops = ops;
+    if (elem == TF_ELEM_RECORD)
+    {
+        ops->init(scratch);
+    }
     return scratch;
 }
 
 static void *out_of_range(const tf_array *a)
 {
     tf_raise(TF_ERR_SUBSCRIPT, NULL);
-    return scratch_element(a->elem);
+    return tf_scratch_element(a->elem, a->ops);
 }
 
 /* Elements in the shape upper[0..rank), or -1 if a bound is below -1. Too
@@ -77,23 +100,54 @@ static int64_t element_count(int32_t rank, const int32_t *upper, size_t size)
     return count;
 }
 
-static void release_strings(tf_array *a, int64_t from, int64_t to)
+static void *element(const tf_array *a, int64_t i)
 {
-    if (a->elem != TF_ELEM_STRING || a->data == NULL)
+    return (char *)a->data + (size_t)i * elem_size(a->elem, a->ops);
+}
+
+/* Releases what elements [from, to) hold; their bytes are then zero. */
+static void release_elements(tf_array *a, int64_t from, int64_t to)
+{
+    if (a->data == NULL)
     {
         return;
     }
-    tf_string **strings = a->data;
-    for (int64_t i = from; i < to; ++i)
+    if (a->elem == TF_ELEM_STRING)
     {
-        tf_str_release(strings[i]);
-        strings[i] = NULL;
+        tf_string **strings = a->data;
+        for (int64_t i = from; i < to; ++i)
+        {
+            tf_str_release(strings[i]);
+            strings[i] = NULL;
+        }
+    }
+    else if (a->elem == TF_ELEM_RECORD)
+    {
+        for (int64_t i = from; i < to; ++i)
+        {
+            a->ops->free(element(a, i));
+            memset(element(a, i), 0, a->ops->size);
+        }
     }
 }
 
-static void set_shape(tf_array *a, int32_t elem, int32_t rank, const int32_t *upper, int64_t count)
+/* Makes elements [from, to), already zeroed, ready: records get their init. */
+static void ready_elements(tf_array *a, int64_t from, int64_t to)
+{
+    if (a->elem == TF_ELEM_RECORD)
+    {
+        for (int64_t i = from; i < to; ++i)
+        {
+            a->ops->init(element(a, i));
+        }
+    }
+}
+
+static void set_shape(tf_array *a, int32_t elem, const tf_record_ops *ops, int32_t rank,
+                      const int32_t *upper, int64_t count)
 {
     a->elem = elem;
+    a->ops = ops;
     a->rank = rank;
     a->count = count;
     for (int32_t d = 0; d < TF_ARRAY_MAX_RANK; ++d)
@@ -102,27 +156,30 @@ static void set_shape(tf_array *a, int32_t elem, int32_t rank, const int32_t *up
     }
 }
 
-void tf_array_init(tf_array *a, tf_elem elem, int32_t rank, const int32_t *upper)
+void tf_array_init(tf_array *a, tf_elem elem, const tf_record_ops *ops, int32_t rank,
+                   const int32_t *upper)
 {
-    const size_t size = elem_size((int32_t)elem);
+    const size_t size = elem_size((int32_t)elem, ops);
     const int64_t count = element_count(rank, upper, size);
     memset(a, 0, sizeof *a);
-    set_shape(a, (int32_t)elem, rank, upper, count < 0 ? 0 : count);
+    set_shape(a, (int32_t)elem, ops, rank, upper, count < 0 ? 0 : count);
     a->fixed = 1;
     if (a->count > 0)
     {
         a->data = tf_xcalloc((size_t)a->count, size);
+        ready_elements(a, 0, a->count);
     }
 }
 
-void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const int32_t *upper)
+void tf_array_redim(tf_array *a, tf_elem elem, const tf_record_ops *ops, int preserve, int32_t rank,
+                    const int32_t *upper)
 {
     if (a->locks > 0 || a->fixed)
     {
         tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
         return;
     }
-    const size_t size = elem_size((int32_t)elem);
+    const size_t size = elem_size((int32_t)elem, ops);
     const int64_t count = element_count(rank, upper, size);
     if (count < 0)
     {
@@ -133,10 +190,11 @@ void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const
     if (!preserve || a->rank == 0)
     {
         tf_array_free(a);
-        set_shape(a, (int32_t)elem, rank, upper, count);
+        set_shape(a, (int32_t)elem, ops, rank, upper, count);
         if (count > 0)
         {
             a->data = tf_xcalloc((size_t)count, size);
+            ready_elements(a, 0, count);
         }
         return;
     }
@@ -151,9 +209,10 @@ void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const
             return;
         }
     }
-    if (count < a->count)
+    const int64_t old = a->count;
+    if (count < old)
     {
-        release_strings(a, count, a->count);
+        release_elements(a, count, old);
     }
     if (count == 0)
     {
@@ -162,13 +221,18 @@ void tf_array_redim(tf_array *a, tf_elem elem, int preserve, int32_t rank, const
     }
     else
     {
+        /* Records move with realloc: a record holds no pointers to itself. */
         a->data = tf_xrealloc(a->data, (size_t)count * size);
-        if (count > a->count)
+        if (count > old)
         {
-            memset((char *)a->data + (size_t)a->count * size, 0, (size_t)(count - a->count) * size);
+            memset((char *)a->data + (size_t)old * size, 0, (size_t)(count - old) * size);
         }
     }
-    set_shape(a, (int32_t)elem, rank, upper, count);
+    set_shape(a, (int32_t)elem, ops, rank, upper, count);
+    if (count > old)
+    {
+        ready_elements(a, old, count);
+    }
 }
 
 void tf_array_erase(tf_array *a)
@@ -180,10 +244,11 @@ void tf_array_erase(tf_array *a)
     }
     if (a->fixed)
     {
-        release_strings(a, 0, a->count);
+        release_elements(a, 0, a->count);
         if (a->data != NULL)
         {
-            memset(a->data, 0, (size_t)a->count * elem_size(a->elem));
+            memset(a->data, 0, (size_t)a->count * elem_size(a->elem, a->ops));
+            ready_elements(a, 0, a->count);
         }
         return;
     }
@@ -192,13 +257,50 @@ void tf_array_erase(tf_array *a)
 
 void tf_array_free(tf_array *a)
 {
-    release_strings(a, 0, a->count);
+    release_elements(a, 0, a->count);
     free(a->data);
     const int32_t elem = a->elem;
     const int32_t fixed = a->fixed;
+    const tf_record_ops *ops = a->ops;
     memset(a, 0, sizeof *a);
     a->elem = elem;
     a->fixed = fixed;
+    a->ops = ops;
+}
+
+/* The copy itself, once the checks are done: to becomes from's shape and
+   holds copies of its elements. */
+static void copy_elements(tf_array *to, const tf_array *from)
+{
+    const int32_t fixed = to->fixed;
+    tf_array_free(to);
+    to->fixed = fixed;
+    set_shape(to, from->elem, from->ops, from->rank, from->upper, from->count);
+    if (from->count == 0)
+    {
+        return;
+    }
+    const size_t size = elem_size(from->elem, from->ops);
+    if (from->elem == TF_ELEM_RECORD)
+    {
+        to->data = tf_xcalloc((size_t)from->count, size);
+        ready_elements(to, 0, to->count);
+        for (int64_t i = 0; i < to->count; ++i)
+        {
+            from->ops->copy(element(to, i), element(from, i));
+        }
+        return;
+    }
+    to->data = tf_xmalloc((size_t)from->count * size);
+    memcpy(to->data, from->data, (size_t)from->count * size);
+    if (from->elem == TF_ELEM_STRING)
+    {
+        tf_string **strings = to->data;
+        for (int64_t i = 0; i < to->count; ++i)
+        {
+            tf_str_retain(strings[i]);
+        }
+    }
 }
 
 void tf_array_copy(tf_array *to, const tf_array *from)
@@ -212,21 +314,14 @@ void tf_array_copy(tf_array *to, const tf_array *from)
         tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
         return;
     }
-    tf_array_free(to);
-    set_shape(to, from->elem, from->rank, from->upper, from->count);
-    if (from->count > 0)
+    copy_elements(to, from);
+}
+
+void tf_array_assign(tf_array *to, const tf_array *from)
+{
+    if (to != from)
     {
-        const size_t bytes = (size_t)from->count * elem_size(from->elem);
-        to->data = tf_xmalloc(bytes);
-        memcpy(to->data, from->data, bytes);
-        if (from->elem == TF_ELEM_STRING)
-        {
-            tf_string **strings = to->data;
-            for (int64_t i = 0; i < to->count; ++i)
-            {
-                tf_str_retain(strings[i]);
-            }
-        }
+        copy_elements(to, from);
     }
 }
 
@@ -236,7 +331,7 @@ void *tf_array_at1(tf_array *a, int64_t i)
     {
         return out_of_range(a);
     }
-    return (char *)a->data + (size_t)i * elem_size(a->elem);
+    return element(a, i);
 }
 
 void *tf_array_at2(tf_array *a, int64_t i, int64_t j)
@@ -245,8 +340,7 @@ void *tf_array_at2(tf_array *a, int64_t i, int64_t j)
     {
         return out_of_range(a);
     }
-    const int64_t linear = i + ((int64_t)a->upper[0] + 1) * j;
-    return (char *)a->data + (size_t)linear * elem_size(a->elem);
+    return element(a, i + ((int64_t)a->upper[0] + 1) * j);
 }
 
 void *tf_array_atn(tf_array *a, int32_t rank, const int64_t *index)
@@ -266,7 +360,7 @@ void *tf_array_atn(tf_array *a, int32_t rank, const int64_t *index)
         linear += index[d] * stride;
         stride *= (int64_t)a->upper[d] + 1;
     }
-    return (char *)a->data + (size_t)linear * elem_size(a->elem);
+    return element(a, linear);
 }
 
 int32_t tf_array_lbound(const tf_array *a, int32_t dimension)

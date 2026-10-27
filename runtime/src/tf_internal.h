@@ -44,4 +44,8 @@ struct tf_string
 void tf_set_shutdown_hook(void (*hook)(void));
 void tf_run_shutdown_hook(void);
 
+/* A zeroed, ready element of the given kind, to hand out after an error
+   instead of a real one (see tf_array.c). */
+void *tf_scratch_element(int32_t elem, const tf_record_ops *ops);
+
 #endif /* TERMFORMS_TF_INTERNAL_H */

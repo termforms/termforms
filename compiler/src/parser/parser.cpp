@@ -4,7 +4,8 @@
 //
 // Grammar of this version (keywords upper case, EOS = end of statement):
 //
-//   module     := { formBlock | sub | function | enum | dim EOS | const EOS }
+//   module     := { formBlock | sub | function | enum | typeBlock | dim EOS | const EOS }
+//   typeBlock  := TYPE name EOS { name [shape] AS type EOS } END TYPE
 //   formBlock  := BEGIN Form name EOS { setting | control } END EOS
 //   control    := BEGIN type name EOS { setting } END EOS
 //   setting    := name '=' ['-'] literal EOS
@@ -35,7 +36,7 @@
 //   args       := expr { ',' expr }
 //   expr       := or-expression, with VB precedence from lowest to highest:
 //                 Or, And, Not, comparisons, &, + -, Mod, \, * /, unary -, ^
-//   primary    := literal | name ['(' [args] ')'] | name '.' property | '(' expr ')'
+//   primary    := (literal | name ['(' [args] ')'] | '(' expr ')') { '.' name ['(' [args] ')'] }
 //               | CTYPE '(' expr ',' type ')'
 //
 // A block ends at a keyword that closes a construct (Next, Loop, Wend,
@@ -95,6 +96,10 @@ public:
             else if (peek().isKeyword("ENUM"))
             {
                 parseEnum(module);
+            }
+            else if (peek().isKeyword("TYPE"))
+            {
+                parseType(module);
             }
             else
             {
@@ -734,17 +739,13 @@ private:
             s->preserve = acceptKeyword("PRESERVE");
             do
             {
-                auto target = std::make_unique<Expr>();
-                target->kind = ExprKind::Call;
-                target->location = peek().location;
-                target->suffix = peek().suffix;
-                target->text = expectIdentifier("an array name");
-                if (expectSymbol("("))
+                // a(n) or o.Lines(n): an array and its new bounds.
+                if (!at(TokenKind::Identifier))
                 {
-                    parseArguments(target->args);
-                    expectSymbol(")");
+                    error(peek().location, "expected an array name but found " + describe(peek()));
+                    return nullptr;
                 }
-                s->args.push_back(std::move(target));
+                s->args.push_back(parsePrimary());
             } while (acceptSymbol(","));
             return s;
         }
@@ -755,12 +756,12 @@ private:
             s->location = next().location;
             do
             {
-                auto name = std::make_unique<Expr>();
-                name->kind = ExprKind::Name;
-                name->location = peek().location;
-                name->suffix = peek().suffix;
-                name->text = expectIdentifier("an array name");
-                s->args.push_back(std::move(name));
+                if (!at(TokenKind::Identifier))
+                {
+                    error(peek().location, "expected an array name but found " + describe(peek()));
+                    return nullptr;
+                }
+                s->args.push_back(parsePrimary()); // a or o.Lines
             } while (acceptSymbol(","));
             return s;
         }
@@ -801,7 +802,7 @@ private:
             // "name = ..." or "name.Prop = ..." is an assignment; anything
             // else starting with a name is a call.
             if (peek(1).isSymbol("=") || peek(1).isSymbol(".") ||
-                (peek(1).isSymbol("(") && parenthesisedThen(1, "=")))
+                (peek(1).isSymbol("(") && (parenthesisedThen(1, "=") || parenthesisedThen(1, "."))))
             {
                 auto s = std::make_unique<Stmt>();
                 s->kind = StmtKind::Assign;
@@ -1136,6 +1137,46 @@ private:
             }
         }
         return s;
+    }
+
+    // Type Name, its members one per line (name [shape] As type), End Type.
+    void parseType(Module &module)
+    {
+        auto def = std::make_unique<TypeDef>();
+        def->location = next().location; // TYPE
+        def->name = expectIdentifier("a Type name");
+        expectEndOfStatement();
+        skipStatementEnds();
+        while (!at(TokenKind::EndOfFile) && !isEndOf("TYPE") && !isEndOf("SUB") &&
+               !isEndOf("FUNCTION") && !peek().isKeyword("SUB") && !peek().isKeyword("FUNCTION"))
+        {
+            if (!at(TokenKind::Identifier))
+            {
+                error(peek().location, "expected a member name but found " + describe(peek()));
+                skipStatement();
+                skipStatementEnds();
+                continue;
+            }
+            auto member = std::make_unique<Variable>();
+            member->isMember = true;
+            member->location = peek().location;
+            const char suffix = peek().suffix;
+            member->name = next().text;
+            member->type = typeFromSuffix(suffix);
+            if (peek().isSymbol("("))
+            {
+                parseShape(*member, true);
+            }
+            parseOptionalAs(*member, "member '" + member->name + "'");
+            def->members.push_back(std::move(member));
+            expectEndOfStatement();
+            skipStatementEnds();
+        }
+        if (expectKeyword("END", "End Type") && expectKeyword("TYPE", "Type"))
+        {
+            expectEndOfStatement();
+        }
+        module.types.push_back(std::move(def));
     }
 
     // Enum Name [As Integer | Long], its members one per line, End Enum.
@@ -1562,21 +1603,11 @@ private:
                 e->text = next().text;
                 if (acceptSymbol("("))
                 {
-                    e->kind = ExprKind::Call;
+                    e->kind = ExprKind::Call; // a call, or an array element: sema decides
                     parseArguments(e->args);
                     expectSymbol(")");
-                    return e;
                 }
-                if (acceptSymbol("."))
-                {
-                    auto member = std::make_unique<Expr>();
-                    member->kind = ExprKind::Member;
-                    member->location = peek().location;
-                    member->text = expectIdentifier("a property name");
-                    member->left = std::move(e);
-                    return member;
-                }
-                return e;
+                return parsePostfix(std::move(e));
             }
             default:
                 break;
@@ -1613,6 +1644,34 @@ private:
         return e;
     }
 
+    // ".Name" and "(i)" after a primary: o.Home.City, a(i).Lines(j),
+    // txtName.Text. A "(...)" after a member indexes that member (an array).
+    ExprPtr parsePostfix(ExprPtr e)
+    {
+        while (peek().isSymbol("."))
+        {
+            next();
+            auto member = std::make_unique<Expr>();
+            member->kind = ExprKind::Member;
+            member->location = peek().location;
+            member->text = expectIdentifier("a member or property name");
+            member->left = std::move(e);
+            e = std::move(member);
+            if (peek().isSymbol("("))
+            {
+                auto index = std::make_unique<Expr>();
+                index->kind = ExprKind::Index;
+                index->location = e->location;
+                next();
+                parseArguments(index->args);
+                expectSymbol(")");
+                index->left = std::move(e);
+                e = std::move(index);
+            }
+        }
+        return e;
+    }
+
     const std::vector<Token> &tokens_;
     Diagnostics &diagnostics_;
     std::size_t pos_ = 0;
@@ -1635,6 +1694,8 @@ const char *ast::typeName(Type type)
             return "Double";
         case Type::Enum:
             return "Enum";
+        case Type::Record:
+            return "Type";
         case Type::String:
             return "String";
         case Type::Boolean:

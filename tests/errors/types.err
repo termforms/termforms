@@ -1,0 +1,12 @@
+types.bas:16:5: error: Type Point has two members named 'X'
+types.bas:9:1: error: Type Node contains itself (Node -> Node); use a Ref member, or a dynamic array, to point to another Node
+types.bas:27:15: error: the array 'points' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+types.bas:32:7: error: Type Point has no member 'Z'
+types.bas:33:9: error: cannot assign a Size to a Point (Option Strict)
+types.bas:34:10: error: Types cannot be compared with '='; compare their members
+types.bas:35:15: error: operator '&' cannot combine a String and a Point
+types.bas:36:14: error: cannot assign to a member of a Function's result; store the result in a variable first
+types.bas:37:9: error: 'Point' is a Type; declare a variable of it, as in Dim x As Point
+types.bas:38:9: error: unknown type 'Pointt'
+types.bas:39:11: error: 'X' is an Integer and has no members or properties
+types.bas:40:11: error: assigning to an array needs an array here

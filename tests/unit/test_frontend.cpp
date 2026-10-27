@@ -454,3 +454,30 @@ TEST_CASE("lexer: ReDim, Preserve and Erase are reserved")
         CHECK(tf::isReservedKeyword(word));
     }
 }
+
+// -- Types (Phase 3 step 5b) ---------------------------------------------------
+
+TEST_CASE("a Type may hold arrays, other Types, and be returned by a Function")
+{
+    const std::string decl = "Type Line\n    Qty As Integer\nEnd Type\n"
+                             "Type Order\n    Lines() As Line\n    Totals(3) As Double\n"
+                             "    Last As Line\nEnd Type\n"
+                             "Function Make() As Order\n    ReDim Make.Lines(1)\nEnd Function\n";
+    const std::string body = "    Dim o As Order, copy As Order\n    o = Make()\n"
+                             "    o.Lines(0).Qty = 2\n    o.Totals(3) = 1.5\n    copy = o\n"
+                             "    ReDim Preserve o.Lines(4)\n";
+    CHECK(check(inClick(decl, body)) == "");
+}
+
+TEST_CASE("a Type cannot contain itself by value")
+{
+    CHECK(check(kForm + "Type T\n    Again As T\nEnd Type\n") ==
+          "7:1: Type T contains itself (T -> T); use a Ref member, or a dynamic array, to point to "
+          "another T\n");
+    CHECK(check(kForm + "Type T\n    More() As T\nEnd Type\n") == "");
+}
+
+TEST_CASE("lexer: Type is reserved")
+{
+    CHECK(tf::isReservedKeyword("type"));
+}
