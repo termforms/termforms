@@ -162,7 +162,7 @@ int tf_term_read(unsigned char *buffer, int capacity, int timeout_ms)
     if (n == 0)
     {
         /* End of input: the terminal has gone away. */
-        tf_runtime_error(TF_ERR_TERMINAL, "Terminal closed");
+        tf_fatal_error(TF_ERR_TERMINAL, "Terminal closed");
     }
     return n > 0 ? (int)n : 0;
 }

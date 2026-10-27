@@ -1,0 +1,12 @@
+
+
+  ┌──────────────────────── Try ─────────────────────────┐
+  │11 Division by zero line 60 x=5                       │
+  │div0 from line 39 [in425]                             │
+  │1fcff i=3 42                                          │
+  │5000 Form_Load custom / Type mismatch / cleared 0     │
+  │outer got first, finally ran, then 13                 │
+  │1004 kept                                             │
+  │                                                      │
+  │                                                      │
+  └──────────────────────────────────────────────────────┘

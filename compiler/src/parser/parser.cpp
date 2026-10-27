@@ -12,7 +12,8 @@
 //   function   := FUNCTION name [params] [AS type] EOS block END FUNCTION EOS
 //   params     := '(' [param { ',' param }] ')'
 //   param      := [BYVAL | BYREF] name [AS type]
-//   statement  := dim | if | for | do | while | EXIT what | RETURN [expr]
+//   statement  := dim | if | for | do | while | try | EXIT what | RETURN [expr]
+//               | THROW [expr [',' expr]] | Err.Raise args | Err.Clear
 //               | CALL name ['(' [args] ')'] | END
 //               | target '=' expr | name [args] | name '(' [args] ')'
 //   dim        := DIM name [AS type] { ',' name [AS type] }
@@ -22,13 +23,16 @@
 //   for        := FOR name '=' expr TO expr [STEP expr] EOS block NEXT [name]
 //   do         := DO [(WHILE | UNTIL) expr] EOS block LOOP [(WHILE | UNTIL) expr]
 //   while      := WHILE expr EOS block (WEND | END WHILE)
+//   try        := TRY EOS block { CATCH [WHEN expr] EOS block }
+//                 [FINALLY EOS block] END TRY
 //   args       := expr { ',' expr }
 //   expr       := or-expression, with VB precedence from lowest to highest:
 //                 Or, And, Not, comparisons, &, + -, Mod, \, * /, unary -, ^
 //   primary    := literal | name ['(' [args] ')'] | name '.' property | '(' expr ')'
 //
 // A block ends at a keyword that closes a construct (Next, Loop, Wend,
-// Else, ElseIf, End If/Sub/Function/While) if some construct still open
+// Else, ElseIf, Catch, Finally, End If/Sub/Function/While/Try) if some
+// construct still open
 // around it can take that closer; the construct then checks that the closer
 // is its own. A closer nothing open can take ("Loop" without "Do") is
 // reported and skipped. Either way one misplaced closer produces one error
@@ -464,12 +468,13 @@ private:
         const Token &t = peek();
         return t.isKeyword("NEXT") || t.isKeyword("LOOP") || t.isKeyword("WEND") ||
                t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || t.isKeyword("SUB") ||
-               t.isKeyword("FUNCTION") || isEndOf("IF") || isEndOf("SUB") || isEndOf("FUNCTION") ||
-               isEndOf("WHILE");
+               t.isKeyword("FUNCTION") || t.isKeyword("CATCH") || t.isKeyword("FINALLY") ||
+               isEndOf("IF") || isEndOf("SUB") || isEndOf("FUNCTION") || isEndOf("WHILE") ||
+               isEndOf("TRY");
     }
 
     // The body of a construct opened with `opener` ("FOR", "DO", "WHILE",
-    // "IF"; empty for a procedure body).
+    // "IF", "TRY"; empty for a procedure body).
     Block parseBlock(const char *opener = "")
     {
         open_.push_back(opener);
@@ -520,6 +525,10 @@ private:
         if (t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || isEndOf("IF"))
         {
             return "IF";
+        }
+        if (t.isKeyword("CATCH") || t.isKeyword("FINALLY") || isEndOf("TRY"))
+        {
+            return "TRY";
         }
         return nullptr;
     }
@@ -580,6 +589,10 @@ private:
         {
             return parseWhile();
         }
+        if (t.isKeyword("TRY"))
+        {
+            return parseTry();
+        }
         StmtPtr s = parseSimpleStatement();
         if (s == nullptr)
         {
@@ -632,6 +645,38 @@ private:
             }
             return s;
         }
+        if (t.isKeyword("THROW"))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::Throw;
+            s->location = next().location;
+            if (!atStatementEnd())
+            {
+                parseArguments(s->args);
+            }
+            return s;
+        }
+        // Err.Raise and Err.Clear are statements; other Err members are read.
+        if (t.kind == TokenKind::Identifier && t.text == "Err" && peek(1).isSymbol(".") &&
+            (peek(2).text == "Raise" || peek(2).text == "Clear"))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->location = t.location;
+            next();
+            next();
+            if (next().text == "Clear")
+            {
+                s->kind = StmtKind::ErrClear;
+                return s;
+            }
+            s->kind = StmtKind::Throw;
+            s->viaErrRaise = true;
+            if (!atStatementEnd())
+            {
+                parseArguments(s->args);
+            }
+            return s;
+        }
         if (t.kind == TokenKind::Identifier)
         {
             // "name = ..." or "name.Prop = ..." is an assignment; anything
@@ -649,7 +694,7 @@ private:
             return parseCallStatement();
         }
         if (t.isKeyword("DIM") || t.isKeyword("IF") || t.isKeyword("FOR") || t.isKeyword("DO") ||
-            t.isKeyword("WHILE"))
+            t.isKeyword("WHILE") || t.isKeyword("TRY"))
         {
             error(t.location, "'" + t.spelling + "' cannot follow 'Then' or 'Else' on one line");
             return nullptr;
@@ -845,6 +890,58 @@ private:
             expectEndOfStatement();
         }
         else if (expectKeyword("WEND", "Wend' or 'End While"))
+        {
+            expectEndOfStatement();
+        }
+        return s;
+    }
+
+    StmtPtr parseTry()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Try;
+        s->location = next().location; // TRY
+        expectEndOfStatement();
+        s->body = parseBlock("TRY");
+
+        while (peek().isKeyword("CATCH"))
+        {
+            CatchClause clause;
+            clause.location = next().location;
+            if (at(TokenKind::Identifier))
+            {
+                // VB.NET's "Catch ex As Exception": there are no exception
+                // objects here.
+                error(peek().location, "Catch takes no variable: the error is in Err "
+                                       "(write Catch, or Catch When Err.Number = ...)");
+                while (!at(TokenKind::EndOfStatement) && !at(TokenKind::EndOfFile) &&
+                       !peek().isKeyword("WHEN"))
+                {
+                    next();
+                }
+            }
+            if (acceptKeyword("WHEN"))
+            {
+                clause.when = parseExpression();
+            }
+            expectEndOfStatement();
+            clause.body = parseBlock("TRY");
+            s->catches.push_back(std::move(clause));
+        }
+        if (peek().isKeyword("FINALLY"))
+        {
+            s->hasFinally = true;
+            s->finallyLocation = next().location;
+            expectEndOfStatement();
+            s->finallyBody = parseBlock("TRY");
+        }
+        if (s->catches.empty() && !s->hasFinally)
+        {
+            error(s->location, "a Try needs at least one Catch or a Finally");
+        }
+
+        s->endLocation = peek().location;
+        if (expectKeyword("END", "End Try") && expectKeyword("TRY", "Try"))
         {
             expectEndOfStatement();
         }

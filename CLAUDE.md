@@ -36,7 +36,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (27 Oct 2026, Phase 3 step 2 done)
+## Status (27 Oct 2026, Phase 3 step 3 done)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -59,7 +59,13 @@ authoritative for design rationale.
   format, Str$'s space, banker's rounding and errors instead of
   Infinity/NaN, then (same day) the remaining number rules in
   `docs/REFERENCE.md`. Nothing is Proposed at present.
-- **Next:** Phase 3 step 3 (Try/Catch/Finally), or Phase 4 work; ask Jim.
+  Step 3 done (27 Oct 2026): Try/Catch [When]/Finally, Throw, Err.Raise
+  (VB's Number, Source, Description), Err.Clear, Err.Number/Description/
+  Source/Line. Jim settled Err.Raise's form and out of memory being fatal;
+  the other details are *Proposed* in `docs/REFERENCE.md` ("Errors
+  (Proposed)") — confirm them with Jim.
+- **Next:** Phase 3 step 4 (arrays, Types and Ref, Dictionary), or Phase 4
+  work; ask Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -194,6 +200,19 @@ Key mechanisms:
   variable, ByRef parameter, local passed ByRef in that statement,
   property) is snapshotted first (`StatementScope::pendingCalls`).
   `prepare()` must run on a statement's expressions before `expr()`.
+- **Errors in C** (see the c_emitter.cpp and tf_error.c file comments):
+  `tf_raise` (catchable) records the error and returns while a Try is
+  active anywhere (`try_depth` > 0), else exits at once; `tf_fatal_error`
+  always exits (out of memory, terminal). Runtime functions must return a
+  harmless value after `tf_raise` (never do the overflowing operation).
+  Generated code tests `tf_error_pending` — but only if the program
+  contains a Try (`checks_`); otherwise it is identical to before. Labels
+  per Try n: `fail_n` (Catch dispatch), `finally_n`, `ffail_n` (error in
+  Finally: discard the saved one), `leave_n` records Exit/Return through
+  Finally; outside any Try the target is `done`. `settle()` parks a
+  fallible value before use; `checkpoint()` releases temps then jumps.
+  `mayFail()` decides what can fail. With multiple modules (step 6),
+  `checks_` must become whole-program.
 - **Numbers in C:** Integer `int32_t`, Long `int64_t`, Double `double`,
   Boolean `int`. Arithmetic calls `tf_i32_`/`tf_i64_`/`tf_f64_` + op by the
   *result* type; narrower operands widen through the prototypes. Built-in
@@ -205,6 +224,10 @@ Key mechanisms:
   `TERMFORMS_HEADLESS_SIZE=60x14`. Runtime errors print
   `file:line: runtime error N: message` to stderr, exit 1, after restoring
   the terminal. This is how CI tests real programs without a terminal.
+  The dump draws the form first, so it shows what the program last set
+  even when an error or End ends it. On macOS, `leaks --atExit -- prog`
+  (with `MallocStackLogging=1`) checks a headless run for leaks; CI's
+  Linux sanitizer job does the same with LeakSanitizer.
 - **Runtime version** is in `runtime/include/termforms/tf_version.h`
   (header, because tfc compiles the runtime directly); the
   `runtime.version` test fails if it drifts from `project(VERSION)`.
@@ -276,7 +299,6 @@ buffer is reused by the next call (copy what you keep).
   `Dim x As Integer = 5` initialisers.
 - Controls: TextBox and CommandButton only; no Label, menus, MsgBox.
 - Ctrl+Q closes the form (placeholder until menus/End/close semantics).
-- Runtime errors terminate (Try/Catch arrives in Phase 3).
 - Every code point is one cell (no width tables yet); no mouse yet
   (SGR mouse is planned); no Alt keys (ESC-prefix dropped in tf_keys.c).
 - Generated `main()` uses `tf_form_run`, a blocking loop; modal stacks and
@@ -287,7 +309,7 @@ buffer is reused by the next call (copy what you keep).
 Phase 3, language core:
 1. ~~Loops, Exit, Function, parameters, block scope~~ (done 27 Oct 2026).
 2. ~~Long and Double, conversions, Option Strict widening~~ (done 27 Oct 2026).
-3. Try/Catch/Finally lowering (status checks + goto), Err, Throw.
+3. ~~Try/Catch/Finally, Err, Throw~~ (done 27 Oct 2026).
 4. Arrays (0-based, ReDim Preserve, bounds checks), Types and Ref, Dictionary.
 5. String library (Mid$, Left$, InStr, …), file I/O, Command$, Environ$.
 6. Multiple modules and the `.vbp` project file.

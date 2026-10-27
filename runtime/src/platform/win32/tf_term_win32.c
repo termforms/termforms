@@ -142,7 +142,7 @@ int tf_term_read(unsigned char *buffer, int capacity, int timeout_ms)
     DWORD count = 0;
     if (!ReadConsoleInputW(input_handle, records, 64, &count))
     {
-        tf_runtime_error(TF_ERR_TERMINAL, "Console input failed");
+        tf_fatal_error(TF_ERR_TERMINAL, "Console input failed");
     }
 
     int used = 0;

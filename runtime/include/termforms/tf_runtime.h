@@ -36,6 +36,9 @@ extern "C" {
 #define TF_NORETURN
 #endif
 
+/* Immutable, reference-counted UTF-8 string; see "Strings" below. */
+typedef struct tf_string tf_string;
+
 /* ------------------------------------------------------------------------ */
 /* Version and lifetime                                                     */
 /* ------------------------------------------------------------------------ */
@@ -72,17 +75,66 @@ extern int32_t tf_current_line;
 #define TF_LINE(n) (tf_current_line = (n))
 
 /*
- * Reports a runtime error and terminates the program: restores the terminal,
- * prints "file:line: runtime error N: message" to stderr and exits with
- * status 1. (Try/Catch replaces this path in a later phase.)
+ * An error the program cannot handle (out of memory, the terminal lost):
+ * restores the terminal, prints "file:line: runtime error N: message" to
+ * stderr and exits with status 1, even inside a Try.
  */
-TF_NORETURN void tf_runtime_error(int number, const char *message);
+TF_NORETURN void tf_fatal_error(int number, const char *message);
+
+/*
+ * Errors a Try can catch. tf_raise records a runtime error (message is
+ * borrowed); tf_throw is Throw and Err.Raise (a NULL description gives VB's
+ * standard text for the number). Each sets Err and tf_error_pending and
+ * returns, so the caller must return a harmless value; generated code tests
+ * tf_error_pending after the statement. With no Try active, nothing could
+ * catch the error, and both report it and exit as tf_fatal_error does. While
+ * an error is pending, further errors are ignored: the first is reported.
+ */
+extern int tf_error_pending;
+void tf_raise(int number, const char *message);
+void tf_throw(int32_t number, const tf_string *source, const tf_string *description);
+void tf_rethrow(void); /* a bare Throw in a Catch: raise Err again */
+
+/* Try blocks: entered at Try, left on the way into Finally (or End Try). */
+void tf_try_enter(void);
+void tf_try_leave(void);
+
+/* Entering a Catch: the error is handled, Err still describes it. */
+void tf_err_catch(void);
+
+/* Err.Number, Err.Line, Err.Description, Err.Source (borrowed), Err.Clear. */
+int32_t tf_err_number(void);
+int32_t tf_err_line(void);
+tf_string *tf_err_description(void);
+tf_string *tf_err_source(void);
+void tf_err_clear(void);
+
+/*
+ * Finally runs with no error pending. tf_err_save sets aside a pending
+ * error (and Err) before it; tf_err_restore makes it pending again after
+ * (or ends the program if no Try is left to catch it); tf_err_discard drops
+ * it when the Finally block raises an error of its own, which replaces it.
+ */
+typedef struct tf_saved_error
+{
+    int pending;
+    int32_t number;
+    int32_t line;
+    tf_string *description;
+    tf_string *source;
+} tf_saved_error;
+
+void tf_err_save(tf_saved_error *saved);
+void tf_err_restore(tf_saved_error *saved);
+void tf_err_discard(tf_saved_error *saved);
+
+/* After an event handler or Form_Load: an error nobody caught ends the
+   program with its report. */
+void tf_check_uncaught(void);
 
 /* ------------------------------------------------------------------------ */
 /* Strings: immutable, reference-counted UTF-8                              */
 /* ------------------------------------------------------------------------ */
-
-typedef struct tf_string tf_string;
 
 /* Creates a string from UTF-8 bytes (not necessarily NUL-terminated). +1 */
 tf_string *tf_str_from_utf8(const char *bytes, int32_t length);

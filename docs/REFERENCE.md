@@ -183,13 +183,52 @@ x = calls + Counted() + calls   ' 0 + 1 + 1 = 2, where Counted adds 1 to calls
 ## Errors (Settled, 23 Oct 2026)
 
 - `Try / Catch [When cond] / Finally / End Try`; several Catch blocks.
-- `Throw number, description` raises (`Err.Raise` is an alias); a bare
-  `Throw` inside Catch rethrows. `Err` has Number, Description and Line.
+- `Throw number, description` raises; a bare `Throw` inside Catch
+  rethrows. `Err` has Number, Description and Line.
 - Finally runs on every way out: normal end, Exit, Return, an error.
   An error inside Finally replaces the pending one.
 - No GoTo into or out of a Try block.
 - An error nobody catches restores the terminal, prints
   `file:line: runtime error N: message` and exits with status 1.
+
+```vb
+Try
+    total = total \ count
+Catch When Err.Number = 11
+    total = 0                      ' division by zero
+Catch
+    MsgBox Err.Description        ' anything else
+    Throw                          ' and pass it on
+Finally
+    Close #1                       ' always runs
+End Try
+```
+
+### Errors (Settled, 27 Oct 2026)
+
+- `Err.Raise Number [, Source [, Description]]` takes VB's arguments
+  exactly, so VB code runs unchanged; `Err.Source` holds the source. (Its
+  second argument is the Source, where Throw's is the description.)
+- Out of memory ends the program even inside a Try: it cannot be caught.
+
+### Errors (Proposed)
+
+- Catch takes no variable (VB.NET's `Catch ex As Exception` is an error):
+  the error is in `Err`. `Err` keeps the last error after End Try, until
+  the next error or `Err.Clear`. Err's properties are read-only.
+- `Err.Line` is the line where the error happened, which may be inside a
+  procedure the Try called.
+- `Throw number` alone uses VB's standard text for the number ("Division
+  by zero", ...) or "Application-defined or object-defined error";
+  `Throw 0` is error 5.
+- A statement that fails has no partial effect: in `x = a \ b` with b = 0,
+  x keeps its old value.
+- Exit and Return cannot leave a Finally block (as VB.NET); leaving a loop
+  that is wholly inside the Finally is allowed. `End` inside a Try ends the
+  program at once, without running Finally blocks (as VB).
+- A Try needs at least one Catch or a Finally. Catch clauses are tried in
+  order; the first whose When is True (or that has no When) handles the
+  error, and if none does, the error goes on after the Finally.
 
 ## References and Types (Settled, 23 Oct 2026)
 

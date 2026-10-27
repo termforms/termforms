@@ -103,6 +103,7 @@ struct Expr
     std::vector<std::unique_ptr<Expr>> args; // Call arguments (text is the callee)
 
     // Resolved by the semantic pass.
+    bool isErr = false;              // Name: the built-in Err object
     Variable *variable = nullptr;    // Name
     ControlDef *control = nullptr;   // Name
     Procedure *procedure = nullptr;  // Call of a Sub or Function
@@ -122,10 +123,13 @@ enum class StmtKind
     If,
     Call,
     For,
-    Do,     // Do/Loop in all its forms, and While ... Wend / End While
-    Exit,   // Exit For / Do / While / Sub / Function
-    Return, // Return [value]: leaves the Sub or Function
-    End     // the End statement: terminate the program
+    Do,       // Do/Loop in all its forms, and While ... Wend / End While
+    Exit,     // Exit For / Do / While / Sub / Function
+    Return,   // Return [value]: leaves the Sub or Function
+    Try,      // Try ... Catch [When c] ... Finally ... End Try
+    Throw,    // Throw [number [, description]]; Err.Raise number [, source [, desc]]
+    ErrClear, // Err.Clear
+    End       // the End statement: terminate the program
 };
 
 struct Stmt;
@@ -136,6 +140,14 @@ using Block = std::vector<StmtPtr>;
 struct IfArm
 {
     ExprPtr condition;
+    Block body;
+};
+
+// One "Catch [When cond]" of a Try.
+struct CatchClause
+{
+    Location location;
+    ExprPtr when; // null: catches every error
     Block body;
 };
 
@@ -177,8 +189,19 @@ struct Stmt
     bool isWhile = false;
     Location loopLocation; // the Loop / Wend / End While line
 
-    // For and Do bodies.
+    // For and Do bodies; the Try block of a Try.
     Block body;
+
+    // Try: its Catch clauses in order, and Finally.
+    std::vector<CatchClause> catches;
+    Block finallyBody;
+    bool hasFinally = false;
+    Location finallyLocation;
+    Location endLocation; // End Try
+
+    // Throw: args are the number and description (none: rethrow). With
+    // viaErrRaise they are Err.Raise's number, source and description.
+    bool viaErrRaise = false;
 
     // Exit: which construct it leaves ("For", "Do", "While", "Sub",
     // "Function"), and for loops the loop statement, resolved.

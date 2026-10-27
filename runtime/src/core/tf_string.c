@@ -88,7 +88,7 @@ tf_string *tf_str_concat(const tf_string *a, const tf_string *b)
 
     if ((int64_t)la + (int64_t)lb > TF_STR_MAX_LENGTH)
     {
-        tf_runtime_error(TF_ERR_OUT_OF_MEMORY, "String too long");
+        tf_fatal_error(TF_ERR_OUT_OF_MEMORY, "String too long");
     }
     if (la + lb == 0)
     {

@@ -6,7 +6,7 @@ each phase; the full design lives in the project's design documents.
 Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
 language core step by step; so far: Sub and Function with parameters, the
-loops, and the Long and Double types. `docs/REFERENCE.md` has every rule
+loops, Long and Double, and Try/Catch. `docs/REFERENCE.md` has every rule
 as decided, including the ones not built yet.
 
 ## Rules that differ from VB
@@ -56,7 +56,7 @@ End Sub
 | --- | --- |
 | Types | `Integer` (32-bit), `Long` (64-bit), `Double`, `String` (UTF-8), `Boolean`; overflow is a runtime error |
 | Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` `&` `#` `$` |
-| Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `End` |
+| Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `Try ... Catch ... Finally`, `Throw`, `Err.Raise`, `Err.Clear`, `End` |
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
@@ -88,6 +88,34 @@ d = 2 ^ 10 + &HFF + 1.5E-3      ' 1024 + 255 + 0.0015
   error 13, Type mismatch); `Val("12abc")` is lenient and gives 12.
 - `^` binds tighter than unary minus: `-2 ^ 2` is -4.
 - For loops work over Long and Double variables too: `For d = 0 To 1 Step 0.25`.
+
+## Errors
+
+```vb
+Try
+    ratio = total \ count
+Catch When Err.Number = 11          ' Division by zero
+    ratio = 0
+Catch                               ' any other error
+    txtStatus.Text = Err.Number & ": " & Err.Description & " (line " & Err.Line & ")"
+Finally
+    txtStatus.Text = txtStatus.Text & "."   ' runs however the Try ends
+End Try
+
+Throw 1000, "Customer not found"    ' raise your own error
+Err.Raise 1000, "Lookup", "Customer not found"   ' the same, VB's form (with a source)
+```
+
+- Catch has no variable: the error is in `Err` (`Number`, `Description`,
+  `Source`, `Line`). Inside a Catch, `Throw` on its own passes the error on.
+- Errors pass up through Subs and Functions to the nearest Try; an error
+  nobody catches ends the program with `file:line: runtime error N:
+  message`, as before. `Err.Line` is the line where the error happened.
+- Finally runs on every way out of the Try: normal end, an error, `Exit`
+  or `Return`. A Finally cannot itself be left with `Exit` or `Return`.
+- A statement that fails changes nothing: after a failed `x = a \ b`, x
+  keeps its old value.
+- Out of memory cannot be caught.
 
 ## Subs and Functions
 

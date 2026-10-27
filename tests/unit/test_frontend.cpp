@@ -344,3 +344,35 @@ TEST_CASE("Str and Str$ are the same built-in; others take no $")
     CHECK(check(inClick("", "    Dim d As Double\n    d = Val$(\"1\")\n")) ==
           "9:9: 'Val' is written without a '$' suffix\n");
 }
+
+// -- Try/Catch/Finally (Phase 3 step 3) --------------------------------------
+
+TEST_CASE("a Try needs a Catch or a Finally")
+{
+    CHECK(check(inClick("", "    Try\n    End Try\n")) ==
+          "8:5: a Try needs at least one Catch or a Finally\n");
+}
+
+TEST_CASE("Catch takes no exception variable, unlike VB.NET")
+{
+    CHECK(check(inClick("", "    Try\n    Catch ex As Exception\n    End Try\n")) ==
+          "9:11: Catch takes no variable: the error is in Err (write Catch, or Catch When "
+          "Err.Number = ...)\n");
+}
+
+TEST_CASE("Try, Throw, Err.Raise and Err.Clear are accepted in their forms")
+{
+    const std::string body = "    Try\n        Throw 5\n        Throw 6, \"six\"\n"
+                             "        Err.Raise 7\n        Err.Raise 8, \"src\", \"eight\"\n"
+                             "    Catch When Err.Number = 5\n        Throw\n"
+                             "    Catch\n        Err.Clear\n    Finally\n    End Try\n";
+    CHECK(check(inClick("", body)) == "");
+}
+
+TEST_CASE("lexer: Try, Throw and When are reserved")
+{
+    for (const char *word : {"try", "THROW", "When"})
+    {
+        CHECK(tf::isReservedKeyword(word));
+    }
+}

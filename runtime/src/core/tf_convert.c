@@ -192,6 +192,8 @@ static int digit_value(char c)
 static size_t scan_number(const char *text, number *out)
 {
     const char *p = text;
+    out->real = 0.0;
+    out->whole = 0;
     out->is_whole = 1;
     out->whole_too_big = 0;
 
@@ -276,7 +278,8 @@ static size_t scan_number(const char *text, number *out)
     free(copy);
     if (!isfinite(out->real))
     {
-        tf_runtime_error(TF_ERR_OVERFLOW, "Overflow");
+        tf_raise(TF_ERR_OVERFLOW, "Overflow");
+        out->real = 0.0;
     }
     out->whole = negative ? (int64_t)(0u - magnitude) : (int64_t)magnitude;
     return length;
@@ -305,7 +308,11 @@ static number parse_whole_text(const tf_string *text)
     }
     if (used == 0 || *rest != '\0')
     {
-        tf_runtime_error(TF_ERR_TYPE_MISMATCH, "Type mismatch");
+        tf_raise(TF_ERR_TYPE_MISMATCH, "Type mismatch");
+        n.real = 0.0; /* a Try may catch it: give back 0 */
+        n.whole = 0;
+        n.is_whole = 1;
+        n.whole_too_big = 0;
     }
     return n;
 }
@@ -324,7 +331,8 @@ int64_t tf_i64_from_str(const tf_string *text)
     }
     if (n.whole_too_big)
     {
-        tf_runtime_error(TF_ERR_OVERFLOW, "Overflow");
+        tf_raise(TF_ERR_OVERFLOW, "Overflow");
+        return 0;
     }
     return n.whole;
 }
@@ -338,7 +346,8 @@ int32_t tf_i32_from_str(const tf_string *text)
     }
     if (n.whole_too_big)
     {
-        tf_runtime_error(TF_ERR_OVERFLOW, "Overflow");
+        tf_raise(TF_ERR_OVERFLOW, "Overflow");
+        return 0;
     }
     return tf_i32_from_i64(n.whole);
 }

@@ -64,7 +64,7 @@ static tf_key next_scripted(void)
         const char *close = strchr(script, '}');
         if (close == NULL)
         {
-            tf_runtime_error(TF_ERR_INVALID_ARGUMENT, "Unterminated {key} in TERMFORMS_HEADLESS");
+            tf_fatal_error(TF_ERR_INVALID_ARGUMENT, "Unterminated {key} in TERMFORMS_HEADLESS");
         }
         const size_t length = (size_t)(close - script - 1);
         const char *name = script + 1;
@@ -86,7 +86,7 @@ static tf_key next_scripted(void)
                 return key;
             }
         }
-        tf_runtime_error(TF_ERR_INVALID_ARGUMENT, "Unknown {key} in TERMFORMS_HEADLESS");
+        tf_fatal_error(TF_ERR_INVALID_ARGUMENT, "Unknown {key} in TERMFORMS_HEADLESS");
     }
 
     uint32_t cp = 0;

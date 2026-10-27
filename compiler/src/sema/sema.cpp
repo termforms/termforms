@@ -57,6 +57,7 @@ public:
         {
             moduleNames_[b.name] = "built-in function";
         }
+        moduleNames_["Err"] = "built-in object";
         registerControls();
         registerGlobals();
         registerProcedures();
@@ -275,6 +276,8 @@ private:
         current_ = &proc;
         scopes_.assign(1, {});
         loops_.clear();
+        catchDepth_ = 0;
+        finallyFloors_.clear();
         for (auto &p : proc.parameters)
         {
             declareLocal(*p);
@@ -347,6 +350,13 @@ private:
             case StmtKind::Return:
                 checkReturn(s);
                 break;
+            case StmtKind::Try:
+                checkTry(s);
+                break;
+            case StmtKind::Throw:
+                checkThrow(s);
+                break;
+            case StmtKind::ErrClear:
             case StmtKind::End:
                 break;
         }
@@ -377,6 +387,11 @@ private:
         if (controls_.count(v.name) != 0)
         {
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a control");
+            return;
+        }
+        if (v.name == "Err")
+        {
+            diagnostics_.error(v.location, "'Err' is the built-in error object");
             return;
         }
         if (findBuiltin(v.name, 0) != nullptr)
@@ -419,6 +434,13 @@ private:
         {
             diagnostics_.error(target.location, "cannot assign to the control '" + target.text +
                                                     "' itself; assign to one of its properties");
+            return;
+        }
+        if (target.kind == ExprKind::Member && target.left->isErr)
+        {
+            diagnostics_.error(target.location, "Err." + target.text +
+                                                    " is read-only; set it with Throw or "
+                                                    "Err.Raise");
             return;
         }
         if (target.kind == ExprKind::Name || target.kind == ExprKind::Member)
@@ -678,6 +700,95 @@ private:
         return Type::Error;
     }
 
+    // -- Errors ------------------------------------------------------------
+
+    void checkTry(Stmt &s)
+    {
+        checkBlock(s.body);
+        for (CatchClause &c : s.catches)
+        {
+            if (c.when != nullptr)
+            {
+                requireBoolean(*c.when, "a Catch When condition");
+            }
+            ++catchDepth_;
+            checkBlock(c.body);
+            --catchDepth_;
+        }
+        if (s.hasFinally)
+        {
+            finallyFloors_.push_back(loops_.size());
+            checkBlock(s.finallyBody);
+            finallyFloors_.pop_back();
+        }
+    }
+
+    // Throw number [, description]; Err.Raise number [, source [, description]].
+    void checkThrow(Stmt &s)
+    {
+        for (auto &arg : s.args)
+        {
+            checkExpr(*arg);
+        }
+        if (s.args.empty())
+        {
+            if (s.viaErrRaise)
+            {
+                diagnostics_.error(s.location, "Err.Raise needs an error number");
+            }
+            else if (catchDepth_ == 0)
+            {
+                diagnostics_.error(s.location, "a Throw on its own rethrows the error being "
+                                               "handled, so it belongs inside a Catch");
+            }
+            return;
+        }
+        static const char *const kThrow[] = {"the error number", "the description"};
+        static const char *const kRaise[] = {"the error number", "the source", "the description"};
+        const char *const *names = s.viaErrRaise ? kRaise : kThrow;
+        const std::size_t most = s.viaErrRaise ? 3 : 2;
+        if (s.args.size() > most)
+        {
+            diagnostics_.error(s.location, s.viaErrRaise
+                                               ? "Err.Raise takes a number, a source and a "
+                                                 "description"
+                                               : "Throw takes a number and a description");
+            return;
+        }
+        for (std::size_t i = 0; i < s.args.size(); ++i)
+        {
+            const Type want = i == 0 ? Type::Integer : Type::String;
+            const Type t = s.args[i]->type;
+            if (!assignable(want, t))
+            {
+                diagnostics_.error(s.args[i]->location, std::string(names[i]) + " must be " +
+                                                            article(want) + ", not " + article(t) +
+                                                            conversionHint(want, t));
+            }
+        }
+    }
+
+    // Err.Number, Err.Description, Err.Source, Err.Line.
+    Type resolveErrMember(Expr &e)
+    {
+        e.left->isErr = true;
+        e.left->type = Type::Control;
+        static const std::pair<const char *, Type> kMembers[] = {{"Number", Type::Integer},
+                                                                 {"Description", Type::String},
+                                                                 {"Source", Type::String},
+                                                                 {"Line", Type::Integer}};
+        for (const auto &[name, type] : kMembers)
+        {
+            if (e.text == name)
+            {
+                return type;
+            }
+        }
+        diagnostics_.error(e.location, "Err has no property '" + e.text +
+                                           "' (it has Number, Description, Source and Line)");
+        return Type::Error;
+    }
+
     // -- Loops and leaving them --------------------------------------------
 
     void checkFor(Stmt &s)
@@ -729,16 +840,26 @@ private:
                                                    procedureKind() + "; use 'Exit " +
                                                    procedureKind() + "'");
             }
+            else if (!finallyFloors_.empty())
+            {
+                leavingFinally(s.location, "Exit " + s.exitWhat);
+            }
             return;
         }
-        for (auto loop = loops_.rbegin(); loop != loops_.rend(); ++loop)
+        for (std::size_t i = loops_.size(); i-- > 0;)
         {
-            const Stmt &l = **loop;
+            const Stmt &l = *loops_[i];
             const bool matches = s.exitWhat == "For"  ? l.kind == StmtKind::For
                                  : s.exitWhat == "Do" ? l.kind == StmtKind::Do && !l.isWhile
                                                       : l.kind == StmtKind::Do && l.isWhile;
             if (matches)
             {
+                // A loop entirely inside the Finally may be left; one
+                // around it may not.
+                if (!finallyFloors_.empty() && i < finallyFloors_.back())
+                {
+                    leavingFinally(s.location, "Exit " + s.exitWhat);
+                }
                 s.exitLoop = &l;
                 return;
             }
@@ -747,8 +868,18 @@ private:
                            "'Exit " + s.exitWhat + "' is not inside a " + s.exitWhat + " loop");
     }
 
+    // As in VB.NET: Finally runs while leaving, so it cannot itself leave.
+    void leavingFinally(Location where, const std::string &statement)
+    {
+        diagnostics_.error(where, "'" + statement + "' cannot leave a Finally block");
+    }
+
     void checkReturn(Stmt &s)
     {
+        if (!finallyFloors_.empty())
+        {
+            leavingFinally(s.location, "Return");
+        }
         if (!current_->isFunction)
         {
             if (s.value != nullptr)
@@ -860,6 +991,11 @@ private:
             return Type::Control;
         }
 
+        if (e.text == "Err")
+        {
+            diagnostics_.error(e.location, "Err is used through its properties, as in Err.Number");
+            return Type::Error;
+        }
         if (findBuiltin(e.text, e.suffix) != nullptr)
         {
             diagnostics_.error(e.location, "'" + e.text +
@@ -904,6 +1040,10 @@ private:
     Type resolveMember(Expr &e)
     {
         Expr &object = *e.left;
+        if (object.kind == ExprKind::Name && object.text == "Err")
+        {
+            return resolveErrMember(e);
+        }
         const Type objectType = checkExpr(object);
         if (objectType == Type::Error)
         {
@@ -1094,6 +1234,10 @@ private:
     Procedure *current_ = nullptr;
     std::vector<std::map<std::string, Variable *>> scopes_;
     std::vector<const Stmt *> loops_;
+    int catchDepth_ = 0; // Catch blocks around the statement (for a bare Throw)
+    // For each Finally around the statement, how many loops were already
+    // open when it began: those cannot be left from inside it.
+    std::vector<std::size_t> finallyFloors_;
 };
 
 } // namespace

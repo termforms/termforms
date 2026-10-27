@@ -18,6 +18,19 @@
 // first. That copy also keeps a String alive if the call reassigns the
 // variable it came from.
 //
+// Errors (Try/Catch/Finally): the runtime sets tf_error_pending and
+// returns; generated code tests it after anything that can fail and jumps
+// to the innermost handler: the Try's Catch dispatch (fail_<n>), its
+// Finally (finally_<n>, from inside a Catch), a cleanup that drops the
+// pending error a Finally set aside (ffail_<n>, from inside the Finally),
+// or the procedure's cleanup (done), after which the caller tests it in
+// turn. A value that can fail is computed into a temporary and checked
+// before it is stored or passed on, so a failed statement has no partial
+// effect. Leaving a Try with Exit or Return records the way out in
+// leave_<n> and runs the Finally first. A program with no Try gets no
+// checks at all: nothing could catch an error, so the runtime ends the
+// program where the error happens, as it always has.
+//
 // Procedures: parameters are C parameters (ByRef ones are pointers). A
 // ByVal String parameter takes its own reference on entry, so the callee
 // may assign to it, and the caller may change the variable it came from,
@@ -30,6 +43,7 @@
 
 #include "sema/catalog.hpp"
 
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -52,6 +66,25 @@ struct Value
 {
     std::string code;
     bool owned = false;
+};
+
+// A Try being emitted: where errors inside it go, and the ways out of it
+// (Exit, Return) that must run its Finally first.
+struct TryContext
+{
+    enum class Part
+    {
+        Body,
+        Catch,
+        Finally
+    };
+    int id = 0;
+    Part part = Part::Body;
+    bool hasCatches = false;
+    std::size_t loopFloor = 0;        // loops already open at Try
+    std::vector<const Stmt *> leaves; // per leave_<n> value: the loop, or null for the procedure
+    bool failUsed = false;            // fail_<n> is jumped to
+    bool finallyFailUsed = false;     // ffail_<n> is jumped to
 };
 
 // Per-statement scratch: temporaries and the code that fills them.
@@ -78,6 +111,7 @@ public:
 
     std::string run()
     {
+        checks_ = containsTry(module_);
         std::ostringstream body;
         for (const auto &proc : module_.procedures)
         {
@@ -173,6 +207,8 @@ private:
         loopIds_.clear();
         loopLabels_.clear();
         loopCount_ = 0;
+        tries_.clear();
+        tryCount_ = 0;
 
         line(out, proc.location);
         out << signature(proc) << "\n{\n";
@@ -219,10 +255,11 @@ private:
         emitBlock(out, proc.body, 1);
 
         const std::string result = proc.isFunction ? " return r_" + proc.name + ";" : "";
-        if (!cleanup_.empty() || !result.empty())
+        if (!cleanup_.empty() || !result.empty() || usesCleanupLabel_)
         {
             line(out, proc.endLocation);
-            out << (usesCleanupLabel_ ? "done:" : "   ") << cleanup_ << result << '\n';
+            const std::string rest = cleanup_ + result;
+            out << (usesCleanupLabel_ ? "done:" : "   ") << (rest.empty() ? ";" : rest) << '\n';
         }
         out << "}\n\n";
         current_ = nullptr;
@@ -254,7 +291,8 @@ private:
         const ControlDef *form = module_.form.get();
         if (form == nullptr)
         {
-            out << "    p_Main();\n    return 0;\n}\n";
+            out << "    p_Main();\n"
+                << (checks_ ? "    tf_check_uncaught();\n" : "") << "    return 0;\n}\n";
             return;
         }
 
@@ -297,6 +335,10 @@ private:
         if (load != nullptr)
         {
             out << "    p_" << load->name << "();\n";
+            if (checks_)
+            {
+                out << "    tf_check_uncaught();\n";
+            }
         }
         out << "    return tf_form_run(c_" << form->name << ");\n}\n";
     }
@@ -363,6 +405,9 @@ private:
             case StmtKind::Do:
                 emitDo(out, s, depth);
                 return;
+            case StmtKind::Try:
+                emitTry(out, s, depth);
+                return;
             default:
                 break;
         }
@@ -381,12 +426,22 @@ private:
                 break;
             case StmtKind::Call:
                 code = wrap(scope, callStatement(s, scope));
+                if (checks_)
+                {
+                    code += " if (tf_error_pending) " + failJump(); // the callee failed
+                }
                 break;
             case StmtKind::Exit:
-                code = s.exitLoop != nullptr ? exitLoop(*s.exitLoop) : leaveProcedure();
+                code = leave(s.exitLoop);
                 break;
             case StmtKind::Return:
                 code = returnStatement(s, scope);
+                break;
+            case StmtKind::Throw:
+                code = throwStatement(s, scope);
+                break;
+            case StmtKind::ErrClear:
+                code = "tf_err_clear();";
                 break;
             case StmtKind::End:
                 code = "tf_end(0);";
@@ -413,7 +468,7 @@ private:
         const std::string condition = unparenthesised(expr(*arm.condition, scope).code);
 
         line(out, arm.condition->location);
-        if (scope.prelude.empty())
+        if (scope.prelude.empty() && !(checks_ && mayFail(*arm.condition)))
         {
             out << indent(depth) << "TF_LINE(" << arm.condition->location.line << "); if ("
                 << condition << ")\n";
@@ -426,7 +481,8 @@ private:
         // BASIC line by the debugger.
         const std::string cond = "cond_" + std::to_string(arm.condition->location.line);
         out << indent(depth) << "{ TF_LINE(" << arm.condition->location.line << ");"
-            << evaluate(scope, cond, condition) << " if (" << cond << ")\n";
+            << evaluate(scope, cond, condition, mayFail(*arm.condition)) << " if (" << cond
+            << ")\n";
         emitArmBodies(out, s, index, depth);
         out << indent(depth) << "}\n";
     }
@@ -453,10 +509,15 @@ private:
 
     // " prelude; const int cond = (condition); releases;" for a condition
     // that needs temporaries.
-    static std::string evaluate(const StatementScope &scope, const std::string &name,
-                                const std::string &condition)
+    std::string evaluate(const StatementScope &scope, const std::string &name,
+                         const std::string &condition, bool canFail = false)
     {
-        return withTemporaries(scope, "const int " + name + " = (" + condition + ");");
+        std::string out = withTemporaries(scope, "const int " + name + " = (" + condition + ");");
+        if (checks_ && canFail)
+        {
+            out += " if (tf_error_pending) " + failJump();
+        }
+        return out;
     }
 
     void emitArmBodies(std::ostringstream &out, const Stmt &s, std::size_t index, int depth)
@@ -499,21 +560,22 @@ private:
         const bool limitConst = isConstant(*s.limit);
         const bool stepConst = s.step == nullptr || isConstant(*s.step);
         std::string code;
-        std::string start = forOperand(*s.value, scope);
+        std::string start = settle(*s.value, forOperand(*s.value, scope), scope);
         if (!isConstant(*s.value) && (!limitConst || !stepConst))
         {
             code += "const " + declaration(varType, "from_" + std::to_string(id)) + " = " + start +
                     "; ";
             start = "from_" + std::to_string(id);
         }
-        std::string limit = forOperand(*s.limit, scope);
+        std::string limit = settle(*s.limit, forOperand(*s.limit, scope), scope);
         if (!limitConst)
         {
             code +=
                 "const " + declaration(varType, "to_" + std::to_string(id)) + " = " + limit + "; ";
             limit = "to_" + std::to_string(id);
         }
-        std::string step = s.step == nullptr ? "1" : forOperand(*s.step, scope);
+        std::string step =
+            s.step == nullptr ? "1" : settle(*s.step, forOperand(*s.step, scope), scope);
         if (!stepConst)
         {
             code +=
@@ -542,8 +604,11 @@ private:
         out << indent(inner) << "for (;;)\n" << indent(inner) << "{\n";
         emitLine(out, s.location, inner + 1, "if (" + test + ") break;");
         emitBlock(out, s.body, inner + 1);
+        const std::string next = opPrefix(varType) + "add(" + var + ", " + step + ")";
         emitLine(out, s.nextLocation, inner + 1,
-                 var + " = " + opPrefix(varType) + "add(" + var + ", " + step + ");");
+                 checks_ ? "{ const " + declaration(varType, "next") + " = " + next +
+                               "; if (tf_error_pending) " + failJump() + " " + var + " = next; }"
+                         : var + " = " + next + ";");
         out << indent(inner) << "}\n";
         leaveLoop(out, s, inner);
         if (braced)
@@ -577,7 +642,7 @@ private:
         StatementScope scope;
         prepare(scope, {s.condition.get()});
         const std::string condition = unparenthesised(expr(*s.condition, scope).code);
-        if (scope.prelude.empty())
+        if (scope.prelude.empty() && !(checks_ && mayFail(*s.condition)))
         {
             emitLine(out, where, depth,
                      std::string("if (") + (s.until ? "" : "!") + "(" + condition + ")) break;");
@@ -586,8 +651,8 @@ private:
         const std::string cond = "cond_" + std::to_string(where.line);
         line(out, where);
         out << indent(depth) << "{ TF_LINE(" << where.line << ");"
-            << evaluate(scope, cond, condition) << " if (" << (s.until ? "" : "!") << cond
-            << ") break; }\n";
+            << evaluate(scope, cond, condition, mayFail(*s.condition)) << " if ("
+            << (s.until ? "" : "!") << cond << ") break; }\n";
     }
 
     int enterLoop(const Stmt &s)
@@ -634,14 +699,14 @@ private:
     {
         if (s.value == nullptr)
         {
-            return leaveProcedure();
+            return leave(nullptr);
         }
         const std::string result = "r_" + current_->name;
-        const Value v = expr(*s.value, scope);
+        const Value v = settle(*s.value, expr(*s.value, scope), scope);
         const std::string store = current_->result->type == Type::String
                                       ? "tf_str_assign(&" + result + ", " + ownedCode(v) + ");"
                                       : result + " = " + v.code + ";";
-        return wrap(scope, store) + " " + leaveProcedure();
+        return wrap(scope, store) + " " + leave(nullptr);
     }
 
     // A For bound: a literal (possibly negated) is written as a plain number.
@@ -680,6 +745,350 @@ private:
         return negated != negative && (literal.real != 0 || literal.integer != 0);
     }
 
+    // -- Errors ------------------------------------------------------------
+
+    // Throw [number [, description]] and Err.Raise number [, source [, desc]].
+    std::string throwStatement(const Stmt &s, StatementScope &scope)
+    {
+        std::string call;
+        if (s.args.empty())
+        {
+            call = "tf_rethrow();";
+        }
+        else
+        {
+            std::vector<std::string> parts = {"0", "NULL", "NULL"}; // number, source, description
+            for (std::size_t i = 0; i < s.args.size(); ++i)
+            {
+                const std::size_t slot = s.viaErrRaise || i == 0 ? i : 2;
+                const Expr &arg = *s.args[i];
+                parts[slot] = i == 0 ? settle(arg, expr(arg, scope), scope).code
+                                     : borrowed(settle(arg, expr(arg, scope), scope), scope).code;
+            }
+            call = "tf_throw(" + parts[0] + ", " + parts[1] + ", " + parts[2] + ");";
+        }
+        // The error is now pending (or the program has ended): go to the handler.
+        return checks_ ? wrap(scope, call) + " " + failJump() : wrap(scope, call);
+    }
+
+    // Try ... Catch [When c] ... Finally ... End Try. See the file comment
+    // for the labels; everything is inside one C block so the names of the
+    // Try's variables (leave_<n>, saved_<n>) stay local to it.
+    void emitTry(std::ostringstream &out, const Stmt &s, int depth)
+    {
+        const int id = ++tryCount_;
+        const std::string n = std::to_string(id);
+        TryContext context;
+        context.id = id;
+        context.hasCatches = !s.catches.empty();
+        context.loopFloor = loopStack_.size();
+        tries_.push_back(context);
+
+        std::ostringstream body;
+        emitBlock(body, s.body, depth + 1);
+        if (!endsInJump(s.body))
+        {
+            body << indent(depth + 1) << "goto finally_" << n << ";\n";
+        }
+
+        std::ostringstream catches;
+        tries_.back().part = TryContext::Part::Catch;
+        if (tries_.back().failUsed)
+        {
+            catches << indent(depth) << "fail_" << n << ":\n";
+            catches << indent(depth + 1) << "tf_err_catch();\n";
+            bool catchesAll = false;
+            for (const CatchClause &c : s.catches)
+            {
+                emitCatch(catches, c, n, depth + 1);
+                if (c.when == nullptr)
+                {
+                    catchesAll = true;
+                    break; // later clauses could never run
+                }
+            }
+            if (!catchesAll)
+            {
+                catches << indent(depth + 1) << "tf_rethrow(); /* no Catch matched */\n";
+            }
+        }
+
+        std::ostringstream finally;
+        tries_.back().part = TryContext::Part::Finally;
+        finally << indent(depth) << "finally_" << n << ":\n";
+        line(finally, s.hasFinally ? s.finallyLocation : s.endLocation);
+        const int finallyLine = (s.hasFinally ? s.finallyLocation : s.endLocation).line;
+        finally << indent(depth + 1) << "TF_LINE(" << finallyLine << "); tf_try_leave();"
+                << (s.hasFinally ? " tf_err_save(&saved_" + n + ");" : "") << '\n';
+        emitBlock(finally, s.finallyBody, depth + 1);
+
+        // Back in the surrounding code: pass on a pending error, or take the
+        // way out that ran the Finally.
+        TryContext done = tries_.back();
+        tries_.pop_back();
+        std::string after = s.hasFinally ? "tf_err_restore(&saved_" + n + "); " : "";
+        after += "if (tf_error_pending) " + failJump();
+        for (std::size_t i = 0; i < done.leaves.size(); ++i)
+        {
+            after +=
+                " if (leave_" + n + " == " + std::to_string(i + 1) + ") " + leave(done.leaves[i]);
+        }
+        emitLine(finally, s.endLocation, depth + 1, after);
+        if (done.finallyFailUsed)
+        {
+            // An error in the Finally replaces the one it set aside.
+            finally << indent(depth + 1) << "goto end_" << n << ";\n";
+            finally << indent(depth) << "ffail_" << n << ":\n";
+            finally << indent(depth + 1) << "tf_err_discard(&saved_" << n << "); " << failJump()
+                    << '\n';
+            finally << indent(depth) << "end_" << n << ":;\n";
+        }
+
+        line(out, s.location);
+        out << indent(depth) << "{ TF_LINE(" << s.location.line << "); tf_try_enter();"
+            << (done.leaves.empty() ? "" : " int leave_" + n + " = 0;")
+            << (s.hasFinally ? " tf_saved_error saved_" + n + ";" : "") << '\n';
+        out << body.str() << catches.str() << finally.str();
+        out << indent(depth) << "}\n";
+    }
+
+    // One Catch: "if (When) { body; goto finally; }", or the body alone.
+    void emitCatch(std::ostringstream &out, const CatchClause &c, const std::string &n, int depth)
+    {
+        const std::string toFinally = "goto finally_" + n + ";";
+        if (c.when == nullptr)
+        {
+            line(out, c.location);
+            out << indent(depth) << "TF_LINE(" << c.location.line << ");\n";
+            out << indent(depth) << "{\n";
+            emitBlock(out, c.body, depth + 1);
+            if (!endsInJump(c.body))
+            {
+                out << indent(depth + 1) << toFinally << '\n';
+            }
+            out << indent(depth) << "}\n";
+            return;
+        }
+        StatementScope scope;
+        prepare(scope, {c.when.get()});
+        const std::string condition = unparenthesised(expr(*c.when, scope).code);
+        const std::string cond = "cond_" + std::to_string(c.location.line);
+        line(out, c.location);
+        out << indent(depth) << "{ TF_LINE(" << c.location.line << ");"
+            << evaluate(scope, cond, condition, mayFail(*c.when)) << " if (" << cond << ")\n";
+        out << indent(depth) << "{\n";
+        emitBlock(out, c.body, depth + 1);
+        if (!endsInJump(c.body))
+        {
+            out << indent(depth + 1) << toFinally << '\n';
+        }
+        out << indent(depth) << "}\n";
+        out << indent(depth) << "}\n";
+    }
+
+    // Does the block end with a statement that always jumps away? Then the
+    // jump to the Finally after it would be dead code (compilers warn).
+    static bool endsInJump(const Block &block)
+    {
+        if (block.empty() || block.back() == nullptr)
+        {
+            return false;
+        }
+        const StmtKind k = block.back()->kind;
+        return k == StmtKind::Throw || k == StmtKind::Exit || k == StmtKind::Return ||
+               k == StmtKind::End;
+    }
+
+    // Where an error goes from here: the innermost Try part's handler, or the
+    // procedure's cleanup, which returns to the caller.
+    std::string failTarget()
+    {
+        if (tries_.empty())
+        {
+            usesCleanupLabel_ = true;
+            return "done";
+        }
+        TryContext &t = tries_.back();
+        const std::string n = std::to_string(t.id);
+        switch (t.part)
+        {
+            case TryContext::Part::Body:
+                if (!t.hasCatches)
+                {
+                    return "finally_" + n;
+                }
+                t.failUsed = true;
+                return "fail_" + n;
+            case TryContext::Part::Catch:
+                return "finally_" + n; // the Finally runs, then the error goes on
+            case TryContext::Part::Finally:
+                t.finallyFailUsed = true;
+                return "ffail_" + n;
+        }
+        return "done";
+    }
+
+    std::string failJump() { return "goto " + failTarget() + ";"; }
+
+    // After something that may have failed: on an error, release the
+    // statement's string temporaries so far and jump to the handler.
+    void checkpoint(StatementScope &scope)
+    {
+        if (!checks_)
+        {
+            return;
+        }
+        std::string releases;
+        for (const std::string &t : scope.releases)
+        {
+            releases += "tf_str_release(" + t + "); ";
+        }
+        scope.prelude.push_back(releases.empty()
+                                    ? "if (tf_error_pending) " + failJump()
+                                    : "if (tf_error_pending) { " + releases + failJump() + " }");
+    }
+
+    // A value that can fail is computed into a temporary and checked before
+    // anything uses it, so a failed statement changes nothing.
+    Value settle(const Expr &e, const Value &v, StatementScope &scope)
+    {
+        if (!checks_ || !mayFail(e))
+        {
+            return v;
+        }
+        const std::string temp = scope.newTemp();
+        scope.prelude.push_back(declaration(e.type, temp) + " = " + v.code + ";");
+        if (v.owned)
+        {
+            scope.releases.push_back(temp);
+        }
+        checkpoint(scope);
+        return {temp, false};
+    }
+
+    std::string settle(const Expr &e, const std::string &code, StatementScope &scope)
+    {
+        return settle(e, Value{code, false}, scope).code;
+    }
+
+    // Can evaluating e raise an error, apart from the Functions it calls
+    // (which are checked where they are hoisted)? Arithmetic can overflow
+    // or divide by zero, conversions can fail; text, comparisons and logic
+    // cannot (running out of memory ends the program).
+    static bool mayFail(const Expr &e)
+    {
+        for (const auto &arg : e.args)
+        {
+            if (mayFail(*arg))
+            {
+                return true;
+            }
+        }
+        if ((e.left != nullptr && mayFail(*e.left)) || (e.right != nullptr && mayFail(*e.right)))
+        {
+            return true;
+        }
+        switch (e.kind)
+        {
+            case ExprKind::Unary:
+                return e.text == "-" && (e.type == Type::Integer || e.type == Type::Long);
+            case ExprKind::Binary:
+                return isNumeric(e.type) && e.text != "&";
+            case ExprKind::Call:
+                switch (e.builtin)
+                {
+                    case Builtin::CInt:
+                        return e.args[0]->type != Type::Integer;
+                    case Builtin::CLng:
+                        return e.args[0]->type == Type::Double || e.args[0]->type == Type::String;
+                    case Builtin::CDbl:
+                        return e.args[0]->type == Type::String;
+                    case Builtin::Val:
+                        return true; // a number too large for a Double
+                    default:
+                        return false;
+                }
+            default:
+                return false;
+        }
+    }
+
+    // Exit For/Do/While (loop) or Exit Sub/Function and Return (null).
+    // Leaving through a Try runs its Finally first: record the way out in
+    // leave_<n> and jump there; the Finally's end takes it, from outside.
+    std::string leave(const Stmt *loop)
+    {
+        if (!tries_.empty())
+        {
+            TryContext &t = tries_.back();
+            const bool crosses = loop == nullptr || loopIndex(*loop) < t.loopFloor;
+            if (crosses)
+            {
+                t.leaves.push_back(loop);
+                const std::string n = std::to_string(t.id);
+                return "leave_" + n + " = " + std::to_string(t.leaves.size()) + "; goto finally_" +
+                       n + ";";
+            }
+        }
+        return loop != nullptr ? exitLoop(*loop) : leaveProcedure();
+    }
+
+    std::size_t loopIndex(const Stmt &loop) const
+    {
+        for (std::size_t i = 0; i < loopStack_.size(); ++i)
+        {
+            if (loopStack_[i] == &loop)
+            {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    static bool containsTry(const Module &module)
+    {
+        for (const auto &proc : module.procedures)
+        {
+            if (containsTry(proc->body))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static bool containsTry(const Block &block)
+    {
+        for (const auto &s : block)
+        {
+            if (s == nullptr)
+            {
+                continue;
+            }
+            if (s->kind == StmtKind::Try || containsTry(s->body) || containsTry(s->elseBody))
+            {
+                return true;
+            }
+            for (const IfArm &arm : s->arms)
+            {
+                if (containsTry(arm.body))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static std::string lowerCase(std::string text)
+    {
+        for (char &c : text)
+        {
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        return text;
+    }
+
     // -- Assignments and calls ---------------------------------------------
 
     std::string assignment(const Stmt &s, StatementScope &scope)
@@ -694,15 +1103,15 @@ private:
             if (prop->type == Type::String)
             {
                 // The setter borrows, so an owned value goes through a temporary.
-                const Value v = borrowed(expr(*s.value, scope), scope);
+                const Value v = borrowed(settle(*s.value, expr(*s.value, scope), scope), scope);
                 return "tf_set_str(c_" + control->name + ", " + prop->cName + ", " + v.code + ");";
             }
             return "tf_set_int(c_" + control->name + ", " + prop->cName + ", " +
-                   expr(*s.value, scope).code + ");";
+                   settle(*s.value, expr(*s.value, scope), scope).code + ");";
         }
 
         const Variable &var = *target.variable;
-        const Value v = expr(*s.value, scope);
+        const Value v = settle(*s.value, expr(*s.value, scope), scope);
         if (target.type == Type::String)
         {
             return "tf_str_assign(" + variableAddress(var) + ", " + ownedCode(v) + ");";
@@ -749,11 +1158,11 @@ private:
             }
             else if (param.type == Type::String)
             {
-                code = borrowed(expr(*args[i], scope), scope).code;
+                code = borrowed(settle(*args[i], expr(*args[i], scope), scope), scope).code;
             }
             else
             {
-                code = expr(*args[i], scope).code;
+                code = settle(*args[i], expr(*args[i], scope), scope).code;
             }
             out += (i == 0 ? "" : ", ") + code;
         }
@@ -906,11 +1315,16 @@ private:
         {
             scope.releases.push_back(temp);
         }
+        checkpoint(scope); // nothing after a failed call may run
         return {temp, false};
     }
 
     Value member(const Expr &e)
     {
+        if (e.left->isErr)
+        {
+            return {"tf_err_" + lowerCase(e.text) + "()", false}; // tf_err_number() ...
+        }
         const ControlDef *control = e.left->control;
         const catalog::ControlType *type = catalog::findType(control->typeName);
         const catalog::Property *prop = catalog::findProperty(*type, e.text);
@@ -1237,6 +1651,9 @@ private:
     std::map<const Stmt *, int> loopIds_; // numbering for exit_<n>, to_<n>
     std::set<const Stmt *> loopLabels_;   // loops an Exit jumps past
     int loopCount_ = 0;
+    std::vector<TryContext> tries_; // Trys around the statement, innermost last
+    int tryCount_ = 0;
+    bool checks_ = false; // the program has a Try, so errors are tested for
 };
 
 } // namespace

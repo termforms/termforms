@@ -93,6 +93,8 @@ static void fire(tf_control *control, tf_event event)
     if (control->handlers[event] != NULL)
     {
         control->handlers[event]();
+        /* An error a Try's Finally let through, with no Catch left. */
+        tf_check_uncaught();
     }
 }
 
@@ -492,6 +494,7 @@ static void button_key(tf_control *button, tf_key key)
 /* ------------------------------------------------------------------------ */
 
 static int headless = 0;
+static tf_control *running_form = NULL; /* the form tf_form_run is showing */
 
 static void parse_size(const char *text, int *cols, int *rows)
 {
@@ -510,6 +513,12 @@ static void ui_shutdown(void)
 {
     if (headless)
     {
+        /* Draw first: an error or End may come before the next redraw,
+           and the dump should show what the program last set. */
+        if (running_form != NULL)
+        {
+            draw_form(running_form);
+        }
         tf_screen_dump(stdout);
     }
     else
@@ -543,7 +552,7 @@ static void ui_open(void)
         const char *reason = "";
         if (tf_term_open(&reason) != 0)
         {
-            tf_runtime_error(TF_ERR_TERMINAL, reason);
+            tf_fatal_error(TF_ERR_TERMINAL, reason);
         }
         use_utf8 = tf_term_utf8();
         tf_term_size(&cols, &rows);
@@ -555,6 +564,7 @@ static void ui_open(void)
 
 int tf_form_run(tf_control *form)
 {
+    running_form = form;
     ui_open();
     move_focus(form, 1);
 

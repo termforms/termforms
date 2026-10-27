@@ -1,0 +1,14 @@
+try.bas:9:5: error: a Throw on its own rethrows the error being handled, so it belongs inside a Catch
+try.bas:10:11: error: the error number must be an Integer, not a String; use CInt(value) to convert
+try.bas:11:14: error: the description must be a String, not an Integer; use CStr(value) to convert
+try.bas:12:5: error: Throw takes a number and a description
+try.bas:13:5: error: Err.Raise needs an error number
+try.bas:14:18: error: the source must be a String, not an Integer; use CStr(value) to convert
+try.bas:15:9: error: Err.Number is read-only; set it with Throw or Err.Raise
+try.bas:16:13: error: Err has no property 'Count' (it has Number, Description, Source and Line)
+try.bas:17:9: error: Err is used through its properties, as in Err.Number
+try.bas:20:16: error: a Catch When condition must be Boolean, not Integer
+try.bas:22:9: error: 'Exit Sub' cannot leave a Finally block
+try.bas:27:13: error: 'Exit For' cannot leave a Finally block
+try.bas:35:9: error: 'Return' cannot leave a Finally block
+try.bas:40:9: error: 'Err' is the built-in error object
