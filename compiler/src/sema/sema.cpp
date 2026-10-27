@@ -69,7 +69,17 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"EOF", Builtin::Eof, false},
                                      {"LOF", Builtin::Lof, false},
                                      {"FreeFile", Builtin::FreeFile, false},
-                                     {"Seek", Builtin::SeekPos, false}};
+                                     {"Seek", Builtin::SeekPos, false},
+                                     {"Kill", Builtin::FileKill, false},
+                                     {"MkDir", Builtin::FileMkDir, false},
+                                     {"RmDir", Builtin::FileRmDir, false},
+                                     {"ChDir", Builtin::FileChDir, false},
+                                     {"FileCopy", Builtin::FileCopy, false},
+                                     {"CurDir", Builtin::CurDir, true},
+                                     {"FileLen", Builtin::FileLen, false},
+                                     {"FileDateTime", Builtin::FileDateTime, false},
+                                     {"Exists", Builtin::Exists, false},
+                                     {"Dir", Builtin::Dir, true}};
 
 const BuiltinInfo *findBuiltin(const std::string &name, char suffix)
 {
@@ -760,6 +770,26 @@ private:
             return;
         }
         s.procedure = findProcedure(s.callee);
+        // Kill "x", MkDir d, FileCopy a, b: built-in statements, written as
+        // calls of a Sub (a program's own Sub of that name comes first).
+        if (const BuiltinInfo *b = s.procedure == nullptr ? findBuiltin(s.callee, 0) : nullptr)
+        {
+            if (const StringFunction *f = findStringFunction(b->id);
+                f != nullptr && f->result == Type::Void)
+            {
+                auto call = std::make_unique<Expr>();
+                call->kind = ExprKind::Call;
+                call->builtin = b->id;
+                call->text = b->name;
+                call->location = s.location;
+                call->args = std::move(s.args);
+                s.args.clear();
+                s.args.push_back(std::move(call));
+                s.kind = StmtKind::Library;
+                checkExpr(*s.args[0]);
+                return;
+            }
+        }
         if (s.procedure == nullptr && findBuiltin(s.callee, 0) != nullptr)
         {
             diagnostics_.error(s.location, "'" + s.callee +
@@ -906,6 +936,18 @@ private:
         }
         if (const StringFunction *f = findStringFunction(b.id))
         {
+            if (f->result == Type::Void)
+            {
+                for (auto &arg : e.args)
+                {
+                    checkExpr(*arg);
+                }
+                diagnostics_.error(e.location, "'" + e.text +
+                                                   "' is a statement, not a function: "
+                                                   "write it on its own, as in " +
+                                                   e.text + " ...");
+                return Type::Error;
+            }
             return checkStringFunction(e, b.name, *f);
         }
         e.builtin = b.id;
@@ -2721,8 +2763,12 @@ private:
 
     // Len, Mid$, InStr, Split, ...: arguments by the signature; missing
     // optional ones become their defaults, so codegen sees every argument.
-    Type checkStringFunction(Expr &e, const std::string &baseName, const StringFunction &f)
+    Type checkStringFunction(Expr &e, const std::string &baseName, const StringFunction &given_)
     {
+        // Dir$() (or Dir$ alone) with no pattern goes on with the last one.
+        const StringFunction &f = given_.id == Builtin::Dir && e.args.empty()
+                                      ? *findStringFunction(Builtin::DirNext)
+                                      : given_;
         const bool whole = wholeNow_; // Split gives an array: where is it used?
         e.builtin = f.id;
         const std::string name = baseName + (e.suffix != 0 ? std::string(1, e.suffix) : "");

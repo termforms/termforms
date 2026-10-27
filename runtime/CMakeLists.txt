@@ -23,6 +23,7 @@ set(TF_RUNTIME_SOURCES
     src/core/tf_array.c
     src/core/tf_text.c
     src/core/tf_file.c
+    src/core/tf_fsys.c
     src/core/tf_ref.c
     src/tui/tf_keys.c
     src/tui/tf_screen.c

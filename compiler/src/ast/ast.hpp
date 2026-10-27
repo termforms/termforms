@@ -114,7 +114,20 @@ enum class Builtin
     FileGet,
     FilePut,
     FileSeek, // Seek #n, offset
-    Count,    // not a name programs use: For Each's element count of an array (a Long)
+    // The file system (step 6b-4).
+    FileKill,
+    FileMkDir,
+    FileRmDir,
+    FileChDir,
+    FileCopy,
+    FileName, // Name old As new
+    CurDir,
+    FileLen,
+    FileDateTime,
+    Exists,
+    Dir,
+    DirNext, // Dir$() with no pattern
+    Count,   // not a name programs use: For Each's element count of an array (a Long)
     // A Dictionary's members, made from d.Count, d.Exists(k), ... (args[0]
     // is the Dictionary, then the key): never written by name.
     DictCount,
@@ -178,6 +191,18 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::FileGet, "IILBII", 6, {}, Type::Void, "tf_file_get", true},
     {Builtin::FilePut, "IILBII", 6, {}, Type::Void, "tf_file_put", true},
     {Builtin::FileSeek, "IL", 2, {}, Type::Void, "tf_file_seek", true},
+    {Builtin::FileKill, "S", 1, {}, Type::Void, "tf_fs_kill", true},
+    {Builtin::FileMkDir, "S", 1, {}, Type::Void, "tf_fs_mkdir", true},
+    {Builtin::FileRmDir, "S", 1, {}, Type::Void, "tf_fs_rmdir", true},
+    {Builtin::FileChDir, "S", 1, {}, Type::Void, "tf_fs_chdir", true},
+    {Builtin::FileCopy, "SS", 2, {}, Type::Void, "tf_fs_copy", true},
+    {Builtin::FileName, "SS", 2, {}, Type::Void, "tf_fs_name", true},
+    {Builtin::CurDir, "", 0, {}, Type::String, "tf_fs_curdir", true},
+    {Builtin::FileLen, "S", 1, {}, Type::Long, "tf_fs_len", true},
+    {Builtin::FileDateTime, "S", 1, {}, Type::String, "tf_fs_datetime", true},
+    {Builtin::Exists, "S", 1, {}, Type::Boolean, "tf_fs_exists", false},
+    {Builtin::Dir, "S", 0, {}, Type::String, "tf_fs_dir", false},
+    {Builtin::DirNext, "", 0, {}, Type::String, "tf_fs_dir_next", true},
 };
 
 inline const StringFunction *findStringFunction(Builtin id)

@@ -1,0 +1,12 @@
+
+
+  ┌──────────────────── File system ─────────────────────┐
+  │TrueTrueFalse 5 19-:                                  │
+  │a.txt,b.txt,renamed.txt, c.tmpd.tmp                   │
+  │box a.txtb.txtrenamed.txt|                            │
+  │53 58 75 76 75 False                                  │
+  │                                                      │
+  │                                                      │
+  │                                                      │
+  │                                                      │
+  └──────────────────────────────────────────────────────┘

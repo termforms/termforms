@@ -66,6 +66,7 @@ End Sub
 | With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items` |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
+| File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
 | Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
@@ -236,6 +237,20 @@ Close #1
   read); `Put` writes the same way; `Seek #1, offset` moves.
 - `Open`, `Print`, `Input` and the rest are not reserved words: they are
   file statements only in these shapes, and free as names otherwise.
+
+## The file system
+
+```vb
+MkDir "backup"
+FileCopy "notes.txt", "backup/notes.txt"
+name = Dir$("backup/*.txt")         ' each matching file in turn, sorted, then ""
+Do While name <> ""
+    total = total + FileLen("backup/" & name)
+    name = Dir$()
+Loop
+If Exists("old.txt") Then Kill "old.txt"
+Name "a.txt" As "b.txt"
+```
 
 ## Dictionaries
 

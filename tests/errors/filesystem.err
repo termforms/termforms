@@ -1,0 +1,4 @@
+filesystem.bas:10:9: error: 'Kill' is a statement, not a function: write it on its own, as in Kill ...
+filesystem.bas:11:11: error: argument 1 of 'MkDir' must be a String, not an Integer; use CStr(value) to convert
+filesystem.bas:12:9: error: 'Dir$' takes 0 or 1 argument, not 2
+filesystem.bas:13:5: error: 'FileCopy' takes 2 arguments, not 1

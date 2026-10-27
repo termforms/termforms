@@ -268,6 +268,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
 | 457 | This key is already associated with an element of this collection | `d.Add` of a key that is there | now |
 | 63 | Bad record number | a negative offset in Get, Put or Seek # | now |
+| 58 | File already exists | `Name` onto a file that is there | now |
 | 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
 | 380 | Invalid property value | a control property set out of range | forms |
 
@@ -691,6 +692,32 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
 - Errors: 54 for Get/Put on a file not opened For Binary; 63 (Bad record
   number) for a negative offset; 5 for a negative count; 9 for a Put count
   larger than the buffer.
+
+### The file system (Proposed)
+
+| Statement or function | Does |
+|---|---|
+| `Kill pattern` | deletes the matching files (53 if none); `*` and `?` in the last part |
+| `MkDir path`, `RmDir path` | makes / removes a folder (RmDir: only an empty one, else 75) |
+| `ChDir path`, `CurDir$` | changes / gives the current folder |
+| `Name old As new` | renames or moves a file or folder; never replaces one (58) |
+| `FileCopy from, to` | copies a file, replacing `to` as VB does |
+| `FileLen(path)`, `FileDateTime(path)` | the size in bytes (a Long); when it last changed, local time as "yyyy-mm-dd hh:mm:ss" |
+| `Exists(path)` | True if a file or folder is there (not VB's) |
+| `Dir$(pattern)`, `Dir$()` | the first matching file, then each next one, then "" |
+
+- `Dir$` lists files, not folders, in sorted order (byte order of the
+  UTF-8 names), so a program sees the same order on every system; a folder
+  that cannot be read gives "". `Dir$()` before any `Dir$(pattern)` is
+  error 5. Like `Kill`, it takes `*` and `?` in the last part only.
+- Names are matched as the system does: exactly on Linux and macOS
+  (macOS's file system itself usually ignores case), ignoring A-Z case on
+  Windows. `/` separates folders everywhere; `\` too on Windows.
+- `Name` is recognised by its shape (`Name ... As ...`), so `Name` stays
+  free as a variable or member name.
+- Errors: 53 no such file, 76 no such folder (in the path, or for MkDir,
+  ChDir, RmDir), 58 Name onto a file that is there, 70 not permitted, 75
+  any other refusal (a folder not empty, one already there).
 
 ### Byte (Proposed)
 

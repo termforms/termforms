@@ -637,3 +637,12 @@ TEST_CASE("Get and Put move bytes between a binary file and a Byte array")
     CHECK(check(inClick("", body)) == "");
     CHECK(check(inClick("", "    Dim fixed(3) As Byte\n    Get #1, 0, fixed, 2\n")) != "");
 }
+
+TEST_CASE("file-system routines: statements, functions, and Name ... As by its shape")
+{
+    const std::string body = "    Dim s As String, Name As String, n As Long\n"
+                             "    Name = \"x\"\n    MkDir Name\n    Name Name As \"y\"\n"
+                             "    s = Dir$(\"*\") & Dir & CurDir$ & FileDateTime(s)\n"
+                             "    n = FileLen(s)\n    If Exists(s) Then Kill s\n";
+    CHECK(check(inClick("", body)) == "");
+}

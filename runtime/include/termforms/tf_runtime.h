@@ -467,6 +467,27 @@ void tf_array_unlock(tf_array *a);
 void tf_str_split(tf_array *to, const tf_string *s, const tf_string *delimiter);
 tf_string *tf_str_join(const tf_array *strings, const tf_string *delimiter);
 
+/* The file system. Paths are UTF-8 (any name works on Windows too).
+   Kill and Dir$ take * and ? in the last part (not in folder names); Dir$
+   gives the matching files (not folders) in sorted order, one per call,
+   then ""; Dir$() with no pattern continues the last one (error 5 if there
+   was none). Name never replaces a file (58); FileCopy does, as VB.
+   FileDateTime is local time as "yyyy-mm-dd hh:mm:ss". Errors: 53 no such
+   file, 76 no such folder, 70 not allowed, 75 any other refusal (a folder
+   not empty, one already there). */
+void tf_fs_kill(const tf_string *pattern);
+void tf_fs_mkdir(const tf_string *path);
+void tf_fs_rmdir(const tf_string *path);
+void tf_fs_chdir(const tf_string *path);
+tf_string *tf_fs_curdir(void);
+void tf_fs_name(const tf_string *from, const tf_string *to);
+void tf_fs_copy(const tf_string *from, const tf_string *to);
+int64_t tf_fs_len(const tf_string *path);
+tf_string *tf_fs_datetime(const tf_string *path);
+int tf_fs_exists(const tf_string *path); /* a file or a folder */
+tf_string *tf_fs_dir(const tf_string *pattern);
+tf_string *tf_fs_dir_next(void);
+
 /* Binary files (Open ... For Binary): Get reads into a Byte array, Put
    writes from one, at an offset from 0 (has_offset 0: where the last read
    or write ended), count bytes (has_count 0: the buffer's size). Get with

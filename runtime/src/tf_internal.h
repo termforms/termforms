@@ -57,12 +57,37 @@ void tf_run_shutdown_hook(void);
 
 #include <stdio.h>
 
+#if defined(_WIN32)
+#define TF_ON_WINDOWS 1
+#else
+#define TF_ON_WINDOWS 0
+#endif
+
 /* fopen with a UTF-8 path (Windows: converted to UTF-16 for _wfopen);
    errno is set on failure. */
 FILE *tf_platform_fopen(const char *path, const char *mode);
 /* 64-bit positions (Windows' long is 32 bits). */
 int tf_platform_fseek(FILE *f, int64_t offset, int origin);
 int64_t tf_platform_ftell(FILE *f);
+
+/* The file system, paths in UTF-8. Each returns 0, or -1 with errno set. */
+int tf_platform_remove(const char *path); /* a file */
+int tf_platform_mkdir(const char *path);
+int tf_platform_rmdir(const char *path);
+int tf_platform_chdir(const char *path);
+int tf_platform_rename(const char *from, const char *to); /* replaces nothing: EEXIST */
+/* size in bytes, modified as seconds since 1970 (UTC), folder: 1 if so. */
+int tf_platform_stat(const char *path, int64_t *size, int64_t *modified, int *folder);
+/* The current folder, to free. */
+char *tf_platform_getcwd(void);
+/* Calls each(name, folder, context) for every entry of dir but . and ..;
+   -1 with errno if dir cannot be read. */
+int tf_platform_list(const char *dir, void (*each)(const char *name, int folder, void *context),
+                     void *context);
+/* Local time of a time since 1970: year, month (1-12), day, hour, minute,
+   second in fields[0..5]. Windows names are matched without case. */
+void tf_platform_local_time(int64_t seconds, int32_t fields[6]);
+#define TF_NAMES_IGNORE_CASE TF_ON_WINDOWS
 
 /* A zeroed, ready element of the given kind, to hand out after an error
    instead of a real one (see tf_array.c). */

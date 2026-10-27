@@ -894,6 +894,23 @@ private:
         {
             return parseLineInput();
         }
+        // Name old As new: As never appears in an expression, so a statement
+        // with it is this one (Name stays free as a variable or member).
+        if (isWord(t, "NAME") && !peek(1).isSymbol("=") && !peek(1).isSymbol(".") &&
+            !peek(1).isSymbol("(") && statementHas("AS"))
+        {
+            StmtPtr s = libraryStatement(next().location);
+            ExprPtr call = libraryCall(Builtin::FileName, "Name", s->location);
+            call->args.push_back(parseExpression());
+            if (!expectKeyword("AS", "As"))
+            {
+                failed_ = true;
+                return nullptr;
+            }
+            call->args.push_back(parseExpression());
+            s->args.push_back(std::move(call));
+            return s;
+        }
         if ((isWord(t, "GET") || isWord(t, "PUT")) && peek(1).isSymbol("#"))
         {
             return parseGetPut(isWord(t, "GET"));

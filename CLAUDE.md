@@ -130,6 +130,10 @@ authoritative for design rationale.
   6b-3 done: binary files (Get/Put/Seek #; the parser passes a 0/1 flag
   before each optional part, so no value means "missing"; library
   parameter kinds L = Long, B = Byte array).
+  6b-4 done: the file system (tf_fsys.c on platform calls in tf_fs_<os>.c;
+  statements such as Kill parse as Sub calls and become library
+  statements in checkCallStatement when no Sub has the name; Name ... As
+  by shape; Dir$ sorted, files only).
   6a done: the string functions (table `kStringFunctions` in ast.hpp,
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case
