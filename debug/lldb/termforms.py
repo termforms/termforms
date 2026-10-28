@@ -40,11 +40,35 @@ def read_string(process, address):
     return text + ("..." if length > 4096 else "")
 
 
+def address_of(valobj):
+    """Where the struct a value is or points to lies (CodeLLDB shows a
+    pointer as what it points to, so a summary may get either)."""
+    if valobj.GetType().IsPointerType():
+        return valobj.GetValueAsUnsigned(0)
+    return valobj.GetLoadAddress()
+
+
 def string_summary(valobj, internal_dict):
-    text = read_string(valobj.GetProcess(), valobj.GetValueAsUnsigned(0))
+    text = read_string(valobj.GetProcess(), address_of(valobj))
     if text is None:
         return "<unreadable String>"
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+# tf_control_type, as in tf_runtime.h.
+CONTROL_KINDS = ["Form", "TextBox", "CommandButton", "Label", "CheckBox", "OptionButton",
+                 "Frame", "ListBox", "Timer", "Menu"]
+
+
+def control_summary(valobj, internal_dict):
+    """A form or control: its name and kind (cmdOK (CommandButton))."""
+    raw = valobj.Dereference() if valobj.GetType().IsPointerType() else valobj
+    if not raw.IsValid() or address_of(valobj) == 0:
+        return "<none>"
+    kind = raw.GetChildMemberWithName("type").GetValueAsUnsigned(0)
+    name = raw.GetChildMemberWithName("name").GetSummary() or '"?"'
+    label = CONTROL_KINDS[kind] if kind < len(CONTROL_KINDS) else "control"
+    return name.strip('"') + " (" + label + ")"
 
 
 def element_type(target, valobj):
@@ -166,8 +190,12 @@ def array_summary(valobj, internal_dict):
 
 def __lldb_init_module(debugger, internal_dict):
     module = __name__
-    debugger.HandleCommand(
-        'type summary add -F %s.string_summary "tf_string *" -w termforms' % module)
+    for string_type in ("tf_string", "tf_string *"):
+        debugger.HandleCommand(
+            'type summary add -F %s.string_summary "%s" -w termforms' % (module, string_type))
+    for control_type in ("tf_control", "tf_control *"):
+        debugger.HandleCommand(
+            'type summary add -F %s.control_summary "%s" -w termforms' % (module, control_type))
     debugger.HandleCommand(
         'type synthetic add -l %s.ArrayProvider tf_array -w termforms' % module)
     debugger.HandleCommand(

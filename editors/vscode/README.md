@@ -36,7 +36,14 @@ name where they say `myprogram`).
 - Cmd+Shift+B (Ctrl+Shift+B) builds the open file; errors are in the
   Problems list and underlined in the code.
 - F9 sets a breakpoint on a `.bas` line; F5 builds and starts the
-  program in a terminal of its own, stopping there.
+  program in a terminal of its own, stopping there. F5 uses the
+  configuration chosen at the top of the Run and Debug view (Cmd+Shift+D):
+  for a program of several files choose "TermForms: debug the project"
+  (building one file of a project alone fails, as the others are
+  missing), or delete the other entry.
+- Local shows a Sub's own variables; module variables are under Static
+  (with tfc's controls, c_<name>, and string literals, s_<n>); the Watch
+  pane takes a name such as `g_total`.
 - In the Variables pane a variable keeps its C name: `x` is `v_x` in a
   Sub, `g_x` at module level, and a Type's members are `f_<name>`.
   Strings, arrays and Dictionaries show as BASIC would; a Boolean shows
