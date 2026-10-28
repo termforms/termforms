@@ -52,6 +52,13 @@ authoritative for design rationale.
   4. Resize behaviour: re-centring, and the "Please resize" overlay.
   5. Can Visual Studio debug zig-built (MinGW ABI, DWARF) programs? Needs
      VS on the ThinkPad. If not, Windows debug builds use MSVC (`--cc cl`).
+  6. The mouse on Windows (Jim, 28 Oct 2026): build a test app that logs
+     every mouse action (click, release elsewhere, drag in a TextBox,
+     double-click, wheel, menus) and run it on the ThinkPad in both conhost
+     and Windows Terminal, to see that SGR reports arrive through VT input
+     and are handled. Cross-built on the Mac (`--cc "python-zig cc -target
+     x86_64-windows-gnu"`), so the ThinkPad needs no tools. Also check
+     bracketed paste there. Do it with the rest of this matrix.
 - **Phase 3 (language core): in progress.** Step 1 done (27 Oct 2026):
   Sub/Function with ByVal/ByRef parameters, Return and name-assignment
   results, the three call syntaxes, For/Do/While loops, Exit, block scope.
