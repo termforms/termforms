@@ -410,8 +410,21 @@ authoritative for design rationale.
   built from the example's own files. Run tests may have a NAME.files
   folder, copied to where the program runs and dated 2 Jan 2026 03:04:05
   local time (FileDateTime stays the same everywhere).
-- **Next:** 5.6, the CI-built release archives (tfc + runtime per
-  platform, tfc finding the runtime next to itself). The terminal matrix is done except
+- **Release archives (5.6), settled with Jim 28 Oct 2026:** archives for
+  the three platforms (macOS arm64, Linux x86-64, Windows x64); the
+  Linux tfc static (musl, built with zig) so it runs on any x86-64
+  Linux; pushing a tag `v*` makes CI build them and publish a GitHub
+  Release (pre-release), every push building them as artifacts, the first
+  tag v0.9.0 (the Phase 5 gate's candidate; v1.0.0 at Phase 6); macOS
+  unsigned, the README saying to download with curl or clear the
+  quarantine with xattr; contents: bin/tfc, runtime/ (sources and
+  headers), debug/, editors/vscode, examples/, docs/ (guide, REFERENCE,
+  LANGUAGE), licences and THIRD_PARTY_NOTICES; installed by unpacking
+  anywhere and adding bin to PATH, tfc finding runtime/ beside its bin;
+  Windows users pointed to zig via `winget install zig.zig` (the gate
+  checks that a zig newer than the pinned 0.16 works). The repository is
+  public, so Release files download without a GitHub login.
+- **Next:** build 5.6. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
