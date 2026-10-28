@@ -1,0 +1,9 @@
+' Run test: the address book in examples/addressbook, built from its own
+' files. Keys: two contacts typed and stored (Enter is Store), Find
+' filtering as it is typed and cleared, File > Save (Ctrl+S) writing
+' addresses.txt, a contact deleted after its MsgBox, then Ctrl+Q: as there
+' are unsaved changes, it asks whether to save, and the script ends there.
+Name=addressbook
+Startup=frmBook
+Form=../../examples/addressbook/book.bas
+Module=../../examples/addressbook/people.bas

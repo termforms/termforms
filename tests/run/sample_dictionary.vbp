@@ -1,0 +1,5 @@
+' Run test: the language sample examples/samples/dictionary.bas, built from its
+' own file; it shows its results as it starts, so no keys are needed.
+Name=dictionary
+Startup=frmSample
+Form=../../examples/samples/dictionary.bas

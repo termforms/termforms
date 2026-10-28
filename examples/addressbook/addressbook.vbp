@@ -1,0 +1,8 @@
+' The TermForms address book: names, phones and email addresses, kept in a
+' text file (addresses.txt, tab-separated) in the folder it runs in.
+'
+' Build and run:   tfc addressbook.vbp && ./addressbook
+Name=addressbook
+Startup=frmBook
+Form=book.bas
+Module=people.bas

@@ -401,8 +401,17 @@ authoritative for design rationale.
   structs and their pointers, as CodeLLDB shows a pointer as its target).
   F5 must use the project configuration for a multi-file program.
   **Step 5.4 is complete.**
-- **Next:** 5.5, the other examples (address book, file viewer, small
-  language samples). The terminal matrix is done except
+  Step 5.5 done (28 Oct 2026): examples/addressbook (book.bas +
+  people.bas: a Contact Type in a Dictionary, addresses.txt, Find as
+  you type, Store/Clear, menus, delete and save prompts), examples/viewer
+  (viewer.bas: Dir$, FileLen, FileDateTime, lines in a ListBox, line
+  numbers toggled), examples/samples (select_case, types, errors,
+  arrays, strings, dictionary), examples/README.md. Each is a run test
+  built from the example's own files. Run tests may have a NAME.files
+  folder, copied to where the program runs and dated 2 Jan 2026 03:04:05
+  local time (FileDateTime stays the same everywhere).
+- **Next:** 5.6, the CI-built release archives (tfc + runtime per
+  platform, tfc finding the runtime next to itself). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
@@ -518,6 +527,7 @@ tests/
               + .args = command-line arguments, one a line;
               + .with = further modules, paths one a line;
               + .size = the headless screen, e.g. 80x24;
+              + .files/ = files copied to where it runs;
               key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4},
               {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
   runtime/    C tests linked against tfrt
@@ -525,6 +535,7 @@ debug/{lldb,gdb}/termforms.py              debugger printers (Strings, arrays)
 editors/vscode/                            VS Code extension and templates
 examples/hello.bas                         the vertical-slice program
 examples/demo/                             every control, menus, dialogs, mouse
+examples/{addressbook,viewer,samples}/     the other examples (README.md)
 ```
 
 Key mechanisms:

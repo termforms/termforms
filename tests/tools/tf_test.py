@@ -7,6 +7,8 @@ Modes:
   errors  Compile NAME.bas and compare the diagnostics with NAME.err.
   run     Build NAME.bas into an executable, run it headless with the key
           script NAME.keys, and compare the final screen with NAME.screen.
+          A NAME.files folder's contents are copied to where it runs
+          (dated 2 Jan 2026 03:04:05, local time).
           If NAME.stderr exists the program must fail (exit 1) with that
           message on stderr; otherwise it must exit 0 with nothing on stderr.
 
@@ -23,6 +25,7 @@ import argparse
 import os
 import shutil
 import subprocess
+import time
 import sys
 from pathlib import Path
 
@@ -101,7 +104,17 @@ def run(tfc: str, source: Path, work: Path) -> bool:
     # writes stay out of the source tree, and tests run in parallel safely.
     folder = work / (source.stem + ".dir")
     shutil.rmtree(folder, ignore_errors=True)
-    folder.mkdir()
+    # An optional NAME.files folder: files the program finds where it runs.
+    given = source.parent / (source.stem + ".files")
+    if given.is_dir():
+        shutil.copytree(given, folder)
+        # Dated 2 Jan 2026 03:04:05 local time, so FileDateTime shows the
+        # same on every machine, whatever its time zone or checkout time.
+        fixed = time.mktime((2026, 1, 2, 3, 4, 5, 0, 0, -1))
+        for path in folder.rglob("*"):
+            os.utime(path, (fixed, fixed))
+    else:
+        folder.mkdir()
     # An optional .args file: the program's command-line arguments, one a line.
     args_file = source.with_suffix(".args")
     args = args_file.read_text(encoding="utf-8").splitlines() if args_file.exists() else []

@@ -1,0 +1,22 @@
+
+
+     ┌──────────────────────────── Dictionary ────────────────────────────┐
+     │ ┌────────────────────────────────────────────────────────────────┐ │
+     │ │the: 3                                                          │ │
+     │ │cat: 1                                                          │ │
+     │ │sat: 1                                                          │ │
+     │ │on: 1                                                           │ │
+     │ │mat: 1                                                          │ │
+     │ │end: 1                                                          │ │
+     │ │6 different words; "the" 3 times                                │ │
+     │ │after Remove "the": 5 words, Exists("the") False                │ │
+     │ │Australia: Canberra, 470000 people                              │ │
+     │ │New Zealand: Wellington, 215000 people                          │ │
+     │ │a key not there is error 5 (Invalid procedure call or argument) │ │
+     │ │                                                                │ │
+     │ │                                                                │ │
+     │ │                                                                │ │
+     │ │                                                                │ │
+     │ └────────────────────────────────────────────────────────────────┘ │
+     │                                                                    │
+     └────────────────────────────────────────────────────────────────────┘

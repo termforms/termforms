@@ -1,0 +1,8 @@
+' Run test: the file viewer in examples/viewer, built from its own file,
+' in a folder holding viewer.files' two files (dated 2 Jan 2026 by the
+' test runner). Keys: the first file is shown at once; Down shows the
+' second; Ctrl+L turns line numbers off; File > Open folder... a folder
+' that is not there, refused with a MsgBox, on which the script ends.
+Name=viewer
+Startup=frmViewer
+Form=../../examples/viewer/viewer.bas
