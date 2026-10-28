@@ -80,7 +80,8 @@ Begin Form frmLists
 End
 
 Sub Form_Load()
-    For Each f As String In Split("pear apple kiwi banana fig mango cherry plum")
+    ' More than the list shows, so its arrows and the mouse wheel have work.
+    For Each f As String In Split("pear apple kiwi banana fig mango cherry plum lemon grape peach lime")
         lstFruit.AddItem f
     Next
     For Each t As String In Split("cheese olives ham basil mushroom onion peppers anchovies egg")

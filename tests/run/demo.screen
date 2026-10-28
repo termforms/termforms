@@ -8,7 +8,7 @@
  │                              │ │back from Controls                      │ ││
  │                              │ │frmDemo Activate                        │ ││
  │      < Controls... >         │ │cmdLists Click                          │ ││
- │                              │ │frmLists Load: 8 fruit                  │ ││
+ │                              │ │frmLists Load: 12 fruit                 │ ││
  │        < Lists... >          │ │lstFruit Click: apple                   │ ││
  │                              │ │lstFruit Click: banana                  │ ││
  │   < Timer, DoEvents... >     │ │lstToppings Click: 0 chosen             │ ││
