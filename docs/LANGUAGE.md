@@ -3,13 +3,11 @@
 This page tracks the language as implemented, not as planned. It grows with
 each phase; the full design lives in the project's design documents.
 
-Version 0.0.1 is the **vertical slice**: enough language to build one form
-with a TextBox and a CommandButton and react to a click. Phase 3 adds the
-language core step by step; so far: Sub and Function with parameters, the
-loops, Long and Double, Try/Catch, Const and Enum, arrays, and Types.
-For learning the language, read the guide, `docs/GUIDE.md`;
-`docs/REFERENCE.md` has every rule
-as decided, including the ones not built yet.
+Version 0.9.0, the first pre-release, has the whole v1 language core, the
+forms runtime (every v1 control, menus, dialogs, several forms, the mouse),
+files and the file system, and Declare for calling C. For learning the
+language, read the guide, `docs/GUIDE.md`; `docs/REFERENCE.md` has every
+rule as decided.
 
 ## Rules that differ from VB
 

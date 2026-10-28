@@ -13,7 +13,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(TermForms
-    VERSION 0.0.1
+    VERSION 0.9.0
     DESCRIPTION "VB-DOS-style forms applications for the terminal, compiled to C"
     HOMEPAGE_URL "https://github.com/termforms/termforms"
     LANGUAGES C CXX)

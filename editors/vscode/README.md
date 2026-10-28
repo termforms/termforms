@@ -12,10 +12,10 @@ folder. Link this folder into VS Code's extensions folder, then restart
 VS Code:
 
 ```sh
-ln -s /path/to/termforms/editors/vscode ~/.vscode/extensions/termforms.termforms-basic-0.0.1
+ln -s /path/to/termforms/editors/vscode ~/.vscode/extensions/termforms.termforms-basic
 ```
 
-(Windows: `mklink /D "%USERPROFILE%\.vscode\extensions\termforms.termforms-basic-0.0.1" C:\path\to\termforms\editors\vscode`.)
+(Windows: `mklink /D "%USERPROFILE%\.vscode\extensions\termforms.termforms-basic" C:\path\to\termforms\editors\vscode`.)
 
 For debugging, also install **CodeLLDB** (`vadimcn.vscode-lldb`) from the
 Marketplace.

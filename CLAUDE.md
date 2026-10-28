@@ -443,8 +443,10 @@ authoritative for design rationale.
   form block or Sub Main: keep the guide's complete programs complete,
   and its fragments without either. tfc's usage text now shows several
   .bas files, a .vbp and the runtime beside bin.
-- **Next:** the version bump to 0.9.0 and the v0.9.0 tag (with Jim's
-  go-ahead: the tag publishes a pre-release), then 5.8, the gate on the laptop. The terminal matrix is done except
+  Version 0.9.0 (28 Oct 2026, Jim's go-ahead): the version bumped in
+  the three places, goldens regenerated, tag v0.9.0 pushed to publish
+  the first pre-release.
+- **Next:** 5.8, the gate on the laptop. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
