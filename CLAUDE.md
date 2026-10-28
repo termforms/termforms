@@ -446,7 +446,16 @@ authoritative for design rationale.
   Version 0.9.0 (28 Oct 2026, Jim's go-ahead): the version bumped in
   the three places, goldens regenerated, tag v0.9.0 pushed to publish
   the first pre-release.
-- **Next:** 5.8, the gate on the laptop. The terminal matrix is done except
+  5.8 begun (Jim, 28 Oct 2026, on his wife's laptop: 10th-gen i5, 16 GB):
+  the v0.9.0 Windows zip from GitHub, zig 0.17 from winget, bin added to
+  PATH; hello.bas built and ran. So a zig newer than the pinned 0.16
+  works. Both the winget install and the first tfc build were slow there
+  (likely zig building its MinGW libc and compiler-rt into its cache on
+  first use, Defender scanning, and tfc compiling the whole runtime on
+  every build); to measure: a second build of the same program. A
+  possible later improvement: cache the runtime's objects per target.
+- **Next:** finish 5.8, the gate on the laptop (the other examples, the
+  environment doc's steps). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
