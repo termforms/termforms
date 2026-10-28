@@ -2711,8 +2711,7 @@ static void modes_on(void)
 {
     static const char kPaste[] = "\x1b[?2004h";
     tf_term_write(kPaste, sizeof kPaste - 1);
-    const char *setting = tf_platform_getenv("TERMFORMS_MOUSE");
-    if (setting == NULL || strcmp(setting, "0") != 0)
+    if (tf_mouse_wanted())
     {
         static const char kOn[] = "\x1b[?1002h\x1b[?1006h";
         tf_term_write(kOn, sizeof kOn - 1);

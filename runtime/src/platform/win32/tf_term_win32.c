@@ -29,6 +29,9 @@
 #ifndef ENABLE_VIRTUAL_TERMINAL_INPUT
 #define ENABLE_VIRTUAL_TERMINAL_INPUT 0x0200
 #endif
+#ifndef ENABLE_EXTENDED_FLAGS
+#define ENABLE_EXTENDED_FLAGS 0x0080
+#endif
 
 static const char ENTER_SEQ[] = "\x1b[?1049h\x1b[?7l\x1b[H\x1b[2J";
 static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l\x1b[?2004l" /* mouse, paste modes off */
@@ -73,8 +76,14 @@ int tf_term_open(const char **reason)
         return -1;
     }
 
-    /* No line input, echo or Ctrl+C processing: every key reaches the program. */
-    if (!SetConsoleMode(input_handle, ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT))
+    /* No line input, echo or Ctrl+C processing: every key reaches the program.
+       With the mouse on, Quick Edit goes too (ENABLE_EXTENDED_FLAGS without
+       ENABLE_QUICK_EDIT_MODE, as Microsoft documents): conhost would
+       otherwise keep the mouse for selecting text. The saved mode puts it
+       back on exit. */
+    const DWORD input_mode = ENABLE_VIRTUAL_TERMINAL_INPUT | ENABLE_WINDOW_INPUT |
+                             (tf_mouse_wanted() ? ENABLE_EXTENDED_FLAGS : 0);
+    if (!SetConsoleMode(input_handle, input_mode))
     {
         SetConsoleMode(output_handle, saved_output_mode);
         *reason = "this console does not support VT input (Windows 10 1809 or later needed)";

@@ -207,6 +207,12 @@ static tf_key next_scripted(void)
     return key;
 }
 
+int tf_mouse_wanted(void)
+{
+    const char *setting = tf_platform_getenv("TERMFORMS_MOUSE");
+    return setting == NULL || strcmp(setting, "0") != 0;
+}
+
 tf_key tf_input_next(void)
 {
     return tf_input_wait(-1);

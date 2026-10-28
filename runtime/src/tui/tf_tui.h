@@ -222,6 +222,10 @@ void tf_edit_free(tf_edit *e);
 /* Input                                                                    */
 /* ------------------------------------------------------------------------ */
 
+/* Whether the program takes the mouse: yes unless TERMFORMS_MOUSE is 0
+   (for a terminal where the mouse is better left to selecting text). */
+int tf_mouse_wanted(void);
+
 /* Starts input from the terminal, or from the script when headless. */
 void tf_input_start(const char *headless_script);
 
