@@ -14,7 +14,7 @@ static TF_MAYBE_UNUSED void t_Order_init(void *record);
 static TF_MAYBE_UNUSED void t_Order_free(void *record);
 static TF_MAYBE_UNUSED void t_Order_copy(void *to, const void *from);
 static TF_MAYBE_UNUSED int t_Order_busy(const t_Order *x);
-static const tf_record_ops t_Order_ops = {sizeof(t_Order), t_Order_init, t_Order_free, t_Order_copy};
+static const tf_record_ops t_Order_ops = {sizeof(t_Order), t_Order_init, t_Order_free, t_Order_copy, "t_Order"};
 
 static void t_Order_init(void *record)
 {
@@ -68,20 +68,35 @@ static void p_Form_Load(void);
 #line 15 "for_each.bas"
 static void p_Form_Load(void)
 {
+#line 15 "for_each.bas"
     tf_array v_words = {0};
+#line 15 "for_each.bas"
     tf_array v_orders = {0};
+#line 15 "for_each.bas"
     t_Order v_o;
+#line 15 "for_each.bas"
     t_Order *v_r = NULL;
+#line 15 "for_each.bas"
     tf_string *v_w = NULL;
+#line 15 "for_each.bas"
     int32_t v_i = 0;
+#line 15 "for_each.bas"
     int64_t v__with1 = 0;
+#line 15 "for_each.bas"
     int32_t v__with2 = 0;
+#line 15 "for_each.bas"
     int64_t v__with3 = 0;
+#line 15 "for_each.bas"
     int64_t v__with4 = 0;
+#line 15 "for_each.bas"
     t_Order *v__with5 = NULL;
+#line 15 "for_each.bas"
     int64_t v__with6 = 0;
+#line 15 "for_each.bas"
     tf_array_init(&v_words, TF_ELEM_STRING, NULL, 1, (const int32_t[]){2});
+#line 15 "for_each.bas"
     tf_array_init(&v_orders, TF_ELEM_RECORD, &t_Order_ops, 1, (const int32_t[]){1});
+#line 15 "for_each.bas"
     t_Order_init(&v_o);
 #line 16 "for_each.bas"
     TF_LINE(16); v_r = tf_ref_replace(v_r, tf_ref_new(&t_Order_ops));
@@ -147,12 +162,13 @@ static void p_Form_Load(void)
 #line 26 "for_each.bas"
         TF_LINE(26); v__with6 = tf_i64_add(v__with6, 1);
 #line 27 "for_each.bas"
-        TF_LINE(27); { tf_string *t1 = tf_str_concat(tf_get_str(c_txtOut, TF_PROP_TEXT), v_w); tf_set_str(c_txtOut, TF_PROP_TEXT, t1); tf_str_release(t1); }
+        { TF_LINE(27); tf_string *t1 = tf_str_concat(tf_get_str(c_txtOut, TF_PROP_TEXT), v_w); tf_set_str(c_txtOut, TF_PROP_TEXT, t1); tf_str_release(t1); }
     }
 #line 29 "for_each.bas"
     tf_array_free(&v_words); tf_array_free(&v_orders); t_Order_free(&v_o); tf_ref_release(v_r); tf_str_release(v_w); tf_ref_release(v__with5);
 }
 
+#line 1 "for_each.tf.c"
 int main(void)
 {
     tf_runtime_init("for_each.bas");
@@ -164,6 +180,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "for_each.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "for_each.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

@@ -34,7 +34,9 @@ static void p__init(void)
 #line 12 "initialisers.bas"
 static void p_Form_Load(void)
 {
+#line 12 "initialisers.bas"
     int32_t v_i = 0;
+#line 12 "initialisers.bas"
     int32_t v_n = 0;
 #line 14 "initialisers.bas"
     TF_LINE(14); v_i = 1;
@@ -47,12 +49,13 @@ static void p_Form_Load(void)
 #line 15 "initialisers.bas"
         TF_LINE(15); v_n = tf_i32_mul(v_i, 2);
 #line 16 "initialisers.bas"
-        TF_LINE(16); { tf_string *t1 = tf_str_from_i32(v_n); tf_set_str(c_frmMain, TF_PROP_CAPTION, t1); tf_str_release(t1); }
+        { TF_LINE(16); tf_string *t1 = tf_str_from_i32(v_n); tf_set_str(c_frmMain, TF_PROP_CAPTION, t1); tf_str_release(t1); }
 #line 17 "initialisers.bas"
         TF_LINE(17); v_i = tf_i32_add(v_i, 1);
     }
 }
 
+#line 1 "initialisers.tf.c"
 int main(void)
 {
     tf_runtime_init("initialisers.bas");
@@ -60,6 +63,7 @@ int main(void)
     c_frmMain = tf_form_new("frmMain");
 #line 6 "initialisers.bas"
     tf_set_str(c_frmMain, TF_PROP_CAPTION, tf_str_literal(&s_2, "Init", 4));
+#line 1 "initialisers.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     p__init();

@@ -22,6 +22,7 @@ static void p_Form_Load(void);
 #line 11 "filesystem.bas"
 static void p_Form_Load(void)
 {
+#line 11 "filesystem.bas"
     tf_string *v_s = NULL;
 #line 13 "filesystem.bas"
     TF_LINE(13); tf_fs_mkdir(tf_str_literal(&s_0, "work", 4));
@@ -30,17 +31,17 @@ static void p_Form_Load(void)
 #line 15 "filesystem.bas"
     TF_LINE(15); tf_fs_name(tf_str_literal(&s_2, "work/a.txt", 10), tf_str_literal(&s_3, "work/b.txt", 10));
 #line 16 "filesystem.bas"
-    TF_LINE(16); { tf_string *t1 = tf_fs_dir(tf_str_literal(&s_4, "work/*.txt", 10)); tf_string *t2 = tf_fs_dir_next(); tf_str_assign(&v_s, tf_str_concat(t1, t2)); tf_str_release(t1); tf_str_release(t2); }
+    { TF_LINE(16); tf_string *t1 = tf_fs_dir(tf_str_literal(&s_4, "work/*.txt", 10)); tf_string *t2 = tf_fs_dir_next(); tf_str_assign(&v_s, tf_str_concat(t1, t2)); tf_str_release(t1); tf_str_release(t2); }
 #line 17 "filesystem.bas"
     TF_LINE(17); if (tf_fs_exists(tf_str_literal(&s_3, "work/b.txt", 10)))
     {
 #line 17 "filesystem.bas"
-        TF_LINE(17); { tf_string *t1 = tf_str_from_i64(tf_fs_len(tf_str_literal(&s_3, "work/b.txt", 10))); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_fs_datetime(tf_str_literal(&s_3, "work/b.txt", 10)); tf_str_assign(&v_s, tf_str_concat(t2, t3)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
+        { TF_LINE(17); tf_string *t1 = tf_str_from_i64(tf_fs_len(tf_str_literal(&s_3, "work/b.txt", 10))); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_fs_datetime(tf_str_literal(&s_3, "work/b.txt", 10)); tf_str_assign(&v_s, tf_str_concat(t2, t3)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
     }
 #line 18 "filesystem.bas"
     TF_LINE(18); tf_fs_chdir(tf_str_literal(&s_0, "work", 4));
 #line 19 "filesystem.bas"
-    TF_LINE(19); { tf_string *t1 = tf_fs_curdir(); tf_str_assign(&v_s, tf_str_concat(v_s, t1)); tf_str_release(t1); }
+    { TF_LINE(19); tf_string *t1 = tf_fs_curdir(); tf_str_assign(&v_s, tf_str_concat(v_s, t1)); tf_str_release(t1); }
 #line 20 "filesystem.bas"
     TF_LINE(20); tf_fs_chdir(tf_str_literal(&s_5, "..", 2));
 #line 21 "filesystem.bas"
@@ -53,6 +54,7 @@ static void p_Form_Load(void)
     tf_str_release(v_s);
 }
 
+#line 1 "filesystem.tf.c"
 int main(void)
 {
     tf_runtime_init("filesystem.bas");
@@ -64,6 +66,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "filesystem.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "filesystem.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

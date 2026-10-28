@@ -24,7 +24,7 @@ static TF_MAYBE_UNUSED void t_Address_copy(void *to, const void *from);
 static TF_MAYBE_UNUSED void t_Customer_init(void *record);
 static TF_MAYBE_UNUSED void t_Customer_free(void *record);
 static TF_MAYBE_UNUSED void t_Customer_copy(void *to, const void *from);
-static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy};
+static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy, "t_Customer"};
 
 static void t_Address_init(void *record)
 {
@@ -104,7 +104,9 @@ static void p_Form_Load(void);
 #line 21 "with.bas"
 static t_Customer p_Make(void)
 {
+#line 21 "with.bas"
     t_Customer r_Make;
+#line 21 "with.bas"
     t_Customer_init(&r_Make);
 #line 22 "with.bas"
     TF_LINE(22); tf_str_assign(&r_Make.f_Name, tf_str_ref(tf_str_literal(&s_0, "new", 3)));
@@ -122,15 +124,25 @@ static void p_Bump(int32_t *v_n)
 #line 29 "with.bas"
 static void p_Form_Load(void)
 {
+#line 29 "with.bas"
     t_Customer v_c;
+#line 29 "with.bas"
     tf_array v_list = {0};
+#line 29 "with.bas"
     t_Customer *v_r = NULL;
+#line 29 "with.bas"
     int32_t v_i = 0;
+#line 29 "with.bas"
     int32_t v__with1 = 0;
+#line 29 "with.bas"
     t_Customer *v__with2 = NULL;
+#line 29 "with.bas"
     t_Customer v__with3;
+#line 29 "with.bas"
     t_Customer_init(&v_c);
+#line 29 "with.bas"
     tf_array_init(&v_list, TF_ELEM_RECORD, &t_Customer_ops, 1, (const int32_t[]){3});
+#line 29 "with.bas"
     t_Customer_init(&v__with3);
 #line 30 "with.bas"
     TF_LINE(30); v_r = tf_ref_replace(v_r, tf_ref_new(&t_Customer_ops));
@@ -149,13 +161,14 @@ static void p_Form_Load(void)
 #line 42 "with.bas"
     TF_LINE(42); tf_str_assign(&(((*(t_Customer *)tf_ref_get(v__with2, &t_Customer_ops)).f_Home).f_City), tf_str_ref(v_c.f_Home.f_City));
 #line 44 "with.bas"
-    TF_LINE(44); { t_Customer t1 = p_Make(); t_Customer_copy(&v__with3, &t1); t_Customer_free(&t1); }
+    { TF_LINE(44); t_Customer t1 = p_Make(); t_Customer_copy(&v__with3, &t1); t_Customer_free(&t1); }
 #line 45 "with.bas"
-    TF_LINE(45); { tf_string *t1 = tf_str_concat(v__with3.f_Name, ((*(t_Customer *)tf_ref_get(v_r, &t_Customer_ops)).f_Home).f_City); tf_set_str(c_txtOut, TF_PROP_TEXT, t1); tf_str_release(t1); }
+    { TF_LINE(45); tf_string *t1 = tf_str_concat(v__with3.f_Name, ((*(t_Customer *)tf_ref_get(v_r, &t_Customer_ops)).f_Home).f_City); tf_set_str(c_txtOut, TF_PROP_TEXT, t1); tf_str_release(t1); }
 #line 47 "with.bas"
     t_Customer_free(&v_c); tf_array_free(&v_list); tf_ref_release(v_r); tf_ref_release(v__with2); t_Customer_free(&v__with3);
 }
 
+#line 1 "with.tf.c"
 int main(void)
 {
     tf_runtime_init("with.bas");
@@ -167,6 +180,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "with.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "with.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

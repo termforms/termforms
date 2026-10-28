@@ -199,7 +199,7 @@ private:
             if (opsNeeded_.count(def) != 0) // only arrays and Refs of the Type need it
             {
                 out << "static const tf_record_ops " << t << "_ops = {sizeof(" << t << "), " << t
-                    << "_init, " << t << "_free, " << t << "_copy};\n";
+                    << "_init, " << t << "_free, " << t << "_copy, \"" << t << "\"};\n";
             }
         }
         out << '\n' << helpers.str();
@@ -477,7 +477,60 @@ private:
     {
         std::ostringstream text;
         emitProcedureText(text, proc);
-        out << markUnusedParameters(text.str(), proc);
+        out << pinPrologue(markUnusedParameters(text.str(), proc));
+    }
+
+    // A procedure's opening lines (its locals, the copies and retains made
+    // on entry) come before its first statement's #line, so C would count
+    // them as the BASIC lines after the Sub's: stepping in would stop at the
+    // wrong line, and a breakpoint there would also stop at every call.
+    // Each is pinned to the Sub's own line instead.
+    static std::string pinPrologue(const std::string &text)
+    {
+        const std::size_t directiveEnd = text.find('\n');
+        const std::size_t open = text.find("\n{\n");
+        if (directiveEnd == std::string::npos || open == std::string::npos ||
+            text.rfind("#line ", 0) != 0)
+        {
+            return text;
+        }
+        const std::string directive = text.substr(0, directiveEnd + 1); // "#line 6 \"x.bas\"\n"
+        const std::size_t start = open + 3;
+        std::size_t end = text.find("#line ", start);
+        if (end == std::string::npos)
+        {
+            end = text.rfind("}\n"); // no statements: the prologue runs to the end
+        }
+        std::string pinned;
+        std::size_t at = start;
+        while (at < end)
+        {
+            const std::size_t next = text.find('\n', at);
+            const std::size_t stop = next == std::string::npos || next >= end ? end : next + 1;
+            pinned += directive + text.substr(at, stop - at);
+            at = stop;
+        }
+        return text.substr(0, start) + pinned + text.substr(end);
+    }
+
+    // Code of main that is no BASIC statement's (the runtime's start, the
+    // event wiring): placed in the generated C file's own lines, so a
+    // breakpoint on a BASIC line never stops in it.
+    void glue(std::ostringstream &out) const
+    {
+        if (glued_)
+        {
+            return; // already in the C file's lines
+        }
+        glued_ = true;
+        std::string path = options_.sourcePath;
+        const std::size_t dot = path.rfind('.');
+        const std::size_t slash = path.find_last_of("/\\");
+        if (dot != std::string::npos && (slash == std::string::npos || dot > slash))
+        {
+            path.erase(dot);
+        }
+        out << "#line 1 " << cString(path + ".tf.c") << '\n';
     }
 
     // "(void)v_x;" first in a procedure whose body never uses parameter x,
@@ -680,6 +733,7 @@ private:
     {
         // Only a program that uses Command$ takes main's arguments, so the
         // others' C is as before.
+        glue(out);
         out << (usesCommandLine_ ? "int main(int argc, char **argv)\n{\n" : "int main(void)\n{\n");
         out << "    tf_runtime_init(" << cString(options_.sourcePath) << ");\n";
         if (usesCommandLine_)
@@ -726,8 +780,10 @@ private:
                 out << '\n';
                 emitSettings(out, *child);
             }
+            glue(out);
             out << "    tf_form_ready(" << cName(*form) << ");\n";
         }
+        glue(out);
         // Event wiring, in the order the Subs appear in the source.
         for (const Module *m : modules_)
         {
@@ -1042,6 +1098,14 @@ private:
     void emitLine(std::ostringstream &out, Location where, int depth, const std::string &code)
     {
         line(out, where);
+        // A statement with temporaries is a block: the mark goes inside it,
+        // or the C compiler splits the line in two and a debugger stops at
+        // the one BASIC line twice.
+        if (code.rfind("{ ", 0) == 0)
+        {
+            out << indent(depth) << "{ " << mark(where) << ";" << code.substr(1) << '\n';
+            return;
+        }
         out << indent(depth) << mark(where) << "; " << code << '\n';
     }
 
@@ -3211,6 +3275,7 @@ private:
 
     void line(std::ostringstream &out, Location where) const
     {
+        glued_ = false;
         out << "#line " << where.line << ' ' << cString(sourceOf(where)) << '\n';
     }
 
@@ -3383,6 +3448,7 @@ private:
     int tryCount_ = 0;
     bool checks_ = false;                  // the program has a Try, so errors are tested for
     std::set<const Procedure *> uncalled_; // defined but never called: TF_MAYBE_UNUSED
+    mutable bool glued_ = false;           // the last #line was glue()'s
     bool usesCommandLine_ = false;         // Command$ is used: main passes argc/argv on
     std::set<const TypeDef *> opsNeeded_;  // Types whose tf_record_ops some code uses
 };

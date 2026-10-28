@@ -250,7 +250,9 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
     else
     {
         command += " -std=c99 -w"; // -w: as /w above
-        command += release ? " -O2 -DNDEBUG" : " -O0 -g";
+        // -gno-column-info: a BASIC statement is one C line, and columns in
+        // it would make a debugger stop at the same BASIC line twice.
+        command += release ? " -O2 -DNDEBUG" : " -O0 -g -gno-column-info";
         command += " -I" + quote(includeDir);
         for (const std::string &s : sources)
         {

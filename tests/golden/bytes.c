@@ -55,12 +55,19 @@ static void p_Form_Load(void);
 #line 15 "bytes.bas"
 static void p_Form_Load(void)
 {
+#line 15 "bytes.bas"
     uint8_t v_b = 0;
+#line 15 "bytes.bas"
     tf_array v_buf = {0};
+#line 15 "bytes.bas"
     t_Pixel v_p;
+#line 15 "bytes.bas"
     int32_t v_n = 0;
+#line 15 "bytes.bas"
     int64_t v_big = 0;
+#line 15 "bytes.bas"
     tf_array_init(&v_buf, TF_ELEM_U8, NULL, 1, (const int32_t[]){3});
+#line 15 "bytes.bas"
     t_Pixel_init(&v_p);
 #line 17 "bytes.bas"
     TF_LINE(17); v_b = 65;
@@ -82,11 +89,12 @@ static void p_Form_Load(void)
         TF_LINE(23); v_b = tf_u8_add(v_b, 1);
     }
 #line 24 "bytes.bas"
-    TF_LINE(24); { tf_string *t1 = tf_str_from_i32(v_b); tf_string *t2 = tf_str_from_i32(v_n); tf_string *t3 = tf_str_concat(t1, t2); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
+    { TF_LINE(24); tf_string *t1 = tf_str_from_i32(v_b); tf_string *t2 = tf_str_from_i32(v_n); tf_string *t3 = tf_str_concat(t1, t2); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
 #line 25 "bytes.bas"
     tf_array_free(&v_buf); t_Pixel_free(&v_p);
 }
 
+#line 1 "bytes.tf.c"
 int main(void)
 {
     tf_runtime_init("bytes.bas");
@@ -98,6 +106,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "bytes.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "bytes.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

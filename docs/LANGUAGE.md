@@ -538,6 +538,29 @@ matching struct. `CLong`, `CULong` and `CSizeT` are C's `long`,
 "cname"` when the C name differs. `Platform` is "Windows", "macOS" or
 "Linux".
 
+## Debugging
+
+tfc builds with debug information by default (`--release` leaves it out),
+and every BASIC statement is one line to a debugger: breakpoints go on
+`.bas` lines, and stepping goes from BASIC line to BASIC line, into your
+Subs and Functions and past the runtime's own. Load TermForms' printers
+so Strings, arrays and Dictionaries show as BASIC would:
+
+```text
+lldb ./myprog                         (macOS; Linux too)
+(lldb) command script import /path/to/termforms/debug/lldb/termforms.py
+(lldb) breakpoint set -f main.bas -l 42
+
+gdb ./myprog                          (Linux)
+(gdb) source /path/to/termforms/debug/gdb/termforms.py
+(gdb) break main.bas:42
+```
+
+Variables keep their C names: `x` is `v_x` in a Sub, `g_x` at module
+level; a Type's members are `f_<name>`. A Boolean shows as 0 or 1. The
+program needs a terminal of its own while it is debugged (lldb and gdb
+share theirs; `TERMFORMS_HEADLESS` runs it without one).
+
 ## Building programs
 
 ```sh

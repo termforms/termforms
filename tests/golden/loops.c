@@ -18,6 +18,7 @@ static void p_Form_Load(void);
 #line 11 "loops.bas"
 static int32_t p_Limit(void)
 {
+#line 11 "loops.bas"
     int32_t r_Limit = 0;
 #line 12 "loops.bas"
     TF_LINE(12); r_Limit = 3;
@@ -28,12 +29,19 @@ static int32_t p_Limit(void)
 #line 15 "loops.bas"
 static void p_Form_Load(void)
 {
+#line 15 "loops.bas"
     int32_t v_i = 0;
+#line 15 "loops.bas"
     int32_t v_j = 0;
+#line 15 "loops.bas"
     int32_t v_total = 0;
+#line 15 "loops.bas"
     tf_string *v_s = NULL;
+#line 15 "loops.bas"
     int32_t v_n = 0;
+#line 15 "loops.bas"
     tf_string *v_s2 = NULL;
+#line 15 "loops.bas"
     tf_string *v_s2_2 = NULL;
 #line 17 "loops.bas"
     TF_LINE(17); v_i = 1;
@@ -130,7 +138,7 @@ static void p_Form_Load(void)
 #line 44 "loops.bas"
                     TF_LINE(44); tf_str_assign(&v_s2, NULL);
 #line 45 "loops.bas"
-                    TF_LINE(45); { tf_string *t1 = tf_str_from_i32(v_i); tf_str_assign(&v_s2, tf_str_concat(v_s2, t1)); tf_str_release(t1); }
+                    { TF_LINE(45); tf_string *t1 = tf_str_from_i32(v_i); tf_str_assign(&v_s2, tf_str_concat(v_s2, t1)); tf_str_release(t1); }
 #line 46 "loops.bas"
                     TF_LINE(46); tf_str_assign(&v_s, tf_str_ref(v_s2));
 #line 47 "loops.bas"
@@ -162,11 +170,12 @@ static void p_Form_Load(void)
     }
     exit_8:;
 #line 58 "loops.bas"
-    TF_LINE(58); { tf_string *t1 = tf_str_from_i32(v_total); tf_string *t2 = tf_str_concat(NULL, t1); tf_string *t3 = tf_str_concat(t2, v_s); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
+    { TF_LINE(58); tf_string *t1 = tf_str_from_i32(v_total); tf_string *t2 = tf_str_concat(NULL, t1); tf_string *t3 = tf_str_concat(t2, v_s); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
 #line 59 "loops.bas"
     tf_str_release(v_s); tf_str_release(v_s2); tf_str_release(v_s2_2);
 }
 
+#line 1 "loops.tf.c"
 int main(void)
 {
     tf_runtime_init("loops.bas");
@@ -178,6 +187,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "loops.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "loops.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

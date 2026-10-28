@@ -18,7 +18,9 @@ static void p_Form_Load(void);
 #line 10 "system.bas"
 static void p_Form_Load(void)
 {
+#line 10 "system.bas"
     int32_t v_code = 0;
+#line 10 "system.bas"
     double v_t = 0;
 #line 12 "system.bas"
     TF_LINE(12); v_code = tf_shell(tf_str_literal(&s_0, "exit 1", 6));
@@ -27,9 +29,10 @@ static void p_Form_Load(void)
 #line 14 "system.bas"
     TF_LINE(14); v_t = tf_timer();
 #line 15 "system.bas"
-    TF_LINE(15); { tf_string *t1 = tf_command(); tf_string *t2 = tf_environ(tf_str_literal(&s_2, "HOME", 4)); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_i32(v_code); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_now(); tf_string *t7 = tf_str_concat(t5, t6); tf_string *t8 = tf_date(); tf_string *t9 = tf_str_concat(t7, t8); tf_string *t10 = tf_time(); tf_string *t11 = tf_str_concat(t9, t10); tf_string *t12 = tf_str_from_f64(v_t); tf_string *t13 = tf_str_concat(t11, t12); tf_set_str(c_txtOut, TF_PROP_TEXT, t13); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); tf_str_release(t12); tf_str_release(t13); }
+    { TF_LINE(15); tf_string *t1 = tf_command(); tf_string *t2 = tf_environ(tf_str_literal(&s_2, "HOME", 4)); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_i32(v_code); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_now(); tf_string *t7 = tf_str_concat(t5, t6); tf_string *t8 = tf_date(); tf_string *t9 = tf_str_concat(t7, t8); tf_string *t10 = tf_time(); tf_string *t11 = tf_str_concat(t9, t10); tf_string *t12 = tf_str_from_f64(v_t); tf_string *t13 = tf_str_concat(t11, t12); tf_set_str(c_txtOut, TF_PROP_TEXT, t13); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); tf_str_release(t12); tf_str_release(t13); }
 }
 
+#line 1 "system.tf.c"
 int main(int argc, char **argv)
 {
     tf_runtime_init("system.bas");
@@ -42,6 +45,7 @@ int main(int argc, char **argv)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 6 "system.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "system.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

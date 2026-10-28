@@ -35,6 +35,7 @@ static void p_Bump(void)
     TF_AT(f_1, 7); g_count = tf_i32_add(g_count, g_util_helper);
 }
 
+#line 1 "modules.tf.c"
 int main(void)
 {
     tf_runtime_init("modules.bas");

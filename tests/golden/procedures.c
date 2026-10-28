@@ -29,6 +29,7 @@ static void p_Form_Load(void);
 #line 12 "procedures.bas"
 static int32_t p_Twice(int32_t v_n)
 {
+#line 12 "procedures.bas"
     int32_t r_Twice = 0;
 #line 13 "procedures.bas"
     TF_LINE(13); r_Twice = tf_i32_mul(v_n, 2);
@@ -39,6 +40,7 @@ static int32_t p_Twice(int32_t v_n)
 #line 16 "procedures.bas"
 static int32_t p_Factorial(int32_t v_n)
 {
+#line 16 "procedures.bas"
     int32_t r_Factorial = 0;
 #line 17 "procedures.bas"
     TF_LINE(17); if (v_n <= 1)
@@ -47,7 +49,7 @@ static int32_t p_Factorial(int32_t v_n)
         TF_LINE(17); r_Factorial = 1; return r_Factorial;
     }
 #line 18 "procedures.bas"
-    TF_LINE(18); { int32_t t1 = p_Factorial(tf_i32_sub(v_n, 1)); r_Factorial = tf_i32_mul(v_n, t1); } return r_Factorial;
+    { TF_LINE(18); int32_t t1 = p_Factorial(tf_i32_sub(v_n, 1)); r_Factorial = tf_i32_mul(v_n, t1); } return r_Factorial;
 #line 19 "procedures.bas"
     return r_Factorial;
 }
@@ -55,7 +57,9 @@ static int32_t p_Factorial(int32_t v_n)
 #line 21 "procedures.bas"
 static tf_string *p_Greeting(tf_string *v_name, int v_polite)
 {
+#line 21 "procedures.bas"
     tf_string *r_Greeting = NULL;
+#line 21 "procedures.bas"
     tf_str_retain(v_name);
 #line 22 "procedures.bas"
     TF_LINE(22); if (v_polite)
@@ -76,6 +80,7 @@ done: tf_str_release(v_name); return r_Greeting;
 #line 30 "procedures.bas"
 static void p_Swap(int32_t *v_a, int32_t *v_b)
 {
+#line 30 "procedures.bas"
     int32_t v_t = 0;
 #line 32 "procedures.bas"
     TF_LINE(32); v_t = (*v_a);
@@ -88,6 +93,7 @@ static void p_Swap(int32_t *v_a, int32_t *v_b)
 #line 37 "procedures.bas"
 static void p_Append(tf_string **v_text, tf_string *v_more)
 {
+#line 37 "procedures.bas"
     tf_str_retain(v_more);
 #line 38 "procedures.bas"
     TF_LINE(38); if (tf_str_compare(v_more, NULL) == 0)
@@ -104,6 +110,7 @@ done: tf_str_release(v_more);
 #line 42 "procedures.bas"
 static int32_t p_Counted(void)
 {
+#line 42 "procedures.bas"
     int32_t r_Counted = 0;
 #line 43 "procedures.bas"
     TF_LINE(43); g_calls = tf_i32_add(g_calls, 1);
@@ -116,13 +123,16 @@ static int32_t p_Counted(void)
 #line 47 "procedures.bas"
 static void p_Form_Load(void)
 {
+#line 47 "procedures.bas"
     int32_t v_x = 0;
+#line 47 "procedures.bas"
     int32_t v_y = 0;
+#line 47 "procedures.bas"
     tf_string *v_s = NULL;
 #line 49 "procedures.bas"
     TF_LINE(49); v_x = 1;
 #line 50 "procedures.bas"
-    TF_LINE(50); { int32_t t1 = p_Twice(v_x); int32_t t2 = p_Counted(); v_y = tf_i32_add(t1, t2); }
+    { TF_LINE(50); int32_t t1 = p_Twice(v_x); int32_t t2 = p_Counted(); v_y = tf_i32_add(t1, t2); }
 #line 51 "procedures.bas"
     TF_LINE(51); p_Swap(&v_x, &v_y);
 #line 52 "procedures.bas"
@@ -130,15 +140,16 @@ static void p_Form_Load(void)
 #line 53 "procedures.bas"
     TF_LINE(53); p_Swap(&v_x, &v_y);
 #line 54 "procedures.bas"
-    TF_LINE(54); { tf_string *t1 = tf_str_concat(tf_get_str(c_txtOut, TF_PROP_TEXT), tf_str_literal(&s_3, "!", 1)); tf_string *t2 = p_Greeting(t1, (v_x > v_y)); tf_str_assign(&v_s, tf_str_ref(t2)); tf_str_release(t1); tf_str_release(t2); }
+    { TF_LINE(54); tf_string *t1 = tf_str_concat(tf_get_str(c_txtOut, TF_PROP_TEXT), tf_str_literal(&s_3, "!", 1)); tf_string *t2 = p_Greeting(t1, (v_x > v_y)); tf_str_assign(&v_s, tf_str_ref(t2)); tf_str_release(t1); tf_str_release(t2); }
 #line 55 "procedures.bas"
     TF_LINE(55); p_Append(&v_s, tf_str_literal(&s_4, ".", 1));
 #line 56 "procedures.bas"
-    TF_LINE(56); { int32_t t1 = p_Factorial(5); tf_string *t2 = tf_str_from_i32(t1); tf_string *t3 = tf_str_concat(v_s, t2); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t2); tf_str_release(t3); }
+    { TF_LINE(56); int32_t t1 = p_Factorial(5); tf_string *t2 = tf_str_from_i32(t1); tf_string *t3 = tf_str_concat(v_s, t2); tf_set_str(c_txtOut, TF_PROP_TEXT, t3); tf_str_release(t2); tf_str_release(t3); }
 #line 57 "procedures.bas"
     tf_str_release(v_s);
 }
 
+#line 1 "procedures.tf.c"
 int main(void)
 {
     tf_runtime_init("procedures.bas");
@@ -150,6 +161,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 6 "procedures.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "procedures.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

@@ -375,8 +375,18 @@ authoritative for design rationale.
   messages shown), libraries linked; a failed build with Declares shows
   the C compiler's messages. Runtime tf_c.c (and tf_platform_name for
   Platform). Run test tests/run/declare (+ declare/utils.c).
-- **Next:** 5.4, lldb and gdb (stepping, printers) with the VS Code
-  extension and CodeLLDB setup. The terminal matrix is done except
+  Step 5.4a done (28 Oct 2026): debugging. debug/lldb/termforms.py and
+  debug/gdb/termforms.py (String summaries, tf_array children: [i], [i,j],
+  Dictionary keys, Ref elements by their record's Type via a new
+  `tf_record_ops.name`; step-avoid/skip of ^tf_ and the Types' helpers).
+  Fixed the line mapping: a procedure's opening lines are pinned to its
+  own #line (`pinPrologue`; they used to count as the next BASIC lines),
+  main's plumbing is in the C file's own lines (`glue()`), TF_LINE goes
+  inside a statement's block, and debug builds pass -gno-column-info, so
+  a BASIC line is one breakpoint location. tests/tools/tf_debug.py
+  (ctest label debug; lldb on macOS, gdb on CI's Linux gcc job, which
+  installs it; skipped elsewhere and on Windows).
+- **Next:** 5.4b, the VS Code extension and the CodeLLDB setup. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
@@ -487,6 +497,7 @@ tests/
   golden/     .bas -> expected .c         tests/tools/tf_test.py drives
   errors/     .bas -> expected .err       golden/errors/run; new cases are
   run/        .bas + .keys -> .screen     just new files (re-run cmake)
+  debug/      sample.bas for tools/tf_debug.py (lldb, gdb)
               (+ .stderr = must fail with that message;
               + .args = command-line arguments, one a line;
               + .with = further modules, paths one a line;
@@ -494,6 +505,7 @@ tests/
               key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4},
               {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
   runtime/    C tests linked against tfrt
+debug/{lldb,gdb}/termforms.py              debugger printers (Strings, arrays)
 examples/hello.bas                         the vertical-slice program
 examples/demo/                             every control, menus, dialogs, mouse
 ```

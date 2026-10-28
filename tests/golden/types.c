@@ -28,7 +28,7 @@ static TF_MAYBE_UNUSED void t_Customer_init(void *record);
 static TF_MAYBE_UNUSED void t_Customer_free(void *record);
 static TF_MAYBE_UNUSED void t_Customer_copy(void *to, const void *from);
 static TF_MAYBE_UNUSED int t_Customer_busy(const t_Customer *x);
-static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy};
+static const tf_record_ops t_Customer_ops = {sizeof(t_Customer), t_Customer_init, t_Customer_free, t_Customer_copy, "t_Customer"};
 
 static void t_Address_init(void *record)
 {
@@ -132,8 +132,11 @@ static void p_Form_Load(void);
 #line 27 "types.bas"
 static t_Customer p_Make(tf_string *v_name, int32_t v_age)
 {
+#line 27 "types.bas"
     t_Customer r_Make;
+#line 27 "types.bas"
     t_Customer_init(&r_Make);
+#line 27 "types.bas"
     tf_str_retain(v_name);
 #line 28 "types.bas"
     TF_LINE(28); tf_str_assign(&r_Make.f_Name, tf_str_ref(v_name));
@@ -157,13 +160,16 @@ static void p_Birthday(t_Customer *v_c)
 #line 38 "types.bas"
 static tf_string *p_Describe(const t_Customer *a_c)
 {
+#line 38 "types.bas"
     t_Customer v_c;
+#line 38 "types.bas"
     t_Customer_init(&v_c); t_Customer_copy(&v_c, a_c);
+#line 38 "types.bas"
     tf_string *r_Describe = NULL;
 #line 39 "types.bas"
     TF_LINE(39); tf_str_assign(&v_c.f_Name, tf_str_concat(v_c.f_Name, tf_str_literal(&s_1, "!", 1)));
 #line 40 "types.bas"
-    TF_LINE(40); { tf_string *t1 = tf_str_concat(v_c.f_Name, tf_str_literal(&s_2, " ", 1)); tf_string *t2 = tf_str_from_i32(v_c.f_Age); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_2, " ", 1)); tf_str_assign(&r_Describe, tf_str_concat(t4, v_c.f_Home.f_City)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
+    { TF_LINE(40); tf_string *t1 = tf_str_concat(v_c.f_Name, tf_str_literal(&s_2, " ", 1)); tf_string *t2 = tf_str_from_i32(v_c.f_Age); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_2, " ", 1)); tf_str_assign(&r_Describe, tf_str_concat(t4, v_c.f_Home.f_City)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
 #line 41 "types.bas"
     t_Customer_free(&v_c); return r_Describe;
 }
@@ -178,13 +184,18 @@ static void p_Bump(int32_t *v_n)
 #line 47 "types.bas"
 static void p_Form_Load(void)
 {
+#line 47 "types.bas"
     t_Customer v_c;
+#line 47 "types.bas"
     tf_array v_list = {0};
+#line 47 "types.bas"
     tf_string *v_s = NULL;
+#line 47 "types.bas"
     t_Customer_init(&v_c);
+#line 47 "types.bas"
     tf_array_init(&v_list, TF_ELEM_RECORD, &t_Customer_ops, 1, (const int32_t[]){3});
 #line 49 "types.bas"
-    TF_LINE(49); { t_Customer t1 = p_Make(tf_str_literal(&s_3, "Ann", 3), 30); t_Customer_copy(&v_c, &t1); t_Customer_free(&t1); }
+    { TF_LINE(49); t_Customer t1 = p_Make(tf_str_literal(&s_3, "Ann", 3), 30); t_Customer_copy(&v_c, &t1); t_Customer_free(&t1); }
 #line 50 "types.bas"
     TF_LINE(50); tf_str_assign(&v_c.f_Home.f_City, tf_str_ref(tf_str_literal(&s_4, "Oslo", 4)));
 #line 51 "types.bas"
@@ -196,17 +207,18 @@ static void p_Form_Load(void)
 #line 54 "types.bas"
     TF_LINE(54); ((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Home).f_Zip = 1234;
 #line 55 "types.bas"
-    TF_LINE(55); { int32_t *t1 = &(((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Home).f_Zip); tf_array_lock(&v_list); p_Bump(t1); tf_array_unlock(&v_list); }
+    { TF_LINE(55); int32_t *t1 = &(((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Home).f_Zip); tf_array_lock(&v_list); p_Bump(t1); tf_array_unlock(&v_list); }
 #line 56 "types.bas"
     TF_LINE(56); t_Customer_copy(&g_best, &(*(t_Customer *)tf_array_at1(&v_list, 0)));
 #line 57 "types.bas"
-    TF_LINE(57); { tf_string *t1 = p_Describe(&g_best); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_2, " ", 1)); tf_string *t3 = tf_str_concat(t2, g_best.f_Name); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_2, " ", 1)); tf_string *t5 = tf_str_concat(t4, (*(tf_string **)tf_array_at1(&((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Tags), 0))); tf_string *t6 = tf_str_from_i32(tf_array_ubound(&((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Tags), 1)); tf_str_assign(&v_s, tf_str_concat(t5, t6)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); }
+    { TF_LINE(57); tf_string *t1 = p_Describe(&g_best); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_2, " ", 1)); tf_string *t3 = tf_str_concat(t2, g_best.f_Name); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_2, " ", 1)); tf_string *t5 = tf_str_concat(t4, (*(tf_string **)tf_array_at1(&((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Tags), 0))); tf_string *t6 = tf_str_from_i32(tf_array_ubound(&((*(t_Customer *)tf_array_at1(&v_list, 0)).f_Tags), 1)); tf_str_assign(&v_s, tf_str_concat(t5, t6)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); }
 #line 58 "types.bas"
-    TF_LINE(58); { t_Customer t1 = p_Make(tf_str_literal(&s_5, "Bo", 2), 1); tf_string *t2 = tf_str_concat(v_s, t1.f_Name); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); t_Customer_free(&t1); tf_str_release(t2); }
+    { TF_LINE(58); t_Customer t1 = p_Make(tf_str_literal(&s_5, "Bo", 2), 1); tf_string *t2 = tf_str_concat(v_s, t1.f_Name); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); t_Customer_free(&t1); tf_str_release(t2); }
 #line 59 "types.bas"
     t_Customer_free(&v_c); tf_array_free(&v_list); tf_str_release(v_s);
 }
 
+#line 1 "types.tf.c"
 int main(void)
 {
     tf_runtime_init("types.bas");
@@ -220,6 +232,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 8 "types.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "types.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

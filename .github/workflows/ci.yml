@@ -56,6 +56,11 @@ jobs:
       - name: Install Ninja
         run: python -m pip install ninja
 
+      # gdb, for the debugger test (debug.gdb); macOS has lldb already.
+      - name: Install gdb
+        if: matrix.name == 'Linux gcc'
+        run: sudo apt-get update && sudo apt-get install -y gdb
+
       # Programs built by tfc with cl need the MSVC environment; tfc itself
       # is built by the Visual Studio generator, which finds it on its own.
       - name: MSVC environment

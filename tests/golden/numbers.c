@@ -23,6 +23,7 @@ static void p_Form_Load(void);
 #line 14 "numbers.bas"
 static double p_Half(double v_x)
 {
+#line 14 "numbers.bas"
     double r_Half = 0;
 #line 15 "numbers.bas"
     TF_LINE(15); r_Half = tf_f64_div(v_x, 2);
@@ -33,9 +34,13 @@ static double p_Half(double v_x)
 #line 18 "numbers.bas"
 static void p_Form_Load(void)
 {
+#line 18 "numbers.bas"
     int32_t v_i = 0;
+#line 18 "numbers.bas"
     int64_t v_n = 0;
+#line 18 "numbers.bas"
     double v_d = 0;
+#line 18 "numbers.bas"
     tf_string *v_s = NULL;
 #line 20 "numbers.bas"
     TF_LINE(20); v_n = INT64_C(5000000000);
@@ -46,7 +51,7 @@ static void p_Form_Load(void)
 #line 23 "numbers.bas"
     TF_LINE(23); g_big = tf_i64_add(tf_i64_mul(v_n, v_i), 7);
 #line 24 "numbers.bas"
-    TF_LINE(24); { double t1 = p_Half(v_i); g_ratio = tf_f64_sub(tf_f64_add(t1, tf_f64_pow(v_d, 2)), (-v_d)); }
+    { TF_LINE(24); double t1 = p_Half(v_i); g_ratio = tf_f64_sub(tf_f64_add(t1, tf_f64_pow(v_d, 2)), (-v_d)); }
 #line 25 "numbers.bas"
     TF_LINE(25); v_n = tf_i64_add(tf_i64_add(tf_i64_div(v_n, 3), tf_i64_mod(v_n, 7)), tf_i64_from_f64(g_ratio));
 #line 26 "numbers.bas"
@@ -57,7 +62,7 @@ static void p_Form_Load(void)
     TF_LINE(28); if ((int)(v_n > v_d) & (int)(v_i <= g_ratio))
     {
 #line 28 "numbers.bas"
-        TF_LINE(28); { tf_string *t1 = tf_str_str_i64(v_n); tf_string *t2 = tf_str_str_f64(v_d); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_i32(v_i); tf_string *t5 = tf_str_concat(t3, t4); tf_str_assign(&v_s, tf_str_concat(t5, tf_str_literal(&s_1, "True", 4))); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
+        { TF_LINE(28); tf_string *t1 = tf_str_str_i64(v_n); tf_string *t2 = tf_str_str_f64(v_d); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_i32(v_i); tf_string *t5 = tf_str_concat(t3, t4); tf_str_assign(&v_s, tf_str_concat(t5, tf_str_literal(&s_1, "True", 4))); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
     }
 #line 29 "numbers.bas"
     TF_LINE(29); v_d = 0.5;
@@ -82,11 +87,12 @@ static void p_Form_Load(void)
         TF_LINE(34); v_n = tf_i64_add(v_n, -1000000000);
     }
 #line 35 "numbers.bas"
-    TF_LINE(35); { tf_string *t1 = tf_str_from_i64(v_n); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_2, " ", 1)); tf_string *t4 = tf_str_from_f64(g_ratio); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_str_concat(t5, tf_str_literal(&s_2, " ", 1)); tf_string *t7 = tf_str_from_i64(tf_i64_neg(v_n)); tf_string *t8 = tf_str_concat(t6, t7); tf_string *t9 = tf_str_from_f64(1.0); tf_string *t10 = tf_str_concat(t8, t9); tf_set_str(c_txtOut, TF_PROP_TEXT, t10); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); }
+    { TF_LINE(35); tf_string *t1 = tf_str_from_i64(v_n); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_2, " ", 1)); tf_string *t4 = tf_str_from_f64(g_ratio); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_str_concat(t5, tf_str_literal(&s_2, " ", 1)); tf_string *t7 = tf_str_from_i64(tf_i64_neg(v_n)); tf_string *t8 = tf_str_concat(t6, t7); tf_string *t9 = tf_str_from_f64(1.0); tf_string *t10 = tf_str_concat(t8, t9); tf_set_str(c_txtOut, TF_PROP_TEXT, t10); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); }
 #line 36 "numbers.bas"
     tf_str_release(v_s);
 }
 
+#line 1 "numbers.tf.c"
 int main(void)
 {
     tf_runtime_init("numbers.bas");
@@ -98,6 +104,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "numbers.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "numbers.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

@@ -17,7 +17,9 @@ static void p_Form_Load(void);
 #line 10 "binary.bas"
 static void p_Form_Load(void)
 {
+#line 10 "binary.bas"
     tf_array v_buf = {0};
+#line 10 "binary.bas"
     int64_t v_at = 0;
 #line 12 "binary.bas"
     TF_LINE(12); tf_array_redim(&v_buf, TF_ELEM_U8, NULL, 0, 1, (const int32_t[]){15});
@@ -34,13 +36,14 @@ static void p_Form_Load(void)
 #line 18 "binary.bas"
     TF_LINE(18); tf_file_get(1, 1, v_at, &v_buf, 0, 0);
 #line 19 "binary.bas"
-    TF_LINE(19); { tf_string *t1 = tf_str_from_i64(tf_file_seek_pos(1)); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_1, " ", 1)); tf_string *t3 = tf_str_from_i32(tf_array_ubound(&v_buf, 1)); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
+    { TF_LINE(19); tf_string *t1 = tf_str_from_i64(tf_file_seek_pos(1)); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_1, " ", 1)); tf_string *t3 = tf_str_from_i32(tf_array_ubound(&v_buf, 1)); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
 #line 20 "binary.bas"
     TF_LINE(20); tf_file_close(1);
 #line 21 "binary.bas"
     tf_array_free(&v_buf);
 }
 
+#line 1 "binary.tf.c"
 int main(void)
 {
     tf_runtime_init("binary.bas");
@@ -52,6 +55,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 6 "binary.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "binary.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

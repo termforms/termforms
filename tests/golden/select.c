@@ -17,6 +17,7 @@ static void p_Form_Load(void);
 #line 9 "select.bas"
 static int32_t p_Limit(void)
 {
+#line 9 "select.bas"
     int32_t r_Limit = 0;
 #line 10 "select.bas"
     TF_LINE(10); r_Limit = 10;
@@ -27,10 +28,15 @@ static int32_t p_Limit(void)
 #line 13 "select.bas"
 static void p_Form_Load(void)
 {
+#line 13 "select.bas"
     int32_t v_n = 0;
+#line 13 "select.bas"
     tf_string *v_s = NULL;
+#line 13 "select.bas"
     int32_t v__select1 = 0;
+#line 13 "select.bas"
     int v__matched2 = 0;
+#line 13 "select.bas"
     tf_string *v__select3 = NULL;
 #line 16 "select.bas"
     TF_LINE(16); v_n = 4;
@@ -89,6 +95,7 @@ static void p_Form_Load(void)
     tf_str_release(v_s); tf_str_release(v__select3);
 }
 
+#line 1 "select.tf.c"
 int main(void)
 {
     tf_runtime_init("select.bas");
@@ -96,6 +103,7 @@ int main(void)
     c_frmMain = tf_form_new("frmMain");
 #line 6 "select.bas"
     tf_set_str(c_frmMain, TF_PROP_CAPTION, tf_str_literal(&s_2, "Select", 6));
+#line 1 "select.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

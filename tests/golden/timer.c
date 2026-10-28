@@ -25,6 +25,7 @@ static void p_tmr_Timer(void)
     }
 }
 
+#line 1 "timer.tf.c"
 int main(void)
 {
     tf_runtime_init("timer.bas");
@@ -36,6 +37,7 @@ int main(void)
     c_tmr = tf_control_new(c_frmMain, TF_CTL_TIMER, "tmr");
 #line 6 "timer.bas"
     tf_set_int(c_tmr, TF_PROP_INTERVAL, 500);
+#line 1 "timer.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_tmr, TF_EVENT_TIMER, p_tmr_Timer);
     return tf_form_run(c_frmMain);

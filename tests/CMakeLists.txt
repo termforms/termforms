@@ -86,3 +86,14 @@ add_test(NAME cli.compiler-fails
 set_tests_properties(cli.compiler-fails PROPERTIES
     LABELS cli
     PASS_REGULAR_EXPRESSION "internal error: .*not in your program")
+
+# Debugger tests: a breakpoint on a .bas line, the printers in debug/, and
+# stepping past the runtime. Each is skipped (exit 77) where its debugger
+# is not installed, and on Windows.
+foreach(debugger lldb gdb)
+    add_test(NAME debug.${debugger}
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/tf_debug.py
+                --tfc $<TARGET_FILE:tfc> --debugger ${debugger}
+                --work ${CMAKE_CURRENT_BINARY_DIR}/debug)
+    set_tests_properties(debug.${debugger} PROPERTIES LABELS debug SKIP_RETURN_CODE 77)
+endforeach()

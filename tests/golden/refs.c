@@ -20,11 +20,11 @@ struct t_Point
 static TF_MAYBE_UNUSED void t_Node_init(void *record);
 static TF_MAYBE_UNUSED void t_Node_free(void *record);
 static TF_MAYBE_UNUSED void t_Node_copy(void *to, const void *from);
-static const tf_record_ops t_Node_ops = {sizeof(t_Node), t_Node_init, t_Node_free, t_Node_copy};
+static const tf_record_ops t_Node_ops = {sizeof(t_Node), t_Node_init, t_Node_free, t_Node_copy, "t_Node"};
 static TF_MAYBE_UNUSED void t_Point_init(void *record);
 static TF_MAYBE_UNUSED void t_Point_free(void *record);
 static TF_MAYBE_UNUSED void t_Point_copy(void *to, const void *from);
-static const tf_record_ops t_Point_ops = {sizeof(t_Point), t_Point_init, t_Point_free, t_Point_copy};
+static const tf_record_ops t_Point_ops = {sizeof(t_Point), t_Point_init, t_Point_free, t_Point_copy, "t_Point"};
 
 static void t_Node_init(void *record)
 {
@@ -112,8 +112,11 @@ static void p_Form_Load(void);
 #line 40 "refs.bas"
 static t_Node *p_Push(t_Node *v_head, int32_t v_value)
 {
+#line 40 "refs.bas"
     t_Node *v_n = NULL;
+#line 40 "refs.bas"
     t_Node *r_Push = NULL;
+#line 40 "refs.bas"
     tf_ref_retain(v_head);
 #line 41 "refs.bas"
     TF_LINE(41); v_n = tf_ref_replace(v_n, tf_ref_new(&t_Node_ops));
@@ -130,8 +133,11 @@ done: tf_ref_release(v_head); tf_ref_release(v_n); return r_Push;
 #line 47 "refs.bas"
 static int32_t p_Total(t_Node *v_head)
 {
+#line 47 "refs.bas"
     t_Node *v_p = NULL;
+#line 47 "refs.bas"
     int32_t r_Total = 0;
+#line 47 "refs.bas"
     tf_ref_retain(v_head);
 #line 49 "refs.bas"
     TF_LINE(49); v_p = tf_ref_replace(v_p, tf_ref_ref(v_head));
@@ -141,9 +147,9 @@ static int32_t p_Total(t_Node *v_head)
 #line 50 "refs.bas"
         TF_LINE(50); if (!(v_p != NULL)) break;
 #line 51 "refs.bas"
-        TF_LINE(51); { int32_t t1 = tf_i32_add(r_Total, (*(t_Node *)tf_ref_get(v_p, &t_Node_ops)).f_Value); if (tf_error_pending) goto done; r_Total = t1; }
+        { TF_LINE(51); int32_t t1 = tf_i32_add(r_Total, (*(t_Node *)tf_ref_get(v_p, &t_Node_ops)).f_Value); if (tf_error_pending) goto done; r_Total = t1; }
 #line 52 "refs.bas"
-        TF_LINE(52); { t_Node *t1 = (*(t_Node *)tf_ref_get(v_p, &t_Node_ops)).f_Next; if (tf_error_pending) goto done; v_p = tf_ref_replace(v_p, tf_ref_ref(t1)); }
+        { TF_LINE(52); t_Node *t1 = (*(t_Node *)tf_ref_get(v_p, &t_Node_ops)).f_Next; if (tf_error_pending) goto done; v_p = tf_ref_replace(v_p, tf_ref_ref(t1)); }
     }
 #line 54 "refs.bas"
 done: tf_ref_release(v_head); tf_ref_release(v_p); return r_Total;
@@ -152,6 +158,7 @@ done: tf_ref_release(v_head); tf_ref_release(v_p); return r_Total;
 #line 56 "refs.bas"
 static void p_Rebind(t_Node *v_r)
 {
+#line 56 "refs.bas"
     tf_ref_retain(v_r);
 #line 57 "refs.bas"
     TF_LINE(57); (*(t_Node *)tf_ref_get(v_r, &t_Node_ops)).f_Value = 100; if (tf_error_pending) goto done;
@@ -171,9 +178,13 @@ static void p_Clear(t_Node **v_r)
 #line 65 "refs.bas"
 static t_Point p_MakePoint(int32_t v_x)
 {
+#line 65 "refs.bas"
     t_Point v_p;
+#line 65 "refs.bas"
     t_Point_init(&v_p);
+#line 65 "refs.bas"
     t_Point r_MakePoint;
+#line 65 "refs.bas"
     t_Point_init(&r_MakePoint);
 #line 67 "refs.bas"
     TF_LINE(67); v_p.f_X = v_x;
@@ -186,16 +197,27 @@ done: t_Point_free(&v_p); return r_MakePoint;
 #line 71 "refs.bas"
 static void p_Form_Load(void)
 {
+#line 71 "refs.bas"
     t_Node *v_a = NULL;
+#line 71 "refs.bas"
     t_Node *v_b = NULL;
+#line 71 "refs.bas"
     t_Node *v_list = NULL;
+#line 71 "refs.bas"
     int32_t v_i = 0;
+#line 71 "refs.bas"
     tf_string *v_s = NULL;
+#line 71 "refs.bas"
     t_Point v_v;
+#line 71 "refs.bas"
     t_Point *v_rp = NULL;
+#line 71 "refs.bas"
     tf_array v_all = {0};
+#line 71 "refs.bas"
     t_Point *v_fresh = NULL;
+#line 71 "refs.bas"
     t_Point_init(&v_v);
+#line 71 "refs.bas"
     tf_array_init(&v_all, TF_ELEM_REF, NULL, 1, (const int32_t[]){2});
 #line 75 "refs.bas"
     TF_LINE(75); v_a = tf_ref_replace(v_a, tf_ref_new(&t_Node_ops));
@@ -206,7 +228,7 @@ static void p_Form_Load(void)
 #line 78 "refs.bas"
     TF_LINE(78); (*(t_Node *)tf_ref_get(v_b, &t_Node_ops)).f_Value = 2; if (tf_error_pending) goto done;
 #line 79 "refs.bas"
-    TF_LINE(79); { tf_string *t1 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_a, &t_Node_ops)).f_Value); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_concat(t2, ((v_a == v_b) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_concat(t4, ((v_a != NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); tf_string *t6 = tf_str_concat(t5, tf_str_literal(&s_0, " ", 1)); t_Node *t7 = tf_ref_new(&t_Node_ops); tf_string *t8 = tf_str_concat(t6, ((t7 == v_a) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_ref_release(t7); tf_str_release(t8); goto done; } tf_set_str(c_t1, TF_PROP_TEXT, t8); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_ref_release(t7); tf_str_release(t8); } if (tf_error_pending) goto done;
+    { TF_LINE(79); tf_string *t1 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_a, &t_Node_ops)).f_Value); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_concat(t2, ((v_a == v_b) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_concat(t4, ((v_a != NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); tf_string *t6 = tf_str_concat(t5, tf_str_literal(&s_0, " ", 1)); t_Node *t7 = tf_ref_new(&t_Node_ops); tf_string *t8 = tf_str_concat(t6, ((t7 == v_a) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_ref_release(t7); tf_str_release(t8); goto done; } tf_set_str(c_t1, TF_PROP_TEXT, t8); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_ref_release(t7); tf_str_release(t8); } if (tf_error_pending) goto done;
 #line 81 "refs.bas"
     TF_LINE(81); v_i = 1;
     for (;;)
@@ -214,30 +236,30 @@ static void p_Form_Load(void)
 #line 81 "refs.bas"
         TF_LINE(81); if (v_i > 4) break;
 #line 82 "refs.bas"
-        TF_LINE(82); { t_Node *t1 = p_Push(v_list, v_i); if (tf_error_pending) { tf_ref_release(t1); goto done; } v_list = tf_ref_replace(v_list, tf_ref_ref(t1)); tf_ref_release(t1); }
+        { TF_LINE(82); t_Node *t1 = p_Push(v_list, v_i); if (tf_error_pending) { tf_ref_release(t1); goto done; } v_list = tf_ref_replace(v_list, tf_ref_ref(t1)); tf_ref_release(t1); }
 #line 83 "refs.bas"
-        TF_LINE(83); { const int32_t next = tf_i32_add(v_i, 1); if (tf_error_pending) goto done; v_i = next; }
+        { TF_LINE(83); const int32_t next = tf_i32_add(v_i, 1); if (tf_error_pending) goto done; v_i = next; }
     }
 #line 84 "refs.bas"
-    TF_LINE(84); { int32_t t1 = p_Total(v_list); if (tf_error_pending) goto done; tf_string *t2 = tf_str_from_i32(t1); tf_string *t3 = tf_str_concat(tf_str_literal(&s_3, "sum=", 4), t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Value); tf_string *t6 = tf_str_concat(t4, t5); tf_string *t7 = tf_str_from_i32((*(t_Node *)tf_ref_get((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Next, &t_Node_ops)).f_Value); tf_string *t8 = tf_str_concat(t6, t7); if (tf_error_pending) { tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); goto done; } tf_str_assign(&v_s, tf_str_ref(t8)); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); }
+    { TF_LINE(84); int32_t t1 = p_Total(v_list); if (tf_error_pending) goto done; tf_string *t2 = tf_str_from_i32(t1); tf_string *t3 = tf_str_concat(tf_str_literal(&s_3, "sum=", 4), t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Value); tf_string *t6 = tf_str_concat(t4, t5); tf_string *t7 = tf_str_from_i32((*(t_Node *)tf_ref_get((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Next, &t_Node_ops)).f_Value); tf_string *t8 = tf_str_concat(t6, t7); if (tf_error_pending) { tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); goto done; } tf_str_assign(&v_s, tf_str_ref(t8)); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); }
 #line 85 "refs.bas"
     TF_LINE(85); p_Rebind(v_list); if (tf_error_pending) goto done;
 #line 86 "refs.bas"
-    TF_LINE(86); { tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_4, " after=", 7)); tf_string *t2 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Value); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_concat(t4, ((v_list != NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); goto done; } tf_str_assign(&v_s, tf_str_ref(t5)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
+    { TF_LINE(86); tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_4, " after=", 7)); tf_string *t2 = tf_str_from_i32((*(t_Node *)tf_ref_get(v_list, &t_Node_ops)).f_Value); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_0, " ", 1)); tf_string *t5 = tf_str_concat(t4, ((v_list != NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); goto done; } tf_str_assign(&v_s, tf_str_ref(t5)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
 #line 87 "refs.bas"
     TF_LINE(87); p_Clear(&v_list); if (tf_error_pending) goto done;
 #line 88 "refs.bas"
-    TF_LINE(88); { tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_5, " cleared=", 9)); tf_string *t2 = tf_str_concat(t1, ((v_list == NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); goto done; } tf_set_str(c_t2, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); } if (tf_error_pending) goto done;
+    { TF_LINE(88); tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_5, " cleared=", 9)); tf_string *t2 = tf_str_concat(t1, ((v_list == NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); goto done; } tf_set_str(c_t2, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); } if (tf_error_pending) goto done;
 #line 90 "refs.bas"
-    TF_LINE(90); { t_Point t1 = p_MakePoint(7); if (tf_error_pending) { t_Point_free(&t1); goto done; } t_Point_copy(&v_v, &t1); t_Point_free(&t1); } if (tf_error_pending) goto done;
+    { TF_LINE(90); t_Point t1 = p_MakePoint(7); if (tf_error_pending) { t_Point_free(&t1); goto done; } t_Point_copy(&v_v, &t1); t_Point_free(&t1); } if (tf_error_pending) goto done;
 #line 91 "refs.bas"
     TF_LINE(91); v_rp = tf_ref_replace(v_rp, tf_ref_new_copy(&t_Point_ops, &v_v));
 #line 92 "refs.bas"
     TF_LINE(92); (*(t_Point *)tf_ref_get(v_rp, &t_Point_ops)).f_X = 8; if (tf_error_pending) goto done;
 #line 93 "refs.bas"
-    TF_LINE(93); { t_Point *t1 = tf_ref_get(v_rp, &t_Point_ops); if (tf_error_pending) goto done; t_Point_copy(&v_v, &(*t1)); } if (tf_error_pending) goto done;
+    { TF_LINE(93); t_Point *t1 = tf_ref_get(v_rp, &t_Point_ops); if (tf_error_pending) goto done; t_Point_copy(&v_v, &(*t1)); } if (tf_error_pending) goto done;
 #line 94 "refs.bas"
-    TF_LINE(94); { int32_t t1 = tf_i32_add(v_v.f_X, 1); if (tf_error_pending) goto done; v_v.f_X = t1; }
+    { TF_LINE(94); int32_t t1 = tf_i32_add(v_v.f_X, 1); if (tf_error_pending) goto done; v_v.f_X = t1; }
 #line 95 "refs.bas"
     TF_LINE(95); (*(t_Point **)tf_array_at1(&v_all, 0)) = tf_ref_replace((*(t_Point **)tf_array_at1(&v_all, 0)), tf_ref_ref(v_rp)); if (tf_error_pending) goto done;
 #line 96 "refs.bas"
@@ -245,11 +267,11 @@ static void p_Form_Load(void)
 #line 97 "refs.bas"
     TF_LINE(97); (*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 1)), &t_Point_ops)).f_X = 5; if (tf_error_pending) goto done;
 #line 98 "refs.bas"
-    TF_LINE(98); { tf_string *t1 = tf_str_from_i32(v_v.f_X); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_from_i32((*(t_Point *)tf_ref_get(v_rp, &t_Point_ops)).f_X); tf_string *t4 = tf_str_concat(t2, t3); tf_string *t5 = tf_str_concat(t4, tf_str_literal(&s_0, " ", 1)); tf_string *t6 = tf_str_from_i32((*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 0)), &t_Point_ops)).f_X); tf_string *t7 = tf_str_concat(t5, t6); tf_string *t8 = tf_str_from_i32((*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 1)), &t_Point_ops)).f_X); tf_string *t9 = tf_str_concat(t7, t8); tf_string *t10 = tf_str_concat(t9, tf_str_literal(&s_0, " ", 1)); tf_string *t11 = tf_str_concat(t10, (((*(t_Point **)tf_array_at1(&v_all, 2)) == NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); goto done; } tf_set_str(c_t3, TF_PROP_TEXT, t11); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); } if (tf_error_pending) goto done;
+    { TF_LINE(98); tf_string *t1 = tf_str_from_i32(v_v.f_X); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_from_i32((*(t_Point *)tf_ref_get(v_rp, &t_Point_ops)).f_X); tf_string *t4 = tf_str_concat(t2, t3); tf_string *t5 = tf_str_concat(t4, tf_str_literal(&s_0, " ", 1)); tf_string *t6 = tf_str_from_i32((*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 0)), &t_Point_ops)).f_X); tf_string *t7 = tf_str_concat(t5, t6); tf_string *t8 = tf_str_from_i32((*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 1)), &t_Point_ops)).f_X); tf_string *t9 = tf_str_concat(t7, t8); tf_string *t10 = tf_str_concat(t9, tf_str_literal(&s_0, " ", 1)); tf_string *t11 = tf_str_concat(t10, (((*(t_Point **)tf_array_at1(&v_all, 2)) == NULL) ? tf_str_literal(&s_1, "True", 4) : tf_str_literal(&s_2, "False", 5))); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); goto done; } tf_set_str(c_t3, TF_PROP_TEXT, t11); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); tf_str_release(t8); tf_str_release(t9); tf_str_release(t10); tf_str_release(t11); } if (tf_error_pending) goto done;
 #line 100 "refs.bas"
     { TF_LINE(100); tf_try_enter();
 #line 101 "refs.bas"
-        TF_LINE(101); { int32_t t1 = (*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 2)), &t_Point_ops)).f_X; if (tf_error_pending) goto fail_1; v_i = t1; }
+        { TF_LINE(101); int32_t t1 = (*(t_Point *)tf_ref_get((*(t_Point **)tf_array_at1(&v_all, 2)), &t_Point_ops)).f_X; if (tf_error_pending) goto fail_1; v_i = t1; }
         goto finally_1;
     fail_1:
         tf_err_catch();
@@ -257,7 +279,7 @@ static void p_Form_Load(void)
         TF_LINE(102);
         {
 #line 103 "refs.bas"
-            TF_LINE(103); { tf_string *t1 = tf_str_from_i32(tf_err_number()); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_concat(t2, tf_err_description()); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); goto finally_1; } tf_set_str(c_t4, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); } if (tf_error_pending) goto finally_1;
+            { TF_LINE(103); tf_string *t1 = tf_str_from_i32(tf_err_number()); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_0, " ", 1)); tf_string *t3 = tf_str_concat(t2, tf_err_description()); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); goto finally_1; } tf_set_str(c_t4, TF_PROP_TEXT, t3); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); } if (tf_error_pending) goto finally_1;
             goto finally_1;
         }
     finally_1:
@@ -271,11 +293,12 @@ static void p_Form_Load(void)
 #line 107 "refs.bas"
     TF_LINE(107); (*(t_Point *)tf_ref_get(v_fresh, &t_Point_ops)).f_X = 3; if (tf_error_pending) goto done;
 #line 108 "refs.bas"
-    TF_LINE(108); { tf_string *t1 = tf_str_from_i32((*(t_Point *)tf_ref_get(v_fresh, &t_Point_ops)).f_X); tf_string *t2 = tf_str_concat(tf_str_literal(&s_6, "fresh=", 6), t1); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_0, " ", 1)); t_Point t4 = p_MakePoint(9); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); goto done; } tf_string *t5 = tf_str_from_i32(t4.f_X); tf_string *t6 = tf_str_concat(t3, t5); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); tf_str_release(t5); tf_str_release(t6); goto done; } tf_set_str(c_t5, TF_PROP_TEXT, t6); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); tf_str_release(t5); tf_str_release(t6); } if (tf_error_pending) goto done;
+    { TF_LINE(108); tf_string *t1 = tf_str_from_i32((*(t_Point *)tf_ref_get(v_fresh, &t_Point_ops)).f_X); tf_string *t2 = tf_str_concat(tf_str_literal(&s_6, "fresh=", 6), t1); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_0, " ", 1)); t_Point t4 = p_MakePoint(9); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); goto done; } tf_string *t5 = tf_str_from_i32(t4.f_X); tf_string *t6 = tf_str_concat(t3, t5); if (tf_error_pending) { tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); tf_str_release(t5); tf_str_release(t6); goto done; } tf_set_str(c_t5, TF_PROP_TEXT, t6); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); t_Point_free(&t4); tf_str_release(t5); tf_str_release(t6); } if (tf_error_pending) goto done;
 #line 109 "refs.bas"
 done: tf_ref_release(v_a); tf_ref_release(v_b); tf_ref_release(v_list); tf_str_release(v_s); t_Point_free(&v_v); tf_ref_release(v_rp); tf_array_free(&v_all); tf_ref_release(v_fresh);
 }
 
+#line 1 "refs.tf.c"
 int main(void)
 {
     tf_runtime_init("refs.bas");
@@ -315,6 +338,7 @@ int main(void)
     tf_set_int(c_t5, TF_PROP_TOP, 4);
 #line 27 "refs.bas"
     tf_set_int(c_t5, TF_PROP_WIDTH, 50);
+#line 1 "refs.tf.c"
     tf_form_ready(c_f);
     tf_control_on(c_f, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_f);

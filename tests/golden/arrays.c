@@ -23,7 +23,9 @@ static void p_Form_Load(void);
 #line 16 "arrays.bas"
 static int32_t p_Sum(tf_array *v_values)
 {
+#line 16 "arrays.bas"
     int32_t v_i = 0;
+#line 16 "arrays.bas"
     int32_t r_Sum = 0;
 #line 18 "arrays.bas"
     TF_LINE(18); const int32_t to_1 = tf_array_ubound(v_values, 1); v_i = 0;
@@ -57,16 +59,27 @@ static void p_Bump(int32_t *v_n)
 #line 31 "arrays.bas"
 static void p_Form_Load(void)
 {
+#line 31 "arrays.bas"
     tf_array v_a = {0};
+#line 31 "arrays.bas"
     tf_array v_grid = {0};
+#line 31 "arrays.bas"
     tf_array v_cube = {0};
+#line 31 "arrays.bas"
     tf_array v_d = {0};
+#line 31 "arrays.bas"
     tf_array v_copy = {0};
+#line 31 "arrays.bas"
     int32_t v_i = 0;
+#line 31 "arrays.bas"
     tf_array v_row = {0};
+#line 31 "arrays.bas"
     tf_array_init(&v_a, TF_ELEM_I32, NULL, 1, (const int32_t[]){3});
+#line 31 "arrays.bas"
     tf_array_init(&v_grid, TF_ELEM_STRING, NULL, 2, (const int32_t[]){2, 3});
+#line 31 "arrays.bas"
     tf_array_init(&v_cube, TF_ELEM_F64, NULL, 3, (const int32_t[]){1, 1, 1});
+#line 31 "arrays.bas"
     tf_array_init(&v_row, TF_ELEM_I32, NULL, 1, (const int32_t[]){2});
 #line 34 "arrays.bas"
     TF_LINE(34); *(int32_t *)tf_array_at1(&v_a, 0) = 5;
@@ -79,17 +92,17 @@ static void p_Form_Load(void)
 #line 38 "arrays.bas"
     TF_LINE(38); tf_array_redim(&v_d, TF_ELEM_I32, NULL, 0, 1, (const int32_t[]){2});
 #line 39 "arrays.bas"
-    TF_LINE(39); { int32_t t1 = p_Sum(&v_a); *(int32_t *)tf_array_at1(&v_d, 1) = t1; }
+    { TF_LINE(39); int32_t t1 = p_Sum(&v_a); *(int32_t *)tf_array_at1(&v_d, 1) = t1; }
 #line 40 "arrays.bas"
     TF_LINE(40); p_Grow(&v_d, 3);
 #line 41 "arrays.bas"
-    TF_LINE(41); { int32_t *t1 = (int32_t *)tf_array_at1(&v_d, 4); tf_array_lock(&v_d); p_Bump(t1); tf_array_unlock(&v_d); }
+    { TF_LINE(41); int32_t *t1 = (int32_t *)tf_array_at1(&v_d, 4); tf_array_lock(&v_d); p_Bump(t1); tf_array_unlock(&v_d); }
 #line 42 "arrays.bas"
     TF_LINE(42); tf_array_copy(&v_copy, &v_d);
 #line 43 "arrays.bas"
     TF_LINE(43); tf_array_redim(&g_names, TF_ELEM_STRING, NULL, 0, 1, (const int32_t[]){1});
 #line 44 "arrays.bas"
-    TF_LINE(44); { tf_string *t1 = tf_str_from_i32(tf_array_ubound(&v_grid, 2)); tf_str_assign((tf_string **)tf_array_at1(&g_names, 1), tf_str_concat((*(tf_string **)tf_array_at2(&v_grid, 2, 3)), t1)); tf_str_release(t1); }
+    { TF_LINE(44); tf_string *t1 = tf_str_from_i32(tf_array_ubound(&v_grid, 2)); tf_str_assign((tf_string **)tf_array_at1(&g_names, 1), tf_str_concat((*(tf_string **)tf_array_at2(&v_grid, 2, 3)), t1)); tf_str_release(t1); }
 #line 45 "arrays.bas"
     TF_LINE(45); *(int64_t *)tf_array_at1(&g_totals, 4) = tf_i64_from_f64(tf_f64_add((*(int32_t *)tf_array_at1(&v_d, 4)), (*(double *)tf_array_atn(&v_cube, 3, (const int64_t[]){1, 0, 1}))));
 #line 46 "arrays.bas"
@@ -108,11 +121,12 @@ static void p_Form_Load(void)
 #line 50 "arrays.bas"
     TF_LINE(50); tf_array_erase(&v_d);
 #line 51 "arrays.bas"
-    TF_LINE(51); { tf_string *t1 = tf_str_from_i32((*(int32_t *)tf_array_at1(&v_copy, 1))); tf_string *t2 = tf_str_concat((*(tf_string **)tf_array_at1(&g_names, 1)), t1); tf_string *t3 = tf_str_from_i64((*(int64_t *)tf_array_at1(&g_totals, 4))); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
+    { TF_LINE(51); tf_string *t1 = tf_str_from_i32((*(int32_t *)tf_array_at1(&v_copy, 1))); tf_string *t2 = tf_str_concat((*(tf_string **)tf_array_at1(&g_names, 1)), t1); tf_string *t3 = tf_str_from_i64((*(int64_t *)tf_array_at1(&g_totals, 4))); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
 #line 52 "arrays.bas"
     tf_array_free(&v_a); tf_array_free(&v_grid); tf_array_free(&v_cube); tf_array_free(&v_d); tf_array_free(&v_copy); tf_array_free(&v_row);
 }
 
+#line 1 "arrays.tf.c"
 int main(void)
 {
     tf_runtime_init("arrays.bas");
@@ -126,6 +140,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "arrays.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "arrays.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

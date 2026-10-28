@@ -17,17 +17,19 @@ static void p_Form_Load(void);
 #line 14 "declare.bas"
 static void p_Form_Load(void)
 {
+#line 14 "declare.bas"
     tf_string *v_buffer = NULL;
 #line 15 "declare.bas"
     TF_LINE(15); tf_str_assign(&v_buffer, tf_str_space(8));
 #line 16 "declare.bas"
-    TF_LINE(16); { tf_string **t1 = &v_buffer; char *t2 = tf_c_buffer(*t1); long t3 = tf_c_long(8); fill_name(t2, t3); tf_c_unbuffer(t1, &t2); tf_c_free(t2); }
+    { TF_LINE(16); tf_string **t1 = &v_buffer; char *t2 = tf_c_buffer(*t1); long t3 = tf_c_long(8); fill_name(t2, t3); tf_c_unbuffer(t1, &t2); tf_c_free(t2); }
 #line 17 "declare.bas"
-    TF_LINE(17); { tf_string *t1 = tf_str_from_c(sqlite3_libversion()); int64_t t2 = tf_c_from_size(strlen(tf_str_cstr(v_buffer))); tf_string *t3 = tf_str_from_i64(t2); tf_string *t4 = tf_str_concat(t1, t3); tf_set_str(c_frmMain, TF_PROP_CAPTION, t4); tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); }
+    { TF_LINE(17); tf_string *t1 = tf_str_from_c(sqlite3_libversion()); int64_t t2 = tf_c_from_size(strlen(tf_str_cstr(v_buffer))); tf_string *t3 = tf_str_from_i64(t2); tf_string *t4 = tf_str_concat(t1, t3); tf_set_str(c_frmMain, TF_PROP_CAPTION, t4); tf_str_release(t1); tf_str_release(t3); tf_str_release(t4); }
 #line 18 "declare.bas"
     tf_str_release(v_buffer);
 }
 
+#line 1 "declare.tf.c"
 int main(void)
 {
     tf_runtime_init("declare.bas");
@@ -35,6 +37,7 @@ int main(void)
     c_frmMain = tf_form_new("frmMain");
 #line 7 "declare.bas"
     tf_set_str(c_frmMain, TF_PROP_CAPTION, tf_str_literal(&s_0, "Declare", 7));
+#line 1 "declare.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

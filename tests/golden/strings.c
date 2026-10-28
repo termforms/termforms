@@ -19,8 +19,11 @@ static void p_Form_Load(void);
 #line 11 "strings.bas"
 static void p_Form_Load(void)
 {
+#line 11 "strings.bas"
     tf_string *v_s = NULL;
+#line 11 "strings.bas"
     tf_array v_parts = {0};
+#line 11 "strings.bas"
     int32_t v_n = 0;
 #line 13 "strings.bas"
     TF_LINE(13); tf_str_assign(&v_s, tf_str_trim(tf_str_literal(&s_0, "  a,b  ", 7)));
@@ -29,11 +32,12 @@ static void p_Form_Load(void)
 #line 15 "strings.bas"
     TF_LINE(15); tf_str_split(&v_parts, v_s, tf_str_literal(&s_3, " ", 1));
 #line 16 "strings.bas"
-    TF_LINE(16); { tf_string *t1 = tf_str_mid(v_s, v_n, 2147483647); tf_string *t2 = tf_str_ucase(v_s); tf_string *t3 = tf_str_left(t2, 1); tf_string *t4 = tf_str_concat(t1, t3); tf_string *t5 = tf_str_chr(45); tf_string *t6 = tf_str_join(&v_parts, t5); tf_string *t7 = tf_str_concat(t4, t6); tf_set_str(c_txtOut, TF_PROP_TEXT, t7); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); }
+    { TF_LINE(16); tf_string *t1 = tf_str_mid(v_s, v_n, 2147483647); tf_string *t2 = tf_str_ucase(v_s); tf_string *t3 = tf_str_left(t2, 1); tf_string *t4 = tf_str_concat(t1, t3); tf_string *t5 = tf_str_chr(45); tf_string *t6 = tf_str_join(&v_parts, t5); tf_string *t7 = tf_str_concat(t4, t6); tf_set_str(c_txtOut, TF_PROP_TEXT, t7); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); tf_str_release(t7); }
 #line 17 "strings.bas"
     tf_str_release(v_s); tf_array_free(&v_parts);
 }
 
+#line 1 "strings.tf.c"
 int main(void)
 {
     tf_runtime_init("strings.bas");
@@ -45,6 +49,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "strings.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "strings.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

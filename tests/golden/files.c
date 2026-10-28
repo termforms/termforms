@@ -17,14 +17,16 @@ static void p_Form_Load(void);
 #line 11 "files.bas"
 static void p_Form_Load(void)
 {
+#line 11 "files.bas"
     int32_t v_n = 0;
+#line 11 "files.bas"
     tf_string *v_line = NULL;
 #line 13 "files.bas"
     TF_LINE(13); v_n = tf_file_free();
 #line 14 "files.bas"
     TF_LINE(14); tf_file_open(tf_str_literal(&s_0, "out.txt", 7), 2, v_n);
 #line 15 "files.bas"
-    TF_LINE(15); { tf_string *t1 = tf_str_from_i32(v_n); tf_string *t2 = tf_str_concat(tf_str_literal(&s_1, "n=", 2), t1); tf_file_print(v_n, t2, 0); tf_str_release(t1); tf_str_release(t2); }
+    { TF_LINE(15); tf_string *t1 = tf_str_from_i32(v_n); tf_string *t2 = tf_str_concat(tf_str_literal(&s_1, "n=", 2), t1); tf_file_print(v_n, t2, 0); tf_str_release(t1); tf_str_release(t2); }
 #line 16 "files.bas"
     TF_LINE(16); tf_file_print(v_n, NULL, 1);
 #line 17 "files.bas"
@@ -40,13 +42,14 @@ static void p_Form_Load(void)
         TF_LINE(20); tf_str_assign(&v_line, tf_file_line_input(1));
     }
 #line 22 "files.bas"
-    TF_LINE(22); { tf_string *t1 = tf_str_from_i64(tf_file_lof(1)); tf_string *t2 = tf_str_concat(v_line, t1); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); }
+    { TF_LINE(22); tf_string *t1 = tf_str_from_i64(tf_file_lof(1)); tf_string *t2 = tf_str_concat(v_line, t1); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); }
 #line 23 "files.bas"
     TF_LINE(23); tf_file_close_all();
 #line 24 "files.bas"
     tf_str_release(v_line);
 }
 
+#line 1 "files.tf.c"
 int main(void)
 {
     tf_runtime_init("files.bas");
@@ -58,6 +61,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "files.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "files.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

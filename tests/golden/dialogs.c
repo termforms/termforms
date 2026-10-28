@@ -17,7 +17,9 @@ static void p_Main(void);
 #line 3 "dialogs.bas"
 static void p_Main(void)
 {
+#line 3 "dialogs.bas"
     int32_t v_answer = 0;
+#line 3 "dialogs.bas"
     tf_string *v_name = NULL;
 #line 5 "dialogs.bas"
     TF_LINE(5); v_answer = tf_msgbox(tf_str_literal(&s_0, "Save\?", 5), tf_i32_add(4, 32), NULL);
@@ -28,11 +30,12 @@ static void p_Main(void)
         TF_LINE(6); tf_str_assign(&v_name, tf_inputbox(tf_str_literal(&s_1, "Name:", 5), tf_str_literal(&s_2, "Save as", 7), tf_str_literal(&s_3, "untitled", 8)));
     }
 #line 7 "dialogs.bas"
-    TF_LINE(7); { tf_string *t1 = tf_str_concat(tf_str_literal(&s_4, "Saved ", 6), v_name); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_5, "\015\012", 2)); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_6, "done", 4)); tf_msgbox(t3, 0, NULL); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
+    { TF_LINE(7); tf_string *t1 = tf_str_concat(tf_str_literal(&s_4, "Saved ", 6), v_name); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_5, "\015\012", 2)); tf_string *t3 = tf_str_concat(t2, tf_str_literal(&s_6, "done", 4)); tf_msgbox(t3, 0, NULL); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); }
 #line 8 "dialogs.bas"
     tf_str_release(v_name);
 }
 
+#line 1 "dialogs.tf.c"
 int main(void)
 {
     tf_runtime_init("dialogs.bas");

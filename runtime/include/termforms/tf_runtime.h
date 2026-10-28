@@ -414,6 +414,7 @@ typedef struct tf_record_ops
     void (*init)(void *record);
     void (*free)(void *record);
     void (*copy)(void *to, const void *from);
+    const char *name; /* the C struct's name ("t_Point"), for debugger printers */
 } tf_record_ops;
 
 typedef struct tf_array

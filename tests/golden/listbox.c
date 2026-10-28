@@ -23,7 +23,7 @@ static void p_Form_Load(void)
 #line 14 "listbox.bas"
     TF_LINE(14); tf_list_add(c_lst, tf_str_literal(&s_1, "b", 1), 0);
 #line 15 "listbox.bas"
-    TF_LINE(15); { tf_string *t1 = tf_list_item(c_lst, 0); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_2, "!", 1)); tf_list_set_item(c_lst, 1, t2); tf_str_release(t1); tf_str_release(t2); }
+    { TF_LINE(15); tf_string *t1 = tf_list_item(c_lst, 0); tf_string *t2 = tf_str_concat(t1, tf_str_literal(&s_2, "!", 1)); tf_list_set_item(c_lst, 1, t2); tf_str_release(t1); tf_str_release(t2); }
 #line 16 "listbox.bas"
     TF_LINE(16); tf_list_set_selected(c_lst, 1, (!tf_list_selected(c_lst, 1)));
 #line 17 "listbox.bas"
@@ -38,6 +38,7 @@ static void p_Form_Load(void)
     TF_LINE(19); tf_list_clear(c_lst);
 }
 
+#line 1 "listbox.tf.c"
 int main(void)
 {
     tf_runtime_init("listbox.bas");
@@ -51,6 +52,7 @@ int main(void)
     tf_set_int(c_lst, TF_PROP_HEIGHT, 6);
 #line 8 "listbox.bas"
     tf_set_int(c_lst, TF_PROP_MULTISELECT, 1);
+#line 1 "listbox.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

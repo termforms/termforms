@@ -22,6 +22,7 @@ static void p_Form_Load(void);
 #line 33 "constants.bas"
 static int32_t p_Next1(int32_t v_c)
 {
+#line 33 "constants.bas"
     int32_t r_Next1 = 0;
 #line 34 "constants.bas"
     TF_LINE(34); r_Next1 = tf_i32_add(v_c, 1);
@@ -32,13 +33,16 @@ static int32_t p_Next1(int32_t v_c)
 #line 37 "constants.bas"
 static void p_Form_Load(void)
 {
+#line 37 "constants.bas"
     int32_t v_i = 0;
+#line 37 "constants.bas"
     tf_string *v_s = NULL;
+#line 37 "constants.bas"
     int64_t v_n = 0;
 #line 40 "constants.bas"
     TF_LINE(40); g_current = 10;
 #line 41 "constants.bas"
-    TF_LINE(41); { int32_t t1 = p_Next1(g_current); g_current = t1; }
+    { TF_LINE(41); int32_t t1 = p_Next1(g_current); g_current = t1; }
 #line 42 "constants.bas"
     TF_LINE(42); v_i = tf_i32_add(g_current, 201);
 #line 43 "constants.bas"
@@ -50,7 +54,7 @@ static void p_Form_Load(void)
 #line 44 "constants.bas"
         TF_LINE(44); if (g_current > 11) break;
 #line 45 "constants.bas"
-        TF_LINE(45); { tf_string *t1 = tf_str_from_i32(g_current); tf_string *t2 = tf_str_concat(v_s, t1); tf_str_assign(&v_s, tf_str_concat(t2, tf_str_literal(&s_0, "x", 1))); tf_str_release(t1); tf_str_release(t2); }
+        { TF_LINE(45); tf_string *t1 = tf_str_from_i32(g_current); tf_string *t2 = tf_str_concat(v_s, t1); tf_str_assign(&v_s, tf_str_concat(t2, tf_str_literal(&s_0, "x", 1))); tf_str_release(t1); tf_str_release(t2); }
 #line 46 "constants.bas"
         TF_LINE(46); g_current = tf_i32_add(g_current, 5);
     }
@@ -58,14 +62,15 @@ static void p_Form_Load(void)
     TF_LINE(47); if ((int)1 & (int)(g_current != 1))
     {
 #line 47 "constants.bas"
-        TF_LINE(47); { tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_1, "Orders 100", 10)); tf_string *t2 = tf_str_from_f64(0.075); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_f64(0.5); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_str_from_i32(tf_i32_from_str(tf_str_literal(&s_2, "2", 1))); tf_str_assign(&v_s, tf_str_concat(t5, t6)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); }
+        { TF_LINE(47); tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_1, "Orders 100", 10)); tf_string *t2 = tf_str_from_f64(0.075); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_f64(0.5); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_str_from_i32(tf_i32_from_str(tf_str_literal(&s_2, "2", 1))); tf_str_assign(&v_s, tf_str_concat(t5, t6)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); }
     }
 #line 48 "constants.bas"
-    TF_LINE(48); { tf_string *t1 = tf_str_from_i32(v_i); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_str_from_i64(v_n); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
+    { TF_LINE(48); tf_string *t1 = tf_str_from_i32(v_i); tf_string *t2 = tf_str_concat(v_s, t1); tf_string *t3 = tf_str_from_i64(v_n); tf_string *t4 = tf_str_concat(t2, t3); tf_set_str(c_txtOut, TF_PROP_TEXT, t4); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); }
 #line 49 "constants.bas"
     tf_str_release(v_s);
 }
 
+#line 1 "constants.tf.c"
 int main(void)
 {
     tf_runtime_init("constants.bas");
@@ -77,6 +82,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "constants.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "constants.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);

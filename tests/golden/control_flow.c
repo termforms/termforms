@@ -45,7 +45,9 @@ static void p_Reset(void)
 #line 26 "control_flow.bas"
 static void p_cmdGo_Click(void)
 {
+#line 26 "control_flow.bas"
     int32_t v_n = 0;
+#line 26 "control_flow.bas"
     int v_done = 0;
 #line 28 "control_flow.bas"
     TF_LINE(28); v_n = tf_i32_sub(tf_i32_div(tf_i32_mul(tf_i32_add(g_total, 2), 3), 2), tf_i32_neg(1));
@@ -63,7 +65,7 @@ static void p_cmdGo_Click(void)
         TF_LINE(32); if ((int)v_done & (int)(v_n != 0))
         {
 #line 33 "control_flow.bas"
-            TF_LINE(33); { tf_string *t1 = tf_str_concat(g_label, tf_str_literal(&s_3, " ", 1)); tf_string *t2 = tf_str_from_i32(v_n); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_3, " ", 1)); tf_string *t5 = tf_str_concat(t4, (v_done ? tf_str_literal(&s_4, "True", 4) : tf_str_literal(&s_5, "False", 5))); tf_set_str(c_txtOut, TF_PROP_TEXT, t5); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
+            { TF_LINE(33); tf_string *t1 = tf_str_concat(g_label, tf_str_literal(&s_3, " ", 1)); tf_string *t2 = tf_str_from_i32(v_n); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_3, " ", 1)); tf_string *t5 = tf_str_concat(t4, (v_done ? tf_str_literal(&s_4, "True", 4) : tf_str_literal(&s_5, "False", 5))); tf_set_str(c_txtOut, TF_PROP_TEXT, t5); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }
         }
         else
         {
@@ -76,6 +78,7 @@ static void p_cmdGo_Click(void)
     }
 }
 
+#line 1 "control_flow.tf.c"
 int main(void)
 {
     tf_runtime_init("control_flow.bas");
@@ -93,6 +96,7 @@ int main(void)
     tf_set_str(c_cmdGo, TF_PROP_CAPTION, tf_str_literal(&s_7, "Go", 2));
 #line 10 "control_flow.bas"
     tf_set_int(c_cmdGo, TF_PROP_TOP, 2);
+#line 1 "control_flow.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     tf_control_on(c_cmdGo, TF_EVENT_CLICK, p_cmdGo_Click);

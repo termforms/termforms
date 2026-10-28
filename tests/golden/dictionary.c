@@ -19,7 +19,7 @@ struct t_Club
 static TF_MAYBE_UNUSED void t_Person_init(void *record);
 static TF_MAYBE_UNUSED void t_Person_free(void *record);
 static TF_MAYBE_UNUSED void t_Person_copy(void *to, const void *from);
-static const tf_record_ops t_Person_ops = {sizeof(t_Person), t_Person_init, t_Person_free, t_Person_copy};
+static const tf_record_ops t_Person_ops = {sizeof(t_Person), t_Person_init, t_Person_free, t_Person_copy, "t_Person"};
 static TF_MAYBE_UNUSED void t_Club_init(void *record);
 static TF_MAYBE_UNUSED void t_Club_free(void *record);
 static TF_MAYBE_UNUSED void t_Club_copy(void *to, const void *from);
@@ -116,21 +116,30 @@ static void p_Bump(int32_t *v_n)
 #line 23 "dictionary.bas"
 static void p_Form_Load(void)
 {
+#line 23 "dictionary.bas"
     tf_array v_ages = {0};
+#line 23 "dictionary.bas"
     t_Club v_club;
+#line 23 "dictionary.bas"
     t_Person v_p;
+#line 23 "dictionary.bas"
     tf_array v_keys = {0};
+#line 23 "dictionary.bas"
     tf_string *v_k = NULL;
+#line 23 "dictionary.bas"
     tf_array v__with1 = {0};
+#line 23 "dictionary.bas"
     int64_t v__with2 = 0;
+#line 23 "dictionary.bas"
     t_Club_init(&v_club);
+#line 23 "dictionary.bas"
     t_Person_init(&v_p);
 #line 25 "dictionary.bas"
-    TF_LINE(25); { int32_t t1 = 30; int32_t *t2 = (int32_t *)tf_dict_put(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_0, "Ann", 3)); *t2 = t1; }
+    { TF_LINE(25); int32_t t1 = 30; int32_t *t2 = (int32_t *)tf_dict_put(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_0, "Ann", 3)); *t2 = t1; }
 #line 26 "dictionary.bas"
-    TF_LINE(26); { int32_t t1 = tf_i32_add((*(int32_t *)tf_dict_get(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_0, "Ann", 3))), 1); int32_t *t2 = (int32_t *)tf_dict_add(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_1, "Bo", 2)); *t2 = t1; }
+    { TF_LINE(26); int32_t t1 = tf_i32_add((*(int32_t *)tf_dict_get(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_0, "Ann", 3))), 1); int32_t *t2 = (int32_t *)tf_dict_add(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_1, "Bo", 2)); *t2 = t1; }
 #line 27 "dictionary.bas"
-    TF_LINE(27); { int32_t *t1 = (int32_t *)tf_dict_get(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_1, "Bo", 2)); tf_array_lock(&v_ages); p_Bump(t1); tf_array_unlock(&v_ages); }
+    { TF_LINE(27); int32_t *t1 = (int32_t *)tf_dict_get(&v_ages, TF_ELEM_I32, NULL, tf_str_literal(&s_1, "Bo", 2)); tf_array_lock(&v_ages); p_Bump(t1); tf_array_unlock(&v_ages); }
 #line 28 "dictionary.bas"
     TF_LINE(28); if (tf_dict_exists(&v_ages, tf_str_literal(&s_0, "Ann", 3)))
     {
@@ -138,7 +147,7 @@ static void p_Form_Load(void)
         TF_LINE(28); tf_dict_remove(&v_ages, tf_str_literal(&s_0, "Ann", 3));
     }
 #line 29 "dictionary.bas"
-    TF_LINE(29); { t_Person t1; t_Person_init(&t1); t_Person_copy(&t1, &v_p); t_Person *t2 = (t_Person *)tf_dict_put(&v_club.f_Members, TF_ELEM_RECORD, &t_Person_ops, tf_str_literal(&s_2, "x", 1)); t_Person_copy(t2, &t1); t_Person_free(&t1); }
+    { TF_LINE(29); t_Person t1; t_Person_init(&t1); t_Person_copy(&t1, &v_p); t_Person *t2 = (t_Person *)tf_dict_put(&v_club.f_Members, TF_ELEM_RECORD, &t_Person_ops, tf_str_literal(&s_2, "x", 1)); t_Person_copy(t2, &t1); t_Person_free(&t1); }
 #line 30 "dictionary.bas"
     TF_LINE(30); tf_str_assign(&((*(t_Person *)tf_dict_get(&v_club.f_Members, TF_ELEM_RECORD, &t_Person_ops, tf_str_literal(&s_2, "x", 1))).f_Name), tf_str_ref(tf_str_literal(&s_3, "Cy", 2)));
 #line 31 "dictionary.bas"
@@ -157,7 +166,7 @@ static void p_Form_Load(void)
 #line 32 "dictionary.bas"
         TF_LINE(32); v__with2 = tf_i64_add(v__with2, 1);
 #line 33 "dictionary.bas"
-        TF_LINE(33); { tf_string *t1 = tf_str_from_i32(tf_dict_count(&v_ages)); tf_string *t2 = tf_str_concat(v_k, t1); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); }
+        { TF_LINE(33); tf_string *t1 = tf_str_from_i32(tf_dict_count(&v_ages)); tf_string *t2 = tf_str_concat(v_k, t1); tf_set_str(c_txtOut, TF_PROP_TEXT, t2); tf_str_release(t1); tf_str_release(t2); }
     }
 #line 35 "dictionary.bas"
     TF_LINE(35); tf_dict_clear(&v_ages);
@@ -165,6 +174,7 @@ static void p_Form_Load(void)
     tf_array_free(&v_ages); t_Club_free(&v_club); t_Person_free(&v_p); tf_array_free(&v_keys); tf_str_release(v_k); tf_array_free(&v__with1);
 }
 
+#line 1 "dictionary.tf.c"
 int main(void)
 {
     tf_runtime_init("dictionary.bas");
@@ -176,6 +186,7 @@ int main(void)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 7 "dictionary.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+#line 1 "dictionary.tf.c"
     tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);
