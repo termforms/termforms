@@ -55,9 +55,14 @@ authoritative for design rationale.
      type Option characters (˜ ¥), so no access key arrives. On Jim's
      non-Apple keyboard it is the key labelled "opt" that works; Ctrl
      and Alt do not give access keys (Ctrl+letter is not meant to).
-  2. Dropping the SSH connection mid-run restores the terminal (SIGHUP).
+  2. ~~Dropping the SSH connection mid-run restores the terminal
+     (SIGHUP)~~: done (Jim, 28 Oct 2026): the demo's static musl build
+     on the Linux server over SSH works as expected, mouse and menus
+     included.
   3. Windows: double-click launch (console host or Windows Terminal?).
-  4. Resize behaviour: re-centring, and the "Please resize" overlay.
+  4. ~~Resize behaviour: re-centring, and the "Please resize"
+     overlay~~: done on the Mac, all three terminals (Jim, 28 Oct 2026);
+     Windows still to see in the ThinkPad session.
   5. Can Visual Studio debug zig-built (MinGW ABI, DWARF) programs? Needs
      VS on the ThinkPad. If not, Windows debug builds use MSVC (`--cc cl`).
   6. The mouse on Windows (Jim, 28 Oct 2026): build a test app that logs
@@ -335,9 +340,9 @@ authoritative for design rationale.
   Option-key hint (Jim, 28 Oct 2026): `option_hint` in tf_forms.c, first
   in form_key after the mouse; a one-time MsgBox when an Option-layer
   symbol arrives outside a TextBox or with the menus open.
-- **Next:** the rest of the Mac-side terminal checks (SSH with
-  examples/demo/demo-linux: SIGHUP restore; resize); then 5.2, the Mid$
-  statement.
+- **Next:** 5.2, the Mid$ statement. The Mac and SSH terminal checks are
+  done; what is left of the matrix (3, 4 on Windows, 5, 6) waits for the
+  ThinkPad session (5.8).
 
 ## Settled design decisions (do not relitigate without Jim)
 
