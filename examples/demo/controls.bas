@@ -1,5 +1,6 @@
 ' controls.bas -- Labels, TextBoxes (MaxLength, PasswordChar, Locked),
-' CheckBoxes, OptionButtons in two Frames (two groups), Default and Cancel.
+' CheckBoxes (Italic starts grey, VB's third state, drawn [-]),
+' OptionButtons in two Frames (two groups), Default and Cancel.
 Begin Form frmControls
     Caption = "Controls"
     Width = 60
@@ -60,10 +61,10 @@ Begin Form frmControls
         Width = 14
     End
     Begin CheckBox chkItalic
-        Caption = "&Italic"
+        Caption = "&Italic (grey)"
         Left = 38
         Top = 2
-        Width = 14
+        Width = 18
         Value = 2
     End
     Begin Frame fraSize
