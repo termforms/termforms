@@ -285,7 +285,25 @@ authoritative for design rationale.
   procedure nothing calls gets a `TF_MAYBE_UNUSED` prototype
   (`uncalled_`). A local set but never read still warns; that one is the
   program's (Jim accepted it, see errors.c above).
-- **Next:** Phase 5's scope with Jim.
+- **Phase 5 (tooling and docs), scope settled with Jim 28 Oct 2026:**
+  build `Declare Function … Lib` (in the v1 table, never built; its
+  design gets its own questions first); lldb and gdb: check stepping
+  through `.bas` lines, add String/array/Type printers (.natvis after the
+  ThinkPad shows whether VS can debug zig builds); a programmer's guide
+  in the repo, `docs/GUIDE.md` (REFERENCE.md stays the decision record);
+  examples: an every-control demo (also the Phase 4 gate demo and the
+  Windows mouse test app), an address book, a file viewer, small
+  language samples; CI-built release archives per platform (tfc +
+  runtime, tfc finding the runtime next to itself) as GitHub Release
+  assets; the Mid$ statement. The Phase 4 gate comes first (demo, then
+  the terminal checks); the Phase 5 gate is the ThinkPad, set up from
+  the environment doc alone, in the same session as the Windows terminal
+  checks, the mouse test and the VS debugging question.
+  Order (proposed): 5.1 every-control demo, then Jim runs the Mac
+  terminal checks with it; 5.2 Mid$ statement; 5.3 Declare (questions
+  first); 5.4 lldb/gdb; 5.5 the other examples; 5.6 release archives;
+  5.7 GUIDE.md; 5.8 the ThinkPad session.
+- **Next:** Phase 5 step 1, the every-control demo.
 
 ## Settled design decisions (do not relitigate without Jim)
 
