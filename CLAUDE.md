@@ -358,7 +358,12 @@ authoritative for design rationale.
   the prototype (int32_t, int64_t, double, uint8_t, int); Strings as
   UTF-8 const char * (results copied), ByRef String a writable buffer;
   ByRef elements and numbers-only Types as pointers; no callbacks.
-- **Next:** build Declare (5.3). The terminal matrix is done except
+  Also (same day): Declare-only types CLong, CULong, CSizeT (C's long,
+  unsigned long, size_t; a Long in BASIC, Overflow if it does not fit);
+  a built-in read-only String `Platform` ("Windows", "macOS", "Linux",
+  set by the C compiler for the target); conditional compilation (#If)
+  after v1.
+- **Next:** build Declare with CLong/CULong/CSizeT, and Platform (5.3). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

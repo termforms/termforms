@@ -944,6 +944,24 @@ Declare Sub fill_name Lib "utils.c" (ByRef buffer As String)
   Strings, Refs, arrays or Dictionaries inside such a Type, and no whole
   arrays, Refs, Dictionaries or controls as arguments.
 - **No callbacks in v1** (VB6's AddressOf): after v1.
+- **C types whose size differs by platform** (Jim, 28 Oct 2026): a
+  Declare may use `CLong`, `CULong` and `CSizeT` for C's `long`,
+  `unsigned long` and `size_t`. In BASIC each is a Long; the prototype
+  names the C type, so every platform's C compiler uses its own size, and
+  a value that does not fit there (a `long` is 32-bit on Windows; an
+  unsigned one takes no negatives) is error 6, Overflow. They exist only
+  in Declares. (Not to be confused with CLng, the conversion.)
+- **No conditional compilation in v1** (VB6's `#If` / `#Const`): after
+  v1; CLong and Platform cover the common needs.
+
+### Platform (Settled, Jim, 28 Oct 2026)
+
+- `Platform` is a built-in read-only String: `"Windows"`, `"macOS"` or
+  `"Linux"`, for the machine the program was built for. The C compiler
+  sets it, so a program cross-built on a Mac for the Linux server says
+  "Linux". It is not a Const (tfc does not know the target), so it
+  cannot go in a Const or an Enum. For choosing Shell commands, paths
+  and the like.
 
 ### Declare: details (Proposed)
 
