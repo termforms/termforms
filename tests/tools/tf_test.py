@@ -92,7 +92,11 @@ def run(tfc: str, source: Path, work: Path) -> bool:
         return False
 
     keys = source.with_suffix(".keys").read_text(encoding="utf-8").rstrip("\r\n")
-    env = dict(os.environ, TERMFORMS_HEADLESS=keys, TERMFORMS_HEADLESS_SIZE=HEADLESS_SIZE)
+    # An optional .size file ("80x24"): a screen for programs larger than
+    # the usual one, such as the examples.
+    size_file = source.with_suffix(".size")
+    size = size_file.read_text(encoding="utf-8").strip() if size_file.exists() else HEADLESS_SIZE
+    env = dict(os.environ, TERMFORMS_HEADLESS=keys, TERMFORMS_HEADLESS_SIZE=size)
     # Each program runs in a folder of its own, emptied first: files it
     # writes stay out of the source tree, and tests run in parallel safely.
     folder = work / (source.stem + ".dir")

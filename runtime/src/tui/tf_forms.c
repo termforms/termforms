@@ -1129,9 +1129,12 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
     const int on = usable(list);
     const int rows = (int)list->height - 2;
     const int inner = (int)list->width - 2;
-    if (list->top_index > list->item_count - rows && list->item_count > rows)
+    /* TopIndex past the end (set by code, or the wheel) shows the last
+       full page, as VB clamps it; a list shorter than the box starts at 0. */
+    const int32_t last_top = list->item_count > rows ? list->item_count - rows : 0;
+    if (list->top_index > last_top)
     {
-        list->top_index = list->item_count - rows;
+        list->top_index = last_top;
     }
     for (int r = 0; r < rows && r + 1 < h; ++r)
     {

@@ -1,0 +1,11 @@
+' The TermForms demo: every v1 control, menus, dialogs, several forms,
+' Timers, DoEvents and the mouse, each event shown in the main form's log.
+'
+' Build and run:   tfc demo.vbp && ./demo
+Name=demo
+Startup=frmDemo
+Form=main.bas
+Form=controls.bas
+Form=lists.bas
+Form=timer.bas
+Module=events.bas

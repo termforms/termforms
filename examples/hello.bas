@@ -3,7 +3,7 @@
 '
 ' Build and run:   tfc hello.bas && ./hello
 ' Keys:            Tab moves between the controls, Enter or Space presses
-'                  the button, Ctrl+Q quits.
+'                  the button, Ctrl+F4 closes the form.
 
 Begin Form frmHello
     Caption = "Hello"

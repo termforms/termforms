@@ -43,6 +43,10 @@ Thumbs.db
 # --- tfc output ---------------------------------------------------------------
 *.tf.c
 *.tf-obj/
-# Programs built from the examples (everything but the sources).
-/examples/*
-!/examples/*.bas
+# Programs built from the examples (everything but the sources, in the
+# examples folder and the projects' folders under it).
+/examples/**
+!/examples/**/
+!/examples/**/*.bas
+!/examples/**/*.vbp
+!/examples/**/README.md

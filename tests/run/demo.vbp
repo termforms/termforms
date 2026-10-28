@@ -1,0 +1,14 @@
+' Run test: the demo in examples/demo, built from its own files, so it
+' cannot quietly stop compiling or working. Keys: the Controls form
+' (typing, a digits-only box refusing a letter, a password, access keys,
+' Default), the Lists form (arrows, Space in a MultiSelect list, adding a
+' fruit, Esc), the View menu by mouse (focus events off), Help > About,
+' then Ctrl+F4 refused by Form_Unload's MsgBox. (The Timer form is left
+' out: it shows the time.)
+Name=demo
+Startup=frmDemo
+Form=../../examples/demo/main.bas
+Form=../../examples/demo/controls.bas
+Form=../../examples/demo/lists.bas
+Form=../../examples/demo/timer.bas
+Module=../../examples/demo/events.bas

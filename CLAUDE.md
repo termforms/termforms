@@ -315,7 +315,15 @@ authoritative for design rationale.
   reader/writer under the standard-library-only rule), then, only if the
   CodeLLDB route proves too raw, our own DAP adapter over lldb/gdb (BASIC
   names, temporaries hidden, BASIC watch expressions).
-- **Next:** Phase 5 step 1, the every-control demo.
+  Step 5.1 done (28 Oct 2026): the every-control demo, examples/demo
+  (demo.vbp: frmDemo with menus and an event log, frmControls, frmLists,
+  frmTimer, events.bas's Note/FocusNote). tests/run/demo.vbp builds the
+  same files (the Timer form is left out: it shows the time); run tests
+  take an optional `.size` file. Found and fixed: TopIndex past the end
+  of a short ListBox blanked it. Raised with Jim: a MsgBox or InputBox
+  closing fires the form's Activate again (VB6 does not).
+- **Next:** Jim runs the Mac terminal checks with the demo
+  (`tfc examples/demo/demo.vbp`); then 5.2, the Mid$ statement.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -427,10 +435,12 @@ tests/
               (+ .stderr = must fail with that message;
               + .args = command-line arguments, one a line;
               + .with = further modules, paths one a line;
+              + .size = the headless screen, e.g. 80x24;
               key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4},
               {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
   runtime/    C tests linked against tfrt
 examples/hello.bas                         the vertical-slice program
+examples/demo/                             every control, menus, dialogs, mouse
 ```
 
 Key mechanisms:
