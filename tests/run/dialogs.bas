@@ -3,7 +3,8 @@
 ' cancelled (Esc gives ""), MsgBox as a statement, vbDefaultButton2 taking
 ' Enter, a Yes/No box that Esc does not close (Alt+Y does); then the
 ' script ends while a two-line information box is shown, so the screen
-' shows it over the form. VB's named constants throughout.
+' shows it over the form. VB's named constants throughout. The form's
+' Activate fires once: dialogs closing do not activate it again (VB6).
 Begin Form frmMain
     Caption = "Dialogs"
     Width = 50
@@ -26,6 +27,10 @@ End
 
 Sub Note(s As String)
     lblLog.Caption = lblLog.Caption & s & " "
+End Sub
+
+Sub Form_Activate()
+    Note "act"
 End Sub
 
 Sub Form_Load()

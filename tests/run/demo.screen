@@ -3,21 +3,21 @@
  │ File  Forms  View  Help                                                    │
  │ Every v1 control, the menus, ┌ Event log ─────────────────────────────────┐│
  │ dialogs, Timers and the      │ ┌────────────────────────────────────────┐ ││
- │ mouse. 中文 and 日本語 take  │ │back from Controls                      ↑ ││
- │ two cells each.              │ │frmDemo Activate                        │ ││
- │                              │ │cmdLists Click                          │ ││
- │                              │ │frmLists Load: 8 fruit                  │ ││
- │      < Controls... >         │ │lstFruit Click: apple                   │ ││
- │                              │ │lstFruit Click: banana                  │ ││
- │        < Lists... >          │ │lstToppings Click: 0 chosen             │ ││
- │                              │ │lstToppings Click: 1 chosen             │ ││
- │   < Timer, DoEvents... >     │ │lstDays Click: Monday                   │ ││
- │                              │ │Add: kiwi2                              │ ││
- │          < Quit >            │ │frmDemo Activate                        │ ││
- │                              │ │focus events hidden                     │ ││
+ │ mouse. 中文 and 日本語 take  │ │OK: Ann 安abc, code 123, bold 1         ↑ ││
+ │ two cells each.              │ │frmControls Unload                      │ ││
+ │                              │ │back from Controls                      │ ││
  │                              │ │frmDemo Activate                        │ ││
- │ F10 or Ctrl+B: menus.        │ │frmDemo Unload refused                  │ ││
- │ Ctrl+F4: close.              │ │frmDemo Activate                        │ ││
+ │      < Controls... >         │ │cmdLists Click                          │ ││
+ │                              │ │frmLists Load: 8 fruit                  │ ││
+ │        < Lists... >          │ │lstFruit Click: apple                   │ ││
+ │                              │ │lstFruit Click: banana                  │ ││
+ │   < Timer, DoEvents... >     │ │lstToppings Click: 0 chosen             │ ││
+ │                              │ │lstToppings Click: 1 chosen             │ ││
+ │          < Quit >            │ │lstDays Click: Monday                   │ ││
+ │                              │ │Add: kiwi2                              │ ││
+ │                              │ │frmDemo Activate                        │ ││
+ │ F10 or Ctrl+B: menus.        │ │focus events hidden                     │ ││
+ │ Ctrl+F4: close.              │ │frmDemo Unload refused                  │ ││
  │                              │ └────────────────────────────────────────┘ ││
  │                              └────────────────────────────────────────────┘│
  └────────────────────────────────────────────────────────────────────────────┘

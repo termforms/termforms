@@ -2784,10 +2784,21 @@ static tf_control *active = NULL; /* the form last at the top (for Activate) */
 
 /* A form come to the top (shown, or uncovered) gets Activate, then the
    focus on its first control if it has none (GotFocus), as VB. Returns 1
-   if it did (the handlers may have changed the stack). */
+   if it did (the handlers may have changed the stack). A MsgBox or
+   InputBox is not a form to the program, as in VB6: it takes the focus
+   for its buttons but never becomes the active form, so the form under
+   it gets no Activate when it closes. */
 static int come_to_top(void)
 {
     tf_control *top = stack[depth - 1];
+    if (top->is_dialog)
+    {
+        if (top->focus < 0)
+        {
+            move_focus(top, 1);
+        }
+        return 0;
+    }
     if (top == active)
     {
         return 0;

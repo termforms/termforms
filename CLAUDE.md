@@ -320,8 +320,10 @@ authoritative for design rationale.
   frmTimer, events.bas's Note/FocusNote). tests/run/demo.vbp builds the
   same files (the Timer form is left out: it shows the time); run tests
   take an optional `.size` file. Found and fixed: TopIndex past the end
-  of a short ListBox blanked it. Raised with Jim: a MsgBox or InputBox
-  closing fires the form's Activate again (VB6 does not).
+  of a short ListBox blanked it. Jim then settled that a MsgBox or
+  InputBox closing does not fire the form's Activate (as VB6):
+  `come_to_top` never makes a dialog the `active` form. (The dialogs run
+  test had been dumping only "Please resize": it now has a .size.)
 - **Next:** Jim runs the Mac terminal checks with the demo
   (`tfc examples/demo/demo.vbp`); then 5.2, the Mid$ statement.
 

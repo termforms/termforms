@@ -1137,7 +1137,11 @@ End Sub
   Setting KeyCode or KeyAscii to 0 throws the key away; KeyPress may
   change a character to another.
 - A form coming to the top (shown, or uncovered) gets Activate, then its
-  first control the focus (GotFocus), as VB. Moving the focus raises
+  first control the focus (GotFocus), as VB. **A MsgBox or InputBox
+  closing does not activate the form under it** (Jim, 28 Oct 2026): as
+  in VB6 it is not a form to the program, so Activate fires only when
+  one of the program's own forms comes to the top, and the focus stays
+  where it was. Moving the focus raises
   LostFocus on one control and GotFocus on the next.
 
 ### Menus (Settled, Jim, 28 Oct 2026)
