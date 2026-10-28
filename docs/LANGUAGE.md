@@ -56,7 +56,7 @@ End Sub
 | Area | Supported |
 | --- | --- |
 | Types | `Integer` (32-bit), `Long` (64-bit), `Double`, `String` (UTF-8), `Boolean`; overflow is a runtime error |
-| Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` `&` `#` `$` |
+| Declarations | `Dim x As Integer`, `Dim a, b As String` (both String), suffixes `%` `&` `#` `$`; values: `Dim n As Integer = 5`, `Dim days() As String = {"Mon", "Tue"}`, `Dim g(,) As Integer = {{1, 2}, {3, 4}}`, module level too (set at start) |
 | Statements | assignment, `If ... Then ... ElseIf ... Else ... End If`, single-line `If`, `Select Case` (values, `a To b`, `Is > x`, `Case Else`), calls, `For ... Next`, `Do ... Loop`, `While ... Wend`, `Exit`, `Return`, `Try ... Catch ... Finally`, `Throw`, `Err.Raise`, `Err.Clear`, `End` |
 | Procedures | `Sub` and `Function` with ByVal (default) and `ByRef` parameters; recursion |
 | Constants | `Const` (module level or in a procedure), `Enum ... End Enum` (Integer or `As Long`), `CType(value, type)` |

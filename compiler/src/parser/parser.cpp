@@ -51,6 +51,7 @@
 
 #include "parser/parser.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <utility>
 
@@ -119,7 +120,40 @@ public:
             }
             skipStatementEnds();
         }
+        gatherInitialisers(module);
         return module;
+    }
+
+    // Module-level initialisers, in order, become a hidden Sub that the
+    // program runs at start (its name cannot be written in BASIC).
+    static void gatherInitialisers(Module &module)
+    {
+        Block init;
+        for (auto &stmt : module.moduleStatements)
+        {
+            if (stmt != nullptr && stmt->kind == StmtKind::Dim)
+            {
+                for (auto &s : stmt->body)
+                {
+                    init.push_back(std::move(s));
+                }
+                stmt->body.clear();
+            }
+        }
+        if (init.empty())
+        {
+            return;
+        }
+        auto proc = std::make_unique<Procedure>();
+        proc->name = "_init";
+        proc->isPrivate = true;
+        proc->location = init.front()->location;
+        proc->endLocation = init.back()->location;
+        proc->body = std::move(init);
+        module.initialiser = proc.get();
+        // First, so it is checked (and its messages come) before the Subs,
+        // as module-level Dims usually come before them.
+        module.procedures.insert(module.procedures.begin(), std::move(proc));
     }
 
 private:
@@ -1817,6 +1851,11 @@ private:
                 const Type declared = parseTypeName(&enumName, &isNew);
                 const bool dictionary = dictionary_;
                 dictionary_ = false;
+                // A value after this As may go only with a name that is its
+                // sole user (the others have suffixes of their own).
+                const bool alone =
+                    std::all_of(pending.begin(), pending.end() - 1,
+                                [](const auto &p) { return p->type != Type::Error; });
                 // "As" types the names before it that have no suffix of their
                 // own; only the name written directly before it may not
                 // contradict it ("Dim n% As String").
@@ -1841,7 +1880,19 @@ private:
                                           typeName(declared) + "'");
                     }
                 }
+                Variable *last = pending.back().get();
                 flush(pending, *s, module, procedure);
+                if (peek().isSymbol("="))
+                {
+                    parseInitialiser(*s, *last, alone);
+                }
+            }
+            else if (peek().isSymbol("="))
+            {
+                Variable *last = pending.back().get();
+                const bool alone = pending.size() == 1;
+                flush(pending, *s, module, procedure);
+                parseInitialiser(*s, *last, alone);
             }
             if (!acceptSymbol(","))
             {
@@ -1860,6 +1911,178 @@ private:
         }
         flush(pending, *s, module, procedure);
         return s;
+    }
+
+    // "= value" after a declared name: lowered into statements in the
+    // Dim's body (see Stmt::declared). alone: the name has its own type
+    // ("Dim a, b As Integer = 5" gives one As to two names, as VB.NET
+    // forbids).
+    void parseInitialiser(Stmt &dim, Variable &v, bool alone)
+    {
+        const Location where = next().location; // =
+        if (v.type == Type::Error)
+        {
+            error(v.location, "'" + v.name + "' needs a type, such as 'As Integer' or " +
+                                  "'As String' (a value does not give it one)");
+        }
+        else if (!alone)
+        {
+            error(where, "a name given a value needs its own type: write 'Dim " + v.name +
+                             " As <type> = value' (other names in the Dim take theirs)");
+        }
+        else if (v.autoNew)
+        {
+            error(where, "'As New' already gives '" + v.name + "' a value");
+        }
+        else if (v.isDictionary)
+        {
+            error(where, "a Dictionary starts empty: fill it after the Dim");
+        }
+        if (!peek().isSymbol("{"))
+        {
+            if (v.rank > 0 && !v.isDynamic)
+            {
+                error(where, "'" + v.name +
+                                 "' has a fixed size; only a dynamic array, "
+                                 "'Dim " +
+                                 v.name + "() As ...', takes a value");
+            }
+            dim.body.push_back(assignTo(v, nullptr, parseExpression(), where));
+            return;
+        }
+        // { ... } (nested for more dimensions): ReDim to its shape, then each
+        // element in turn.
+        const Location listAt = peek().location;
+        std::vector<std::pair<std::vector<std::int64_t>, ExprPtr>> items;
+        std::vector<std::int64_t> shape;
+        std::vector<std::int64_t> index;
+        parseList(items, shape, index, 0);
+        if (v.rank == 0)
+        {
+            error(listAt, "a list in braces gives an array its values, but '" + v.name +
+                              "' is not an array");
+            return;
+        }
+        if (!v.isDynamic)
+        {
+            error(where, "'" + v.name + "' has a fixed size; only a dynamic array, 'Dim " + v.name +
+                             "() As ...', takes a list");
+            return;
+        }
+        if (static_cast<int>(shape.size()) != v.rank)
+        {
+            error(listAt, "'" + v.name + "' has " + std::to_string(v.rank) +
+                              (v.rank == 1 ? " dimension" : " dimensions") + " but the list has " +
+                              std::to_string(shape.size()) + " (one level of braces each)");
+            return;
+        }
+        if (items.empty())
+        {
+            return; // {}: the array stays empty
+        }
+        auto redim = std::make_unique<Stmt>();
+        redim->kind = StmtKind::ReDim;
+        redim->location = where;
+        std::vector<ExprPtr> bounds;
+        for (std::int64_t n : shape)
+        {
+            bounds.push_back(integer(n - 1, listAt));
+        }
+        redim->args.push_back(arrayCall(v, std::move(bounds), listAt));
+        dim.body.push_back(std::move(redim));
+        for (auto &[at, value] : items)
+        {
+            std::vector<ExprPtr> subscripts;
+            for (std::int64_t i : at)
+            {
+                subscripts.push_back(integer(i, value->location));
+            }
+            const Location valueAt = value->location;
+            dim.body.push_back(assignTo(v, arrayCall(v, std::move(subscripts), valueAt),
+                                        std::move(value), valueAt));
+        }
+    }
+
+    // { item, ... }: items are values, or lists one level down. Every list
+    // at a level must be as long as the first (rows of equal length).
+    void parseList(std::vector<std::pair<std::vector<std::int64_t>, ExprPtr>> &items,
+                   std::vector<std::int64_t> &shape, std::vector<std::int64_t> &index,
+                   std::size_t level)
+    {
+        const Location open = next().location; // {
+        if (shape.size() <= level)
+        {
+            shape.push_back(-1);
+        }
+        std::int64_t count = 0;
+        if (!peek().isSymbol("}"))
+        {
+            do
+            {
+                index.push_back(count);
+                if (peek().isSymbol("{"))
+                {
+                    parseList(items, shape, index, level + 1);
+                }
+                else if (shape.size() > level + 1)
+                {
+                    error(peek().location, "expected a list in braces here, as in the rows "
+                                           "before it");
+                    parseExpression();
+                }
+                else
+                {
+                    items.emplace_back(index, parseExpression());
+                }
+                index.pop_back();
+                ++count;
+            } while (acceptSymbol(","));
+        }
+        expectSymbol("}");
+        if (shape[level] == -1)
+        {
+            shape[level] = count;
+        }
+        else if (shape[level] != count)
+        {
+            error(open, "this list has " + std::to_string(count) +
+                            (count == 1 ? " item" : " items") + " but the one before it has " +
+                            std::to_string(shape[level]) +
+                            " (an array's rows are all the same length)");
+        }
+    }
+
+    // name = value, or name(subscripts) = value when element is given.
+    static StmtPtr assignTo(const Variable &v, ExprPtr element, ExprPtr value, Location where)
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Assign;
+        s->location = where;
+        if (element != nullptr)
+        {
+            s->target = std::move(element);
+        }
+        else
+        {
+            auto name = std::make_unique<Expr>();
+            name->kind = ExprKind::Name;
+            name->location = v.location;
+            name->text = v.name;
+            s->target = std::move(name);
+        }
+        s->value = std::move(value);
+        return s;
+    }
+
+    // name(args), as parsePrimary gives it.
+    static ExprPtr arrayCall(const Variable &v, std::vector<ExprPtr> args, Location where)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::Call;
+        e->location = where;
+        e->text = v.name;
+        e->args = std::move(args);
+        return e;
     }
 
     static Type typeFromSuffix(char suffix)

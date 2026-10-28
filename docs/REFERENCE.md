@@ -245,6 +245,15 @@ For Each w As String In words ... Next w
 - **`For i As Integer = ...` and `For Each w As String In ...`** declare
   the loop variable for the loop alone (gone after Next); it may not
   hide an enclosing local. The old form with an existing variable stays.
+- Initialiser details (Proposed): the values in one Dim are given left
+  to right, so a later one may use an earlier (`Dim a As Integer = 5, b
+  As Long = a * 2`). A name with a suffix needs no As of its own (`Dim
+  n%, m As Integer = 3` is fine). `{}` leaves the array empty (UBound of
+  it is error 9, as for any empty array). A dynamic array may also be
+  given another array (`Dim b() As Integer = a`, a copy). `As New`, a
+  Dictionary and a fixed-size array take no value. Module variables are
+  set after the forms are made and their event handlers wired, so a
+  Function called there may use the controls.
 
 ### DoEvents (Settled, Jim, 28 Oct 2026)
 

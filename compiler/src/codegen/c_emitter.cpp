@@ -674,6 +674,18 @@ private:
             }
         }
 
+        // Module variables' initialisers, module by module, once the forms
+        // exist (a control read there gives its form-block value) and before
+        // any of the program's own code runs.
+        for (const Module *m : modules_)
+        {
+            if (m->initialiser != nullptr)
+            {
+                out << "    " << pName(*m->initialiser) << "();\n"
+                    << (checks_ ? "    tf_check_uncaught();\n" : "");
+            }
+        }
+
         // The start: the project's Startup, else Sub Main if there is one, else
         // the first form. After Sub Main, the forms it showed run until closed.
         const ControlDef *start = startForm();
@@ -834,6 +846,7 @@ private:
                     }
                     emitLine(out, s.location, depth, code);
                 }
+                emitBlock(out, s.body, depth); // its initialisers
                 return;
             case StmtKind::If:
                 emitIf(out, s, 0, depth);

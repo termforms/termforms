@@ -1,0 +1,8 @@
+initialisers.bas:10:25: error: a name given a value needs its own type: write 'Dim b As <type> = value' (other names in the Dim take theirs)
+initialisers.bas:11:9: error: 'c' needs a type, such as 'As Integer' or 'As String' (a value does not give it one)
+initialisers.bas:12:24: error: 'As New' already gives 'p' a value
+initialisers.bas:13:37: error: a Dictionary starts empty: fill it after the Dim
+initialisers.bas:14:25: error: 'f' has a fixed size; only a dynamic array, 'Dim f() As ...', takes a list
+initialisers.bas:15:24: error: a list in braces gives an array its values, but 'n' is not an array
+initialisers.bas:16:26: error: 'g' has 1 dimension but the list has 2 (one level of braces each)
+initialisers.bas:17:36: error: this list has 1 item but the one before it has 2 (an array's rows are all the same length)

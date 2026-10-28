@@ -1,0 +1,4 @@
+initialisers_types.bas:4:22: error: cannot assign a String to an Integer (Option Strict); use CInt(value) to convert
+initialisers_types.bas:7:23: error: cannot assign an Integer to a String (Option Strict); use CStr(value) to convert
+initialisers_types.bas:8:24: error: cannot assign a Long to an Integer (Option Strict); use CInt(value) to convert
+initialisers_types.bas:9:31: error: cannot assign an Integer to a String (Option Strict); use CStr(value) to convert

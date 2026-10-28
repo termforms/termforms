@@ -415,7 +415,7 @@ private:
         }
 
         const char c = peek();
-        static constexpr std::string_view kSingle = "&+-*/\\^=<>().,;#";
+        static constexpr std::string_view kSingle = "&+-*/\\^=<>().,;#{}"; // {} array lists
         if (kSingle.find(c) == std::string_view::npos)
         {
             diagnostics_.error(start, std::string("unexpected character '") + c + "'");

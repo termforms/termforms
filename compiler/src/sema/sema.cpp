@@ -1014,6 +1014,7 @@ private:
                 {
                     declareLocal(*v);
                 }
+                checkBlock(s.body, false); // its initialisers, as assignments
                 break;
             case StmtKind::Assign:
                 checkAssignment(s);

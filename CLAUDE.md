@@ -259,8 +259,14 @@ authoritative for design rationale.
   others through a hidden `_matched` flag; codegen just emits body.
   Boolean And/Or now cast their operands to int (clang's
   -Wbitwise-instead-of-logical, under the strict flags).
-- **Next:** Dim initialisers, inline For, DoEvents, then Phase 5's scope
-  with Jim.
+  Dim initialisers done: the parser lowers each into statements in the
+  Dim's `body` (x = v; a list: ReDim then each element), which sema checks
+  as ordinary assignments and codegen emits after the Dim; module-level
+  ones are gathered into a hidden Private Sub `_init` per module
+  (`Module::initialiser`, first in its procedures) that main calls after
+  the forms and event wiring. `{` `}` are now symbols.
+- **Next:** inline For declarations, DoEvents, then Phase 5's scope with
+  Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -559,8 +565,8 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- Dim initialisers, inline For declarations and DoEvents: settled (28
-  Oct 2026), not yet built.
+- Inline For declarations and DoEvents: settled (28 Oct 2026), not yet
+  built.
 - No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
   the overlay); no MouseDown/Up/Move events; the clipboard is the
   program's own.

@@ -438,6 +438,9 @@ struct Stmt
 
     // Dim and Const: the names they declare (owned by the procedure or
     // module). For a Const, constValues holds each one's value expression.
+    // A Dim's initialisers are statements in body (x = value; for a list,
+    // ReDim then each element), checked and run as written there; at
+    // module level the parser moves them into Module::initialiser.
     std::vector<Variable *> declared;
     std::vector<ExprPtr> constValues;
     bool insideLoop = false; // set by the semantic pass: re-initialised each pass
@@ -615,6 +618,9 @@ struct Module
     std::vector<std::unique_ptr<EnumDef>> enums;
     std::vector<std::unique_ptr<TypeDef>> types;
     std::vector<std::unique_ptr<Procedure>> procedures;
+    // The module-level variables' initialisers as a hidden Sub (one of
+    // procedures), run once at program start; null if there are none.
+    Procedure *initialiser = nullptr;
 };
 
 } // namespace tf::ast
