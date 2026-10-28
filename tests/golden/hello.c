@@ -70,6 +70,7 @@ int main(void)
     tf_set_int(c_cmdGreet, TF_PROP_TOP, 3);
 #line 21 "hello.bas"
     tf_set_int(c_cmdGreet, TF_PROP_WIDTH, 12);
+    tf_form_ready(c_frmHello);
     tf_control_on(c_cmdGreet, TF_EVENT_CLICK, p_cmdGreet_Click);
     return tf_form_run(c_frmHello);
 }

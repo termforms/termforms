@@ -915,7 +915,7 @@ Module=lib/stock.bas
   script in tools/ (no download); the Unicode notice ships in
   runtime/THIRD_PARTY_NOTICES.
 
-### Controls (Proposed)
+### Controls (Settled, Jim, 28 Oct 2026)
 
 | Control | Shows as | Properties beyond Left, Top, Width, Height, Enabled, Visible | Events |
 |---|---|---|---|
@@ -961,7 +961,7 @@ Module=lib/stock.bas
   for keys (not while code runs). In a key script, `{WAIT n}` makes n ms
   pass, so tests of Timers are exact.
 
-### MsgBox, InputBox and VB's constants (Proposed)
+### MsgBox, InputBox and VB's constants (Settled, Jim, 28 Oct 2026)
 
 ```vb
 If MsgBox("Save changes?", vbYesNoCancel + vbQuestion, "Editor") = vbYes Then Save
@@ -994,7 +994,7 @@ name = InputBox("Your name:", "Hello", "Ann")  ' "" if cancelled
 - When a key script ends with a dialog shown, the screen is dumped as it
   is then, the dialog included.
 
-### Several forms and the events (Proposed)
+### Several forms and the events (Settled, Jim, 28 Oct 2026)
 
 ```vb
 Sub cmdOptions_Click()
@@ -1016,8 +1016,14 @@ End Sub
   also waits until it is hidden or unloaded. `frm.Hide` takes it off.
   `Load frm` runs its Form_Load without showing it; `Unload frm` runs
   Form_Unload (whose Cancel may refuse) and hides it, so the next Show
-  loads it again. Its controls keep their values (VB would make them
-  afresh).
+  loads it again.
+- **An unloaded form is made afresh when it is next loaded**, as VB: its
+  own and its controls' properties go back to the form block's settings
+  (and the runtime's defaults), ListBoxes are emptied, the focus and the
+  menus start again, and then Form_Load runs. No events fire while it is
+  remade. It happens at the next Load, not at Unload, so until then the
+  program can still read what the user left in it (VB would load it
+  afresh on that read).
 - **Form_Load runs when the form is first shown or loaded**, not when the
   program starts.
 - **The program starts** at the project's Startup, else at Sub Main if
@@ -1039,7 +1045,7 @@ End Sub
   first control the focus (GotFocus), as VB. Moving the focus raises
   LostFocus on one control and GotFocus on the next.
 
-### Menus (Proposed)
+### Menus (Settled, Jim, 28 Oct 2026)
 
 The handover settled F10 and Alt+letter, and a Ctrl alternative for every
 function key; the rest follows VB-DOS and VB6's `.frm` form.
@@ -1088,7 +1094,7 @@ End
   KeyDown).
 - The drop-down is drawn over the form and may reach past its edge.
 
-### TextBox editing (Proposed)
+### TextBox editing (Settled, Jim, 28 Oct 2026)
 
 The TextBox sits on an edit buffer of its own (runtime `tf_edit.c`), so
 the multi-line TextBox and the ComboBox after v1 edit the same way. Keys
@@ -1121,10 +1127,15 @@ and properties follow a Windows edit control, as VB's TextBox does.
   forgets the undo. The selection is shown only while the box has the
   focus (as Windows). The focus arriving does not select the text (as
   VB; set SelStart and SelLength in GotFocus for that).
+- **A paste arrives as text** (the terminal's bracketed-paste mode,
+  2004): its line breaks and tabs become spaces and other control
+  characters are dropped, so a paste never presses Enter (a Default
+  button) or Tab. Each character goes to the focused control as if typed
+  (KeyPress sees it). A terminal without the mode sends a paste as keys.
 - A long paste is no longer cut at 64 bytes: the input reads only what
   its decoder has room for.
 
-### The mouse (Proposed)
+### The mouse (Settled, Jim, 28 Oct 2026)
 
 Settled: on by default, clicks and the wheel go to the form, Shift+drag
 still selects text in most terminals, an environment variable turns it
@@ -1156,7 +1167,7 @@ off. The rest:
   with cells counted from 0,0 at the screen's top left.
 - No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
 
-### Character widths (Proposed)
+### Character widths (Settled, Jim, 28 Oct 2026)
 
 Settled: the tables come from Python's unicodedata by a script in
 tools/, and the Unicode notice ships in runtime/THIRD_PARTY_NOTICES.

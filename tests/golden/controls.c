@@ -75,6 +75,7 @@ int main(void)
     tf_set_int(c_cmdOK, TF_PROP_TOP, 7);
 #line 25 "controls.bas"
     tf_set_int(c_cmdOK, TF_PROP_DEFAULT, 1);
+    tf_form_ready(c_frmMain);
     tf_control_on(c_cmdOK, TF_EVENT_CLICK, p_cmdOK_Click);
     return tf_form_run(c_frmMain);
 }

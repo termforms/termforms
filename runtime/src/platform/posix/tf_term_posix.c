@@ -29,7 +29,7 @@
 static const char ENTER_SEQ[] = "\x1b[?1049h" /* alternate screen */
                                 "\x1b[?7l"    /* no auto-wrap at the last column */
                                 "\x1b[H\x1b[2J";
-static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l" /* mouse reports off (if on) */
+static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l\x1b[?2004l" /* mouse, paste modes off */
                                 "\x1b[0m\x1b[?25h\x1b[?7h\x1b[?1049l";
 
 static struct termios saved_termios;

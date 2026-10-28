@@ -63,6 +63,7 @@ int main(void)
     c_frmMain_cmdOK = tf_control_new(c_frmMain, TF_CTL_COMMANDBUTTON, "cmdOK");
 #line 8 "forms.bas"
     tf_set_str(c_frmMain_cmdOK, TF_PROP_CAPTION, tf_str_literal(&s_1, "Go", 2));
+    tf_form_ready(c_frmMain);
 #line 2 "forms/other.bas"
     c_frmOther = tf_form_new("frmOther");
 #line 3 "forms/other.bas"
@@ -71,6 +72,7 @@ int main(void)
     c_frmOther_cmdOK = tf_control_new(c_frmOther, TF_CTL_COMMANDBUTTON, "cmdOK");
 #line 5 "forms/other.bas"
     tf_set_str(c_frmOther_cmdOK, TF_PROP_CAPTION, tf_str_literal(&s_3, "OK", 2));
+    tf_form_ready(c_frmOther);
     tf_control_on_ref(c_frmMain, TF_EVENT_UNLOAD, p_Form_Unload);
     tf_control_on(c_frmMain_cmdOK, TF_EVENT_CLICK, p_cmdOK_Click);
     tf_control_on_ref(c_frmOther_cmdOK, TF_EVENT_KEYPRESS, p_cmdOK_KeyPress);

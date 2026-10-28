@@ -51,6 +51,7 @@ int main(void)
     tf_set_int(c_lst, TF_PROP_HEIGHT, 6);
 #line 8 "listbox.bas"
     tf_set_int(c_lst, TF_PROP_MULTISELECT, 1);
+    tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);
 }

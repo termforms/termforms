@@ -492,6 +492,7 @@ With a menu bar, controls' Top counts from the row below it.
 | Alt+letter | The control whose Caption has &letter |
 | Left, Right, Home, End, Backspace, Delete | Edit in a TextBox (Shift+: select; Ctrl+Left/Right: by words) |
 | Ctrl+A, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+Z | In a TextBox: select all, cut, copy, paste (the program's own clipboard), undo |
+| The terminal's paste | Types the text in; line breaks become spaces (never presses Enter) |
 | Ctrl+F4 (or Alt+F4) | Close the form |
 | The mouse | Click to focus, press, toggle, choose, open menus; drag to select in a TextBox; double-click a word or a ListBox item; the wheel scrolls a ListBox. `TERMFORMS_MOUSE=0` turns it off; Shift+drag selects text on the screen as usual |
 | F10 or Ctrl+B | Go to the menu bar (again, or Esc: leave it) |

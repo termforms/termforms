@@ -236,8 +236,16 @@ authoritative for design rationale.
   screen keeps a wide character's second cell as TF_CELL_TAIL; captions,
   wrapping and the TextBox measure in cells). **Phase 4 is complete**
   apart from the terminal matrix checks (Phase 2's list above).
-- **Next:** waiting for Jim: review the Proposed rules of Phase 4, and
-  decide the known gaps below (Select Case first) and Phase 5's scope.
+  **Phase 4 rules settled (Jim, 28 Oct 2026):** every Phase 4 Proposed
+  section in REFERENCE.md approved as built (Ctrl+B for the menu bar,
+  Change on code changes, the program's own clipboard, ByRef handler
+  arguments, Top 0 below the menu bar), plus two changes, made: bracketed
+  paste (tf_keys.c `pasting`; mode 2004 on with the mouse modes, off in
+  LEAVE_SEQ) and an unloaded form made afresh at its next Load
+  (`tf_form_ready`, emitted after each form's settings, keeps a
+  `tf_design` per control; `stale` set by Unload).
+- **Next:** decide the known gaps below (Select Case first) and Phase 5's
+  scope with Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 

@@ -110,7 +110,25 @@ struct tf_control
        not), for the mouse. */
     int drawn;
     int at_x, at_y, at_w, at_h;
+
+    /* Its form-block settings, kept by tf_form_ready, to make the form
+       afresh after an Unload (as VB); a form's `stale` says it needs it. */
+    struct tf_design *design;
+    int stale;
 };
+
+/* What a control's form block (or the runtime's defaults) set; the rest
+   of its state starts empty. */
+typedef struct tf_design
+{
+    tf_string *caption;
+    tf_string *text; /* a TextBox's Text, a Menu's Shortcut */
+    tf_string *password;
+    int32_t left, top, width, height, value, multi, interval, max_length;
+    int is_default, is_cancel, enabled, visible, checked, sorted, locked;
+    uint32_t password_char;
+    tf_key shortcut;
+} tf_design;
 
 static int headless = 0;
 static int64_t virtual_now = 0; /* a key script's clock: moved only by {WAIT n} */
@@ -2614,11 +2632,14 @@ static void ui_suspend(void)
     tf_term_close();
 }
 
-/* SGR mouse reports (1006) of presses, releases and drags (1002), unless
+/* Bracketed paste (2004), so a paste arrives as text (tf_keys.c), and SGR
+   mouse reports (1006) of presses, releases and drags (1002), unless
    TERMFORMS_MOUSE is 0 (for a terminal where the mouse is better left to
    selecting text). The terminal layer turns them off when it closes. */
-static void mouse_on(void)
+static void modes_on(void)
 {
+    static const char kPaste[] = "\x1b[?2004h";
+    tf_term_write(kPaste, sizeof kPaste - 1);
     const char *setting = tf_platform_getenv("TERMFORMS_MOUSE");
     if (setting == NULL || strcmp(setting, "0") != 0)
     {
@@ -2634,7 +2655,7 @@ static void ui_resume(void)
     {
         tf_fatal_error(TF_ERR_TERMINAL, reason);
     }
-    mouse_on();
+    modes_on();
     int cols = 80;
     int rows = 25;
     tf_term_size(&cols, &rows);
@@ -2704,7 +2725,7 @@ static void ui_open(void)
             tf_fatal_error(TF_ERR_TERMINAL, reason);
         }
         use_utf8 = tf_term_utf8();
-        mouse_on();
+        modes_on();
         tf_term_size(&cols, &rows);
         tf_screen_init(cols, rows, 1);
         tf_input_start(NULL);
@@ -2829,10 +2850,106 @@ static void run_loop(const tf_control *until)
     }
 }
 
+static void keep_design(tf_control *c)
+{
+    tf_design *d = tf_xcalloc(1, sizeof *d);
+    d->caption = tf_str_ref(c->caption);
+    d->text = tf_str_ref(c->type == TF_CTL_TEXTBOX ? c->edit.text : c->text);
+    d->password = tf_str_ref(c->password);
+    d->left = c->left;
+    d->top = c->top;
+    d->width = c->width;
+    d->height = c->height;
+    d->value = c->value;
+    d->multi = c->multi;
+    d->interval = c->interval;
+    d->max_length = c->edit.max_length;
+    d->is_default = c->is_default;
+    d->is_cancel = c->is_cancel;
+    d->enabled = c->enabled;
+    d->visible = c->visible;
+    d->checked = c->checked;
+    d->sorted = c->sorted;
+    d->locked = c->edit.locked;
+    d->password_char = c->password_char;
+    d->shortcut = c->shortcut;
+    c->design = d;
+}
+
+/* Back to the form block's settings, without events (the form is not
+   loaded): what VB does by making the form anew. */
+static void restore_design(tf_control *c)
+{
+    const tf_design *d = c->design;
+    tf_str_assign(&c->caption, tf_str_ref(d->caption));
+    if (c->type == TF_CTL_TEXTBOX)
+    {
+        tf_edit_set_text(&c->edit, d->text);
+        c->scroll = 0;
+    }
+    else
+    {
+        tf_str_assign(&c->text, tf_str_ref(d->text));
+    }
+    tf_str_assign(&c->password, tf_str_ref(d->password));
+    c->left = d->left;
+    c->top = d->top;
+    c->width = d->width;
+    c->height = d->height;
+    c->value = d->value;
+    c->multi = d->multi;
+    c->interval = d->interval;
+    c->edit.max_length = d->max_length;
+    c->is_default = d->is_default;
+    c->is_cancel = d->is_cancel;
+    c->enabled = d->enabled;
+    c->visible = d->visible;
+    c->checked = d->checked;
+    c->sorted = d->sorted;
+    c->edit.locked = d->locked;
+    c->password_char = d->password_char;
+    c->edit.concealed = d->password_char != 0;
+    c->shortcut = d->shortcut;
+    tf_list_clear(c);
+}
+
+static void free_design(tf_control *c)
+{
+    if (c->design != NULL)
+    {
+        tf_str_release(c->design->caption);
+        tf_str_release(c->design->text);
+        tf_str_release(c->design->password);
+        free(c->design);
+        c->design = NULL;
+    }
+}
+
+void tf_form_ready(tf_control *form)
+{
+    keep_design(form);
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        keep_design(form->children[i]);
+    }
+}
+
 void tf_form_load(tf_control *form)
 {
     if (!form->loaded)
     {
+        if (form->stale && form->design != NULL)
+        {
+            /* Unloaded since it was last loaded: made afresh, as VB. */
+            restore_design(form);
+            for (int i = 0; i < form->child_count; ++i)
+            {
+                restore_design(form->children[i]);
+            }
+            form->focus = -1;
+            menu_close(form);
+        }
+        form->stale = 0;
         form->loaded = 1;
         fire(form, TF_EVENT_LOAD); /* before the form is first shown, as VB */
     }
@@ -2873,7 +2990,10 @@ void tf_form_unload(tf_control *form)
             return; /* the program said no */
         }
     }
+    /* Made afresh when next loaded, not now: until then the program can
+       still read what the user entered, and a headless dump shows it. */
     form->loaded = 0;
+    form->stale = 1;
     tf_form_hide(form);
 }
 
@@ -2903,9 +3023,11 @@ void tf_form_free(tf_control *form)
         tf_edit_free(&c->edit);
         tf_str_release(c->password);
         tf_str_release(c->sel_text);
+        free_design(c);
         free(c->name);
         free(c);
     }
+    free_design(form);
     free(form->children);
     tf_str_release(form->caption);
     free(form->name);

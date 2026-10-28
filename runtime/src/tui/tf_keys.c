@@ -6,6 +6,12 @@
  * bytes, and everything else as escape sequences: CSI (ESC [ ...) or SS3
  * (ESC O x). Sequences this decoder does not know are consumed and ignored,
  * so an unexpected key can never be mistaken for typed text.
+ *
+ * A bracketed paste (the terminal sends ESC [ 200 ~ before pasted text and
+ * ESC [ 201 ~ after it, once the forms layer asks with mode 2004) comes
+ * out as the characters alone: its line breaks and tabs become spaces and
+ * other control bytes go, so a paste can never press Enter (a Default
+ * button) or Tab away from the box it is going into.
  */
 #include "tf_tui.h"
 
@@ -245,6 +251,66 @@ static int decode_escape(const tf_keys *keys, tf_key *key)
     return 0; /* incomplete */
 }
 
+static const char kPasteStart[] = "\x1b[200~";
+static const char kPasteEnd[] = "\x1b[201~";
+
+/* Whether the buffer starts with marker: 1 wholly, -1 with the start of it
+   (the rest may still come), 0 not. */
+static int at_marker(const tf_keys *keys, const char *marker)
+{
+    const int length = (int)strlen(marker);
+    const int n = keys->count < length ? keys->count : length;
+    if (memcmp(keys->pending, marker, (size_t)n) != 0)
+    {
+        return 0;
+    }
+    return n == length ? 1 : -1;
+}
+
+/* A byte inside a paste. Returns 1 with a key, 0 to wait for more bytes,
+   -1 when the byte was used up without a key, -2 to decode it as usual (a
+   character of text). */
+static int paste_byte(tf_keys *keys, tf_key *key, int flush_escape)
+{
+    const unsigned char c = keys->pending[0];
+    if (c == 0x1B)
+    {
+        const int end = at_marker(keys, kPasteEnd);
+        if (end == 1)
+        {
+            consume(keys, (int)strlen(kPasteEnd));
+            keys->pasting = 0;
+            return -1;
+        }
+        if (end == -1 && !flush_escape)
+        {
+            return 0;
+        }
+        consume(keys, 1); /* an escape in pasted text: dropped */
+        return -1;
+    }
+    const int was_cr = keys->after_cr;
+    keys->after_cr = c == '\r';
+    if (c == '\n' && was_cr)
+    {
+        consume(keys, 1); /* CR LF is one line break */
+        return -1;
+    }
+    if (c == '\r' || c == '\n' || c == '\t')
+    {
+        consume(keys, 1);
+        key->kind = TF_KEY_CHAR;
+        key->ch = ' ';
+        return 1;
+    }
+    if (c < 0x20 || c == 0x7F)
+    {
+        consume(keys, 1);
+        return -1;
+    }
+    return -2;
+}
+
 int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape)
 {
     while (keys->count > 0)
@@ -252,6 +318,34 @@ int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape)
         const unsigned char c = keys->pending[0];
         key->ch = 0;
         key->mods = 0;
+
+        if (keys->pasting)
+        {
+            const int got = paste_byte(keys, key, flush_escape);
+            if (got >= 0)
+            {
+                return got;
+            }
+            if (got == -1)
+            {
+                continue;
+            }
+        }
+        else if (c == 0x1B)
+        {
+            const int start = at_marker(keys, kPasteStart);
+            if (start == 1)
+            {
+                consume(keys, (int)strlen(kPasteStart));
+                keys->pasting = 1;
+                keys->after_cr = 0;
+                continue;
+            }
+            if (start == -1 && !flush_escape)
+            {
+                return 0;
+            }
+        }
 
         if (c == 0x1B)
         {

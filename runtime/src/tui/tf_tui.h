@@ -106,6 +106,8 @@ typedef struct tf_keys
 {
     unsigned char pending[64];
     int count;
+    int pasting;  /* inside a bracketed paste: text, not keys */
+    int after_cr; /* the paste's last byte was CR (so a LF after it is one break) */
 } tf_keys;
 
 void tf_keys_feed(tf_keys *keys, const unsigned char *bytes, int length);

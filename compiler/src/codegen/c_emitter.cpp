@@ -638,6 +638,7 @@ private:
                 out << '\n';
                 emitSettings(out, *child);
             }
+            out << "    tf_form_ready(" << cName(*form) << ");\n";
         }
         // Event wiring, in the order the Subs appear in the source.
         for (const Module *m : modules_)

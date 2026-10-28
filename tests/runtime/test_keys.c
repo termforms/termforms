@@ -2,7 +2,8 @@
 /*
  * test_keys.c -- the key decoder on the bytes a terminal sends: modifiers
  * on arrows and function keys, SGR mouse reports (press, drag, release,
- * the wheel; other buttons ignored), and sequences split across reads.
+ * the wheel; other buttons ignored), bracketed paste (text only, line
+ * breaks as spaces), and sequences split across reads.
  * Key scripts never reach this code, so the run tests cannot cover it.
  */
 #include "../../runtime/src/tui/tf_tui.h"
@@ -76,6 +77,34 @@ int main(void)
     if (!tf_keys_next(&keys, &key, 0) || key.kind != TF_KEY_MOUSE || key.x != 11 || key.y != 2)
     {
         fprintf(stderr, "FAIL: the mouse report's second half\n");
+        ++failures;
+    }
+
+    /* A paste: its line breaks (CR LF once) and tab become spaces, its
+       other control bytes go; split in the middle of the end marker; then
+       Enter after it is a key again. */
+    const char *pasted = "\x1b[200~a\r\nb\tc\x01\xC3\xA9\x1b[20";
+    memset(&keys, 0, sizeof keys);
+    tf_keys_feed(&keys, (const unsigned char *)pasted, (int)strlen(pasted));
+    const uint32_t want[] = {'a', ' ', 'b', ' ', 'c', 0xE9};
+    for (size_t i = 0; i < sizeof want / sizeof want[0]; ++i)
+    {
+        if (!tf_keys_next(&keys, &key, 0) || key.kind != TF_KEY_CHAR || key.ch != want[i])
+        {
+            fprintf(stderr, "FAIL: pasted character %d: kind %d ch %u\n", (int)i, (int)key.kind,
+                    (unsigned)key.ch);
+            ++failures;
+        }
+    }
+    if (tf_keys_next(&keys, &key, 0))
+    {
+        fprintf(stderr, "FAIL: half the paste's end marker gave a key\n");
+        ++failures;
+    }
+    tf_keys_feed(&keys, (const unsigned char *)"1~\r", 3);
+    if (!tf_keys_next(&keys, &key, 0) || key.kind != TF_KEY_ENTER || keys.pasting)
+    {
+        fprintf(stderr, "FAIL: Enter after the paste\n");
         ++failures;
     }
 

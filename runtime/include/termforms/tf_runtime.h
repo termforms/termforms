@@ -707,9 +707,14 @@ void tf_list_set_selected(tf_control *list, int32_t index, int selected);
  * form's Load event if it has not run; Show loads it and puts it on top
  * (modal: waits until it is hidden or unloaded); Hide takes it off;
  * Unload fires its Unload event (which may cancel) and hides it, so the
- * next Show loads it again. tf_forms_run runs the forms shown (after Sub
+ * next Show loads it again, afresh: its controls back to their form-block
+ * settings, as VB. tf_forms_run runs the forms shown (after Sub
  * Main) until the last is closed.
  */
+/* Called once a form's controls and their form-block settings are made:
+   keeps those settings, so the form is made afresh after an Unload. */
+void tf_form_ready(tf_control *form);
+
 void tf_form_load(tf_control *form);
 void tf_form_show(tf_control *form, int32_t modal);
 void tf_form_hide(tf_control *form);

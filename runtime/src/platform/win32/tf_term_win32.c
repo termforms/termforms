@@ -31,7 +31,7 @@
 #endif
 
 static const char ENTER_SEQ[] = "\x1b[?1049h\x1b[?7l\x1b[H\x1b[2J";
-static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l" /* mouse reports off (if on) */
+static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l\x1b[?2004l" /* mouse, paste modes off */
                                 "\x1b[0m\x1b[?25h\x1b[?7h\x1b[?1049l";
 
 static HANDLE input_handle;

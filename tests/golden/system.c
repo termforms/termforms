@@ -42,6 +42,7 @@ int main(int argc, char **argv)
     c_txtOut = tf_control_new(c_frmMain, TF_CTL_TEXTBOX, "txtOut");
 #line 6 "system.bas"
     tf_set_int(c_txtOut, TF_PROP_WIDTH, 30);
+    tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     return tf_form_run(c_frmMain);
 }

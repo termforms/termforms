@@ -93,6 +93,7 @@ int main(void)
     tf_set_str(c_cmdGo, TF_PROP_CAPTION, tf_str_literal(&s_7, "Go", 2));
 #line 10 "control_flow.bas"
     tf_set_int(c_cmdGo, TF_PROP_TOP, 2);
+    tf_form_ready(c_frmMain);
     tf_control_on(c_frmMain, TF_EVENT_LOAD, p_Form_Load);
     tf_control_on(c_cmdGo, TF_EVENT_CLICK, p_cmdGo_Click);
     return tf_form_run(c_frmMain);
