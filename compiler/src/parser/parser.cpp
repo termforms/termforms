@@ -1356,6 +1356,10 @@ private:
         var->location = peek().location;
         var->suffix = peek().suffix;
         var->text = expectIdentifier("a loop variable");
+        if (peek().isKeyword("AS"))
+        {
+            declareLoopVariable(*s, *var);
+        }
         s->target = std::move(var);
         if (s->isForEach)
         {
@@ -1387,6 +1391,43 @@ private:
             expectEndOfStatement();
         }
         return s;
+    }
+
+    // For i As Integer = ... / For Each w As String In ...: a local of the
+    // procedure, which the semantic pass scopes to the loop.
+    void declareLoopVariable(Stmt &s, const Expr &name)
+    {
+        const Location as = next().location; // AS
+        auto v = std::make_unique<Variable>();
+        v->name = name.text;
+        v->location = name.location;
+        std::string enumName;
+        bool isNew = false;
+        const Type declared = parseTypeName(&enumName, &isNew);
+        if (dictionary_)
+        {
+            dictionary_ = false;
+            error(as, "a loop variable cannot be a Dictionary");
+        }
+        if (isNew)
+        {
+            error(as, "a loop variable is given its values by the loop: write 'As " + enumName +
+                          "' without New");
+        }
+        const Type suffix = typeFromSuffix(name.suffix);
+        if (suffix != Type::Error && suffix != declared && declared != Type::Error)
+        {
+            error(as, "'" + v->name + "' has a type suffix that contradicts 'As " +
+                          typeName(declared) + "'");
+        }
+        v->type = declared;
+        v->typeName = enumName;
+        if (currentProcedure_ == nullptr)
+        {
+            return;
+        }
+        s.loopVariable = v.get();
+        currentProcedure_->locals.push_back(std::move(v));
     }
 
     StmtPtr parseDo()

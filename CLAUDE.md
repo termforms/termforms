@@ -265,8 +265,10 @@ authoritative for design rationale.
   ones are gathered into a hidden Private Sub `_init` per module
   (`Module::initialiser`, first in its procedures) that main calls after
   the forms and event wiring. `{` `}` are now symbols.
-- **Next:** inline For declarations, DoEvents, then Phase 5's scope with
-  Jim.
+  Inline For declarations done: `Stmt::loopVariable` (a procedure local
+  the parser makes for `For i As T`), declared by sema in a scope of its
+  own around the For.
+- **Next:** DoEvents, then Phase 5's scope with Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -565,8 +567,7 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- Inline For declarations and DoEvents: settled (28 Oct 2026), not yet
-  built.
+- DoEvents: settled (28 Oct 2026), not yet built.
 - No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
   the overlay); no MouseDown/Up/Move events; the clipboard is the
   program's own.

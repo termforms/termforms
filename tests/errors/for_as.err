@@ -1,0 +1,3 @@
+for_as.bas:10:9: error: 'i' is already declared in this Sub
+for_as.bas:14:5: error: 'j' is not declared (add a Dim)
+for_as.bas:15:9: error: the For loop variable must be a numeric variable (Integer, Long or Double) or an Enum variable

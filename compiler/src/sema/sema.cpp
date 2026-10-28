@@ -1031,6 +1031,15 @@ private:
                 checkCallStatement(s);
                 break;
             case StmtKind::For:
+                if (s.loopVariable != nullptr)
+                {
+                    // For i As Integer: i belongs to the loop alone.
+                    scopes_.emplace_back();
+                    declareLocal(*s.loopVariable);
+                    checkFor(s);
+                    scopes_.pop_back();
+                    break;
+                }
                 checkFor(s);
                 break;
             case StmtKind::Do:

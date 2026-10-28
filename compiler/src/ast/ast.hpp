@@ -463,7 +463,11 @@ struct Stmt
     std::vector<ExprPtr> args;
     Procedure *procedure = nullptr; // resolved
 
-    // For: For target = value To limit [Step step] ... Next [nextName]
+    // For: For target = value To limit [Step step] ... Next [nextName].
+    // loopVariable: declared by the For itself (For i As Integer = ...,
+    // For Each w As String In ...), for the loop alone; owned by the
+    // procedure as locals are.
+    Variable *loopVariable = nullptr;
     ExprPtr limit;
     ExprPtr step; // null when there is no Step
     std::string nextName;

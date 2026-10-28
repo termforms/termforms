@@ -1,0 +1,2 @@
+for_as_syntax.bas:8:12: error: 'k' has a type suffix that contradicts 'As Long'
+for_as_syntax.bas:10:16: error: a loop variable is given its values by the loop: write 'As Point' without New
