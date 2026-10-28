@@ -352,7 +352,13 @@ authoritative for design rationale.
   assignment into a library call `Builtin::MidAssign`, parameter kind R
   = a String passed by address via codegen's `address()`; runtime
   tf_str_mid_assign).
-- **Next:** 5.3, Declare (design questions first). The terminal matrix is done except
+  Declare settled (Jim, 28 Oct 2026; REFERENCE.md "Declare: calling
+  C"): Lib "x.c" = a C file of the program (compiled with it), Lib "x" =
+  a library to link, Lib "" = the C library; ByVal default; tfc writes
+  the prototype (int32_t, int64_t, double, uint8_t, int); Strings as
+  UTF-8 const char * (results copied), ByRef String a writable buffer;
+  ByRef elements and numbers-only Types as pointers; no callbacks.
+- **Next:** build Declare (5.3). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

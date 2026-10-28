@@ -906,6 +906,63 @@ b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outs
   start outside 1 to Len(s), or a negative length, is error 5 (so an
   empty s always is). `Mid` without `$` works too.
 
+## Declare: calling C (Settled, Jim, 28 Oct 2026)
+
+```vb
+Declare Function add_tax Lib "utils.c" (ByVal cents As Integer) As Integer
+Declare Function sqlite3_libversion Lib "sqlite3" () As String
+Declare Function clock Lib "" () As Long
+Declare Sub fill_name Lib "utils.c" (ByRef buffer As String)
+```
+
+- **Lib says where the function is.** A name ending in `.c` is a C file
+  of the program (a path relative to the `.bas` file): tfc compiles it
+  with the program, once however many Declares name it, and it
+  cross-compiles with the rest. Any other name is a library to link
+  (`-lsqlite3`; `sqlite3.lib` with MSVC). `Lib ""` is the C library
+  itself. Libraries are joined in at build time, not loaded at run time
+  as VB6's DLLs were; a cross-build needs the library built for the
+  target.
+- **Parameters are ByVal unless marked ByRef**, as for every Sub (not
+  VB6's ByRef default for Declares). ByVal passes the value; ByRef a
+  pointer to it.
+- **tfc writes the C prototype from the Declare**; no header is needed.
+  Integer is `int32_t`, Long `int64_t`, Double `double`, Byte `uint8_t`,
+  Boolean `int` (0 or 1); ByRef adds a `*`. The C function must be
+  declared with exactly those types (the guide warns that C's `long` is
+  64-bit on Linux and macOS but 32-bit on Windows).
+- **Strings**: a ByVal String reaches C as `const char *`, UTF-8 ending in
+  NUL, valid for the call. A String result is a `const char *` the C side
+  keeps owning: TermForms copies it (NULL is `""`). **A ByRef String is a
+  writable buffer**: C gets a `char *` to a copy of its bytes (LenB plus a
+  NUL), and after the call the String is the bytes up to the first NUL
+  (VB6's `Space$(260)` idiom).
+- **Arrays and Types**: an element passed ByRef (`buffer(0)`) gives C a
+  pointer to it, with the rest of the array after it (arrays of numbers
+  or Bytes). A Type whose members are all numbers, passed ByRef, gives a
+  pointer to a C struct with the same members in the same order. No
+  Strings, Refs, arrays or Dictionaries inside such a Type, and no whole
+  arrays, Refs, Dictionaries or controls as arguments.
+- **No callbacks in v1** (VB6's AddressOf): after v1.
+
+### Declare: details (Proposed)
+
+- `Declare Function name Lib "..." [Alias "cname"] ([params]) As type`,
+  and `Declare Sub` for a C function returning void. Alias gives the C
+  name when it differs from the BASIC one (a C name that is a reserved
+  word in BASIC, or clashes with another). Without Alias the C name is
+  the BASIC name, exactly (it is not mangled).
+- Declares are at module level; Public unless marked Private, as Subs.
+  Called like any Sub or Function, with the same three call forms.
+- A C function cannot raise a TermForms error: a call of one is never
+  checked for one. What C does with bad input is C's business.
+- A Declare names one Lib; two Declares naming the same C function with
+  different types are an error.
+- `.c` files go to the C compiler as they are, with tfc's include path
+  for `termforms/tf_runtime.h` (should they want TermForms' strings); a
+  build failing in them is reported with the C compiler's message, not
+  hidden as tfc's own C is.
+
 ## Modules and projects (Settled, Jim, 28 Oct 2026)
 
 - **A project file, `.vbp`, in VB6's style**: `Key=Value` lines, one file
