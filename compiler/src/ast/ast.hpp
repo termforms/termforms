@@ -144,6 +144,7 @@ enum class Builtin
     Time,
     Timer,
     DoEvents,
+    Platform,
     // Dialogs (step 4.4).
     MsgBox,
     InputBox,
@@ -253,6 +254,7 @@ inline constexpr StringFunction kStringFunctions[] = {
     // Handlers it runs report their own errors (an uncaught one ends the
     // program, as in the event loop), so the statement itself cannot fail.
     {Builtin::DoEvents, "", 0, {}, Type::Void, "tf_do_events", false},
+    {Builtin::Platform, "", 0, {}, Type::String, "tf_platform_name", false},
     {Builtin::Now, "", 0, {}, Type::String, "tf_now", false},
     {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},
@@ -537,6 +539,16 @@ struct Stmt
 // Declarations
 // ---------------------------------------------------------------------------
 
+// C types whose size differs by platform, allowed only in a Declare
+// (Jim, 28 Oct 2026): each is a Long in BASIC.
+enum class CType
+{
+    None,
+    Long,  // CLong: C's long
+    ULong, // CULong: unsigned long
+    SizeT  // CSizeT: size_t
+};
+
 struct Variable
 {
     std::string name;
@@ -572,6 +584,9 @@ struct Variable
     // Dictionary(Of T): type is T; held as a dynamic array of rank 1 (its
     // values) with an index of keys, so array rules mostly apply.
     bool isDictionary = false;
+    // A Declare's parameter or result: the C type it stands for, if not
+    // the usual one for its type.
+    CType cType = CType::None;
 };
 
 // A property setting inside a Begin ... End block.
@@ -625,6 +640,14 @@ struct Procedure
     // Event wiring, resolved by the semantic pass.
     ControlDef *eventControl = nullptr;
     EventKind event = EventKind::None;
+
+    // Declare: a C function, with no body. lib is "" (the C library), a C
+    // file of the program ("utils.c", relative to the module's file) or a
+    // library to link; cName is what C calls it (Alias, else the name).
+    bool isDeclare = false;
+    std::string lib;
+    Location libLocation;
+    std::string cName;
 };
 
 struct Module

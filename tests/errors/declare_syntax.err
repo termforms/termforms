@@ -1,0 +1,3 @@
+declare_syntax.bas:3:22: error: a Declare says where the function is: Declare Function one Lib "..." ...
+declare_syntax.bas:4:26: error: expected the Lib's name in quotes ("" for the C library, "utils.c" for a C file of the program)
+declare_syntax.bas:5:37: error: expected the C name in quotes after Alias

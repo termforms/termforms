@@ -363,7 +363,20 @@ authoritative for design rationale.
   a built-in read-only String `Platform` ("Windows", "macOS", "Linux",
   set by the C compiler for the target); conditional compilation (#If)
   after v1.
-- **Next:** build Declare with CLong/CULong/CSizeT, and Platform (5.3). The terminal matrix is done except
+  Step 5.3 done (28 Oct 2026): Declare. Parser: `parseDeclare` (Declare,
+  Lib, Alias are words, not reserved) makes a body-less Procedure
+  (`isDeclare`, `lib`, `cName`; params' `cType` for CLong/CULong/
+  CSizeT). Sema `checkDeclare` (types C can take, C name rules,
+  one prototype per C function). Codegen: `declareSignature` (extern
+  prototypes), `declareCall`/`declareResult` (Strings via tf_str_cstr /
+  tf_c_buffer..tf_c_unbuffer / tf_str_from_c; CLong via tf_c_long etc.,
+  checked before the call). Driver: `gatherLibs` (C files next to the
+  module, libraries), `compileOwnCCommand` (their C compiled first, its
+  messages shown), libraries linked; a failed build with Declares shows
+  the C compiler's messages. Runtime tf_c.c (and tf_platform_name for
+  Platform). Run test tests/run/declare (+ declare/utils.c).
+- **Next:** 5.4, lldb and gdb (stepping, printers) with the VS Code
+  extension and CodeLLDB setup. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

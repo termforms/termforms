@@ -518,6 +518,26 @@ Option (often labelled "opt" or "alt/opt"). F10 or Ctrl+B reaches the
 menus with no setting at all. A program notices the Option key typing characters
 (on a button or a list, or in the menus) and says, once, how to set it.
 
+## Calling C
+
+```vb
+Declare Function add_tax Lib "utils.c" (ByVal cents As Integer) As Integer
+Declare Function sqlite3_libversion Lib "sqlite3" () As String
+Declare Function strlen Lib "" (ByVal s As String) As CSizeT
+```
+
+`Lib "utils.c"` is a C file next to the `.bas` file, compiled with the
+program; `Lib "sqlite3"` a library linked in; `Lib ""` the C library.
+Parameters are ByVal unless ByRef (a pointer). C sees Integer as
+`int32_t`, Long `int64_t`, Double `double`, Byte `uint8_t`, Boolean
+`int`, a ByVal String `const char *` (UTF-8), a ByRef String a buffer it
+may fill (`Space$(n)` first), an element passed ByRef (`buffer(0)`) a
+pointer into the array, a Type of numbers passed ByRef a pointer to a
+matching struct. `CLong`, `CULong` and `CSizeT` are C's `long`,
+`unsigned long` and `size_t`, whose sizes differ by platform. `Alias
+"cname"` when the C name differs. `Platform` is "Windows", "macOS" or
+"Linux".
+
 ## Building programs
 
 ```sh

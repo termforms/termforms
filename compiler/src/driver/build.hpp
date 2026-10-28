@@ -40,9 +40,17 @@ enum class CompilerStyle
 // Chooses the style from the command's first word.
 CompilerStyle compilerStyle(const std::string &command);
 
-// Builds the C compiler command line. Exposed for unit tests.
+// Builds the C compiler command line. Exposed for unit tests. libraries:
+// the Declares' Lib names to link (sqlite3: -lsqlite3, or sqlite3.lib).
 std::string compileCommand(const std::string &compiler, CompilerStyle style,
                            const std::vector<std::string> &sources, const std::string &includeDir,
-                           const std::string &output, const std::string &objectDir, bool release);
+                           const std::string &output, const std::string &objectDir, bool release,
+                           const std::vector<std::string> &libraries = {});
+
+// Builds the command compiling one of the program's own C files (a
+// Declare's Lib "utils.c") into an object file. Exposed for unit tests.
+std::string compileOwnCCommand(const std::string &compiler, CompilerStyle style,
+                               const std::string &source, const std::string &includeDir,
+                               const std::string &object, bool release);
 
 } // namespace tf::driver

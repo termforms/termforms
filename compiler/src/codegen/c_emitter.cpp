@@ -124,7 +124,10 @@ public:
         {
             for (const auto &proc : m->procedures)
             {
-                emitProcedure(body, *proc);
+                if (!proc->isDeclare) // a C function: only its prototype
+                {
+                    emitProcedure(body, *proc);
+                }
             }
         }
         emitMain(body);
@@ -137,7 +140,8 @@ public:
         {
             for (const auto &proc : m->procedures)
             {
-                if (mentionCount(code, pName(*proc)) <= 1) // its definition only
+                if (!proc->isDeclare &&
+                    mentionCount(code, pName(*proc)) <= 1) // its definition only
                 {
                     uncalled_.insert(proc.get());
                 }
@@ -425,6 +429,11 @@ private:
             {
                 for (const auto &proc : m->procedures)
                 {
+                    if (proc->isDeclare)
+                    {
+                        out << declareSignature(*proc) << ";\n";
+                        continue;
+                    }
                     const std::string sig = signature(*proc);
                     out << (uncalled_.count(proc.get()) != 0
                                 ? "static TF_MAYBE_UNUSED " + sig.substr(std::strlen("static "))
@@ -2113,6 +2122,19 @@ private:
     std::string callStatement(const Stmt &s, StatementScope &scope)
     {
         const Procedure &callee = *s.procedure;
+        if (callee.isDeclare)
+        {
+            std::vector<std::string> locks;
+            std::vector<std::string> after;
+            const std::string call = declareCall(callee, s.args, scope, locks, after);
+            std::string code =
+                lockedAround(locks, (callee.isFunction ? "(void)" : "") + call + ";");
+            for (const std::string &a : after)
+            {
+                code += " " + a;
+            }
+            return code;
+        }
         std::vector<std::string> locks;
         const std::string call =
             pName(callee) + "(" + arguments(callee, s.args, scope, locks) + ")";
@@ -2130,6 +2152,171 @@ private:
             : callee.result->type == Type::Ref    ? "tf_ref_release(" + call + ");"
                                                   : "(void)" + call + ";";
         return lockedAround(locks, statement);
+    }
+
+    // -- Declare: calling C ---------------------------------------------------
+
+    // The C type a Declare gives a parameter or its result: the usual one
+    // for its type, or the C type named (CLong); Strings as char pointers.
+    std::string declareType(const Variable &v, bool result) const
+    {
+        std::string base = v.cType == CType::Long    ? "long"
+                           : v.cType == CType::ULong ? "unsigned long"
+                           : v.cType == CType::SizeT ? "size_t"
+                           : v.type == Type::String
+                               ? (v.byRef && !result ? "char *" : "const char *")
+                               : cTypeOf(v);
+        if (v.byRef && !result && v.type != Type::String)
+        {
+            base += base.back() == '*' ? "*" : " *";
+        }
+        return base;
+    }
+
+    // "extern int32_t add_tax(int32_t)": the prototype tfc writes for a
+    // Declare, so no C header is needed.
+    std::string declareSignature(const Procedure &proc) const
+    {
+        const std::string result = proc.isFunction ? declareType(*proc.result, true) : "void";
+        std::string out = "extern " + result + (result.back() == '*' ? "" : " ") + proc.cName + "(";
+        if (proc.parameters.empty())
+        {
+            out += "void";
+        }
+        for (std::size_t i = 0; i < proc.parameters.size(); ++i)
+        {
+            out += (i == 0 ? "" : ", ") + declareType(*proc.parameters[i], false);
+        }
+        return out + ")";
+    }
+
+    // A C function's call: each argument made into what C takes, ahead of
+    // the call; after holds what the call changed, to write back (a ByRef
+    // String's buffer, a ByRef CLong). A C Long that does not fit C's type
+    // is Overflow before the call is made.
+    std::string declareCall(const Procedure &callee, const std::vector<ExprPtr> &args,
+                            StatementScope &scope, std::vector<std::string> &locks,
+                            std::vector<std::string> &after)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < args.size(); ++i)
+        {
+            const Variable &param = *callee.parameters[i];
+            const Expr &arg = *args[i];
+            std::string code;
+            if (param.byRef && (param.type == Type::String || param.cType != CType::None))
+            {
+                // Where the variable is, then a C copy of it for the call.
+                const std::string slot = scope.newTemp();
+                scope.prelude.push_back(
+                    (param.type == Type::String ? "tf_string **" : "int64_t *") + slot + " = " +
+                    address(arg, scope) + ";");
+                if (pathHasIndex(arg))
+                {
+                    checkpoint(scope);
+                }
+                const std::string copy = scope.newTemp();
+                if (param.type == Type::String)
+                {
+                    scope.prelude.push_back("char *" + copy + " = tf_c_buffer(*" + slot + ");");
+                    scope.releases.push_back("tf_c_free(" + copy + ");"); // NULL once written back
+                    after.push_back("tf_c_unbuffer(" + slot + ", &" + copy + ");");
+                }
+                else
+                {
+                    scope.prelude.push_back(declareType(param, true) + " " + copy + " = " +
+                                            toC(param.cType) + "(*" + slot + ");");
+                    checkpoint(scope);
+                    after.push_back("*" + slot + " = " + fromC(param.cType, copy) + ";");
+                }
+                code = "&" + copy;
+                if (param.type == Type::String)
+                {
+                    code = copy;
+                }
+            }
+            else if (param.byRef)
+            {
+                // A number, Boolean, element or Type: C gets its address.
+                std::vector<std::string> arrays;
+                code = address(arg, scope, &arrays);
+                if (pathHasIndex(arg))
+                {
+                    const std::string temp = scope.newTemp();
+                    scope.prelude.push_back(declareType(param, false) + " " + temp + " = " + code +
+                                            ";");
+                    checkpoint(scope);
+                    code = temp;
+                }
+            }
+            else if (param.cType != CType::None)
+            {
+                const std::string value = settle(arg, expr(arg, scope), scope).code;
+                const std::string temp = scope.newTemp();
+                scope.prelude.push_back(declareType(param, true) + " " + temp + " = " +
+                                        toC(param.cType) + "(" + value + ");");
+                checkpoint(scope);
+                code = temp;
+            }
+            else if (param.type == Type::String)
+            {
+                code = "tf_str_cstr(" + borrowed(settle(arg, expr(arg, scope), scope), scope).code +
+                       ")";
+            }
+            else
+            {
+                code = settle(arg, expr(arg, scope), scope).code;
+            }
+            out += (i == 0 ? "" : ", ") + code;
+        }
+        (void)locks; // C cannot ReDim an array: nothing to lock
+        return callee.cName + "(" + out + ")";
+    }
+
+    static std::string toC(CType type)
+    {
+        return type == CType::Long    ? "tf_c_long"
+               : type == CType::ULong ? "tf_c_ulong"
+                                      : "tf_c_size";
+    }
+
+    // C's value back as a Long: a long always fits; an unsigned one may not.
+    static std::string fromC(CType type, const std::string &value)
+    {
+        return type == CType::Long    ? "(int64_t)" + value
+               : type == CType::ULong ? "tf_c_from_ulong(" + value + ")"
+                                      : "tf_c_from_size(" + value + ")";
+    }
+
+    // A C Function's value, as TermForms holds it (a String copied).
+    Value declareResult(const Procedure &callee, const std::vector<ExprPtr> &args,
+                        StatementScope &scope)
+    {
+        std::vector<std::string> locks;
+        std::vector<std::string> after;
+        const std::string call = declareCall(callee, args, scope, locks, after);
+        const Variable &result = *callee.result;
+        const std::string value = result.cType != CType::None   ? fromC(result.cType, call)
+                                  : result.type == Type::String ? "tf_str_from_c(" + call + ")"
+                                                                : call;
+        const std::string temp = scope.newTemp();
+        scope.prelude.push_back(declarationOf(result, temp) + " = " + value + ";");
+        for (const std::string &a : after)
+        {
+            scope.prelude.push_back(a);
+        }
+        if (result.type == Type::String)
+        {
+            scope.releases.push_back("tf_str_release(" + temp + ");");
+        }
+        if (result.cType == CType::ULong || result.cType == CType::SizeT ||
+            std::any_of(callee.parameters.begin(), callee.parameters.end(), [](const auto &p) {
+                return p->byRef && p->cType != CType::None && p->cType != CType::Long;
+            }))
+        {
+            checkpoint(scope); // an unsigned value too big for a Long
+        }
+        return {temp, false};
     }
 
     // ByRef arguments pass the variable's address; ByVal Strings are
@@ -2386,6 +2573,10 @@ private:
         // need no protection from it; only from calls after it.
         --scope.pendingCalls;
         const Procedure &callee = *e.procedure;
+        if (callee.isDeclare)
+        {
+            return declareResult(callee, e.args, scope);
+        }
         std::vector<std::string> locks;
         const std::string code =
             pName(callee) + "(" + arguments(callee, e.args, scope, locks) + ")";

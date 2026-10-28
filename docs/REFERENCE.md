@@ -976,10 +976,20 @@ Declare Sub fill_name Lib "utils.c" (ByRef buffer As String)
   checked for one. What C does with bad input is C's business.
 - A Declare names one Lib; two Declares naming the same C function with
   different types are an error.
-- `.c` files go to the C compiler as they are, with tfc's include path
-  for `termforms/tf_runtime.h` (should they want TermForms' strings); a
-  build failing in them is reported with the C compiler's message, not
-  hidden as tfc's own C is.
+- A program's `.c` files are compiled first, each on its own, with the
+  same C compiler (and target) and tfc's include path (for
+  `termforms/tf_runtime.h`), but not tfc's `-std=c99` or `-w`: they are
+  the programmer's C, so its warnings and errors are shown as the C
+  compiler gives them, and a failure stops the build there.
+- When a program with Declares fails to link (a C function in no Lib, a
+  library not installed, or not built for the target), the C compiler's
+  messages are shown with that explanation, rather than tfc's "internal
+  error" (which a program without Declares cannot cause).
+- A C name may not be one C keeps for itself, nor start with a prefix
+  tfc's own C uses (`tf_`, `c_`, `g_`, `v_`, `p_`, `t_`, `r_`, `a_`,
+  `s_`), nor be `main`: it would clash. The C function must then be
+  renamed (an Alias only helps when the BASIC name is the problem).
+- `Platform` is `"Other"` when built for none of the three.
 
 ## Modules and projects (Settled, Jim, 28 Oct 2026)
 

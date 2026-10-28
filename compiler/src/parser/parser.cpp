@@ -95,6 +95,10 @@ public:
             {
                 module.procedures.push_back(parseProcedure());
             }
+            else if (atDeclare())
+            {
+                module.procedures.push_back(parseDeclare());
+            }
             else if (peek().isKeyword("DIM"))
             {
                 module.moduleStatements.push_back(parseDim(&module, nullptr));
@@ -487,6 +491,122 @@ private:
         {
             expectEndOfStatement();
         }
+        return proc;
+    }
+
+    // Declare, Lib and Alias are words, not reserved: a program may still
+    // have a variable called lib. Declare starts one only before Sub or
+    // Function.
+    bool isWord(std::size_t ahead, std::string_view word) const
+    {
+        const Token &t = peek(ahead);
+        if (t.kind != TokenKind::Identifier || t.text.size() != word.size())
+        {
+            return false;
+        }
+        for (std::size_t i = 0; i < word.size(); ++i)
+        {
+            if (std::toupper(static_cast<unsigned char>(t.text[i])) != word[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool atDeclare() const
+    {
+        return isWord(0, "DECLARE") && (peek(1).isKeyword("SUB") || peek(1).isKeyword("FUNCTION"));
+    }
+
+    // Declare Function name Lib "..." [Alias "cname"] [(params)] As type, or
+    // Declare Sub: a C function (REFERENCE.md "Declare: calling C").
+    std::unique_ptr<Procedure> parseDeclare()
+    {
+        next(); // Declare
+        auto proc = std::make_unique<Procedure>();
+        proc->isDeclare = true;
+        proc->isFunction = peek().isKeyword("FUNCTION");
+        proc->location = next().location;
+        const char suffix = peek().suffix;
+        const Location nameAt = peek().location;
+        proc->name = expectIdentifier(proc->isFunction ? "a Function name" : "a Sub name");
+        proc->cName = proc->name;
+        if (isWord(0, "LIB"))
+        {
+            next();
+            proc->libLocation = peek().location;
+            if (at(TokenKind::StringLiteral))
+            {
+                proc->lib = next().text;
+            }
+            else
+            {
+                error(peek().location, "expected the Lib's name in quotes (\"\" for the C "
+                                       "library, \"utils.c\" for a C file of the program)");
+            }
+        }
+        else
+        {
+            error(peek().location, "a Declare says where the function is: Declare " +
+                                       std::string(proc->isFunction ? "Function " : "Sub ") +
+                                       proc->name + " Lib \"...\" ...");
+        }
+        if (isWord(0, "ALIAS"))
+        {
+            next();
+            if (at(TokenKind::StringLiteral))
+            {
+                proc->cName = next().text;
+            }
+            else
+            {
+                error(peek().location, "expected the C name in quotes after Alias");
+            }
+        }
+        if (acceptSymbol("("))
+        {
+            parseParameters(*proc);
+            expectSymbol(")");
+        }
+        if (proc->isFunction)
+        {
+            auto result = std::make_unique<Variable>();
+            result->name = proc->name;
+            result->location = nameAt;
+            result->isResult = true;
+            result->type = typeFromSuffix(suffix);
+            parseOptionalAs(*result, "Function '" + proc->name + "'");
+            proc->result = std::move(result);
+        }
+        else if (suffix != 0)
+        {
+            error(nameAt, "a Sub returns no value, so its name cannot have a type suffix");
+        }
+        // CLong, CULong and CSizeT: Longs in BASIC that C sees as its own
+        // types (the semantic pass rejects them anywhere else).
+        auto cType = [](Variable &v) {
+            static const std::pair<const char *, CType> kTypes[] = {
+                {"CLong", CType::Long}, {"CULong", CType::ULong}, {"CSizeT", CType::SizeT}};
+            for (const auto &[name, type] : kTypes)
+            {
+                if (v.typeName == name)
+                {
+                    v.cType = type;
+                    v.type = Type::Long;
+                    v.typeName.clear();
+                }
+            }
+        };
+        for (auto &p : proc->parameters)
+        {
+            cType(*p);
+        }
+        if (proc->result != nullptr)
+        {
+            cType(*proc->result);
+        }
+        expectEndOfStatement();
         return proc;
     }
 
@@ -1805,9 +1925,9 @@ private:
     {
         const bool isPublic = next().isKeyword("PUBLIC");
         const Token &t = peek();
-        if (t.isKeyword("SUB") || t.isKeyword("FUNCTION"))
+        if (t.isKeyword("SUB") || t.isKeyword("FUNCTION") || atDeclare())
         {
-            module.procedures.push_back(parseProcedure());
+            module.procedures.push_back(atDeclare() ? parseDeclare() : parseProcedure());
             module.procedures.back()->isPrivate = !isPublic;
             return;
         }

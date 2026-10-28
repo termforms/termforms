@@ -89,6 +89,7 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Time", Builtin::Time, true},
                                      {"Timer", Builtin::Timer, false},
                                      {"DoEvents", Builtin::DoEvents, false},
+                                     {"Platform", Builtin::Platform, false},
                                      {"MsgBox", Builtin::MsgBox, false},
                                      {"InputBox", Builtin::InputBox, true},
                                      {"Load", Builtin::FormLoad, false},
@@ -883,6 +884,10 @@ private:
 
     void wireEvent(Procedure &proc)
     {
+        if (proc.isDeclare)
+        {
+            return; // a C function is never an event handler
+        }
         const std::size_t underscore = proc.name.rfind('_');
         if (underscore == std::string::npos || underscore == 0)
         {
@@ -971,6 +976,11 @@ private:
     // may be reused in sibling blocks but never hides one still in scope.
     void checkProcedure(Procedure &proc)
     {
+        if (proc.isDeclare)
+        {
+            checkDeclare(proc);
+            return;
+        }
         current_ = &proc;
         scopes_.assign(1, {});
         loops_.clear();
@@ -984,6 +994,160 @@ private:
         }
         checkBlock(proc.body, false);
         current_ = nullptr;
+    }
+
+    // -- Declare -----------------------------------------------------------
+
+    // A C function: its name must be one C can have and tfc's own C does not
+    // use, and every parameter and the result must be something C can take
+    // (REFERENCE.md "Declare: calling C").
+    void checkDeclare(Procedure &proc)
+    {
+        if (std::string problem = cNameProblem(proc.cName); !problem.empty())
+        {
+            if (proc.cName != proc.name && problem.find("Alias") != std::string::npos)
+            {
+                problem = "'" + proc.cName + "' is a word C keeps for itself, so no C function " +
+                          "has that name";
+            }
+            diagnostics_.error(proc.location, problem);
+        }
+        for (const auto &p : proc.parameters)
+        {
+            if (p->type == Type::Error)
+            {
+                continue;
+            }
+            const std::string which = "parameter '" + p->name + "'";
+            if (p->rank > 0 || p->isDictionary)
+            {
+                diagnostics_.error(p->location,
+                                   which + ": a Declare takes no whole arrays or Dictionaries; "
+                                           "pass an element ByRef (buffer(0)) to give C a "
+                                           "pointer to it and what follows, as VB6 did");
+            }
+            else if (p->type == Type::Record)
+            {
+                if (!p->byRef)
+                {
+                    diagnostics_.error(p->location, which + ": a Type goes to C ByRef, as a "
+                                                            "pointer to it");
+                }
+                else if (!plainRecord(*p->typeDef))
+                {
+                    diagnostics_.error(p->location,
+                                       which +
+                                           ": only a Type made of numbers (and Booleans) "
+                                           "can go to C; " +
+                                           p->typeDef->name + " has a String, array or Ref in it");
+                }
+            }
+            else if (p->type == Type::Ref || p->type == Type::Control)
+            {
+                diagnostics_.error(p->location, which +
+                                                    ": a Declare takes numbers, Booleans, "
+                                                    "Strings and Types of numbers, not " +
+                                                    article(infoOf(*p)));
+            }
+        }
+        if (proc.isFunction && proc.result->type != Type::Error)
+        {
+            const Type t = proc.result->type;
+            if (proc.result->rank > 0 || t == Type::Record || t == Type::Ref || t == Type::Control)
+            {
+                diagnostics_.error(proc.result->location,
+                                   "a Declare's Function returns a number, a Boolean or a "
+                                   "String, not " +
+                                       article(infoOf(*proc.result)));
+            }
+        }
+        // One C function, one set of types: C has a single prototype for it.
+        const std::string shape = declareShape(proc);
+        if (auto [it, added] = cFunctions_.emplace(proc.cName, std::make_pair(&proc, shape));
+            !added && it->second.second != shape)
+        {
+            diagnostics_.error(proc.location, "the C function '" + proc.cName +
+                                                  "' is declared again with different types (" +
+                                                  "it was declared at line " +
+                                                  std::to_string(it->second.first->location.line) +
+                                                  ")");
+        }
+    }
+
+    static bool plainRecord(const TypeDef &def)
+    {
+        for (const auto &m : def.members)
+        {
+            const Type t = m->type;
+            if (m->rank > 0 || m->isDictionary || t == Type::String || t == Type::Ref ||
+                (t == Type::Record && !plainRecord(*m->typeDef)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // The types a Declare gives its C function, to compare two of them.
+    static std::string declareShape(const Procedure &proc)
+    {
+        auto one = [](const Variable &v) {
+            return std::to_string(static_cast<int>(v.type)) + "/" +
+                   std::to_string(static_cast<int>(v.cType)) + (v.byRef ? "&" : "") +
+                   (v.typeDef != nullptr ? v.typeDef->name : "");
+        };
+        std::string shape = proc.isFunction ? one(*proc.result) : "void";
+        for (const auto &p : proc.parameters)
+        {
+            shape += "," + one(*p);
+        }
+        return shape;
+    }
+
+    // Why name cannot be a C function's here, or "". tfc's own C names start
+    // with these prefixes, so a C function of the same name would clash.
+    static std::string cNameProblem(const std::string &name)
+    {
+        const bool shaped = !name.empty() &&
+                            (std::isalpha(static_cast<unsigned char>(name[0])) || name[0] == '_') &&
+                            std::all_of(name.begin(), name.end(), [](char c) {
+                                return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+                            });
+        if (!shaped)
+        {
+            return "'" + name + "' is not a name C can have (letters, digits and _)";
+        }
+        static const char *const kKeywords[] = {
+            "auto",    "break",  "case",     "char",   "const",    "continue", "default",
+            "do",      "double", "else",     "enum",   "extern",   "float",    "for",
+            "goto",    "if",     "inline",   "int",    "long",     "register", "restrict",
+            "return",  "short",  "signed",   "sizeof", "static",   "struct",   "switch",
+            "typedef", "union",  "unsigned", "void",   "volatile", "while",    "main"};
+        for (const char *k : kKeywords)
+        {
+            if (name == k)
+            {
+                return "'" + name + "' is a word C keeps for itself; give the BASIC name " +
+                       "an Alias with the C function's real name";
+            }
+        }
+        static const char *const kPrefixes[] = {"tf_", "TF_", "c_", "g_", "v_",
+                                                "p_",  "t_",  "r_", "a_", "s_"};
+        for (const char *prefix : kPrefixes)
+        {
+            if (name.rfind(prefix, 0) == 0)
+            {
+                return "a C function's name cannot start with '" + std::string(prefix) +
+                       "', which tfc's own C uses; rename the C function";
+            }
+        }
+        if (name.size() > 1 && name[0] == 't' &&
+            std::all_of(name.begin() + 1, name.end(),
+                        [](char c) { return std::isdigit(static_cast<unsigned char>(c)) != 0; }))
+        {
+            return "'" + name + "' is a name tfc's own C uses; rename the C function";
+        }
+        return "";
     }
 
     void checkBlock(Block &block, bool newScope = true)
@@ -1839,6 +2003,12 @@ private:
 
     void unknownType(const std::string &name, Location where)
     {
+        if (name == "CLong" || name == "CULong" || name == "CSizeT")
+        {
+            diagnostics_.error(where, name + " is a C type, for a Declare's parameters and "
+                                             "result only; elsewhere use Long");
+            return;
+        }
         if (reportAmbiguous(name, where))
         {
             return;
@@ -5007,6 +5177,8 @@ private:
     // one whose target was in error); hidden locals made so far.
     std::vector<const Expr *> withs_;
     int withCount_ = 0;
+    // Each C function a Declare names, with the first Declare and its types.
+    std::map<std::string, std::pair<const Procedure *, std::string>> cFunctions_;
     bool wantWhole_ = false; // see checkWhole
     bool wholeNow_ = false;  // the expression being checked may be a whole array
 };

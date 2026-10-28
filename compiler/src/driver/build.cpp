@@ -218,7 +218,8 @@ CompilerStyle compilerStyle(const std::string &command)
 
 std::string compileCommand(const std::string &compiler, CompilerStyle style,
                            const std::vector<std::string> &sources, const std::string &includeDir,
-                           const std::string &output, const std::string &objectDir, bool release)
+                           const std::string &output, const std::string &objectDir, bool release,
+                           const std::vector<std::string> &libraries)
 {
     // The compiler command is used as written: it may carry its own
     // arguments, e.g. "zig cc -target x86_64-linux-musl".
@@ -233,6 +234,10 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
         for (const std::string &s : sources)
         {
             command += " " + quote(s);
+        }
+        for (const std::string &library : libraries)
+        {
+            command += " " + quote(library + ".lib");
         }
         // Doubled: a single backslash before the closing quote would escape it.
         command += " /Fo" + quote(objectDir + "\\\\");
@@ -254,10 +259,92 @@ std::string compileCommand(const std::string &compiler, CompilerStyle style,
         // The runtime's Double arithmetic needs pow and fmod, which glibc
         // keeps in libm; elsewhere (macOS, musl, MinGW via zig) -lm is
         // accepted and costs nothing. Libraries go after the sources.
+        for (const std::string &library : libraries)
+        {
+            command += " -l" + quote(library);
+        }
         command += " -lm";
         command += " -o " + quote(output);
     }
     return command;
+}
+
+std::string compileOwnCCommand(const std::string &compiler, CompilerStyle style,
+                               const std::string &source, const std::string &includeDir,
+                               const std::string &object, bool release)
+{
+    // The programmer's own C: their warnings are theirs to see (no -w), and
+    // their C need not be C99 (the compiler's own default). The include
+    // path lets it use termforms/tf_runtime.h.
+    std::string command = compiler;
+    if (style == CompilerStyle::Msvc)
+    {
+        command += " /nologo /c /utf-8";
+        command += release ? " /O2 /DNDEBUG" : " /Od /Z7";
+        command += " /I" + quote(includeDir) + " " + quote(source) + " /Fo" + quote(object);
+    }
+    else
+    {
+        command += " -c";
+        command += release ? " -O2 -DNDEBUG" : " -O0 -g";
+        command += " -I" + quote(includeDir) + " " + quote(source) + " -o " + quote(object);
+    }
+    return command;
+}
+
+// The Declares' Libs, gathered for the build: the program's own C files
+// (Lib "utils.c", found next to the module that names it) and libraries
+// to link, each once. A missing C file or a library name that cannot be
+// one is an error at its Declare.
+static void gatherLibs(const std::vector<ast::Module> &modules,
+                       const std::vector<std::string> &inputs, Diagnostics &diagnostics,
+                       std::vector<std::string> &cFiles, std::vector<std::string> &libraries)
+{
+    for (std::size_t i = 0; i < modules.size(); ++i)
+    {
+        for (const auto &proc : modules[i].procedures)
+        {
+            if (!proc->isDeclare || proc->lib.empty())
+            {
+                continue;
+            }
+            const std::string &lib = proc->lib;
+            const bool isC = lib.size() > 2 && lib[lib.size() - 2] == '.' &&
+                             (lib.back() == 'c' || lib.back() == 'C');
+            if (isC)
+            {
+                const fs::path path = (fs::path(inputs[i]).parent_path() / lib).lexically_normal();
+                std::error_code ec;
+                if (!fs::is_regular_file(path, ec))
+                {
+                    diagnostics.error(proc->libLocation, "there is no C file '" + lib +
+                                                             "' (looked for " + path.string() +
+                                                             ")");
+                    continue;
+                }
+                if (std::find(cFiles.begin(), cFiles.end(), path.string()) == cFiles.end())
+                {
+                    cFiles.push_back(path.string());
+                }
+                continue;
+            }
+            const bool name = std::all_of(lib.begin(), lib.end(), [](char c) {
+                return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_' || c == '-' ||
+                       c == '.' || c == '+';
+            });
+            if (!name)
+            {
+                diagnostics.error(proc->libLocation,
+                                  "'" + lib + "' is not a library's name (as sqlite3) nor a C " +
+                                      "file (ending .c)");
+                continue;
+            }
+            if (std::find(libraries.begin(), libraries.end(), lib) == libraries.end())
+            {
+                libraries.push_back(lib);
+            }
+        }
+    }
 }
 
 // What a .vbp says about its files must hold: Form= files have a form,
@@ -421,6 +508,16 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     {
         checkProgram(program, diagnostics);
     }
+    std::vector<std::string> cFiles;
+    std::vector<std::string> libraries;
+    if (!diagnostics.hasErrors())
+    {
+        gatherLibs(modules, inputs, diagnostics, cFiles, libraries);
+    }
+    const bool declares = std::any_of(modules.begin(), modules.end(), [](const ast::Module &m) {
+        return std::any_of(m.procedures.begin(), m.procedures.end(),
+                           [](const auto &p) { return p->isDeclare; });
+    });
     diagnostics.print(err);
     if (diagnostics.hasErrors())
     {
@@ -510,14 +607,49 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     const CompilerStyle style = compilerStyle(compiler);
     const std::string objectDir = output + ".tf-obj";
     std::error_code ec;
-    if (style == CompilerStyle::Msvc)
+    if (style == CompilerStyle::Msvc || !cFiles.empty())
     {
         fs::create_directories(objectDir, ec);
     }
-
     const std::string includeDir = (fs::path(runtimeDir) / "include").string();
-    std::string command =
-        compileCommand(compiler, style, sources, includeDir, output, objectDir, cmd.release);
+
+    // The program's own C files first, each on its own, their messages
+    // shown: they are the programmer's C, not tfc's.
+    for (std::size_t i = 0; i < cFiles.size(); ++i)
+    {
+        const std::string object =
+            (fs::path(objectDir) /
+             ("c" + std::to_string(i) + "_" + fs::path(cFiles[i]).stem().string() +
+              (style == CompilerStyle::Msvc ? ".obj" : ".o")))
+                .string();
+        std::string own =
+            compileOwnCCommand(compiler, style, cFiles[i], includeDir, object, cmd.release);
+        if (cmd.verbose)
+        {
+            err << own << '\n';
+        }
+        if constexpr (kWindowsHost)
+        {
+            own = "\"" + own + "\"";
+        }
+        out.flush();
+        err.flush();
+        if (std::system(own.c_str()) != 0)
+        {
+            err << "tfc: error: the C file '" << cFiles[i]
+                << "' did not compile (the C compiler's messages are above)\n";
+            fs::remove_all(objectDir, ec);
+            if (!cmd.keepC)
+            {
+                fs::remove(cFile, ec); // the fault is in their C, not tfc's
+            }
+            return kExitCompile;
+        }
+        sources.push_back(object);
+    }
+
+    std::string command = compileCommand(compiler, style, sources, includeDir, output, objectDir,
+                                         cmd.release, libraries);
     if (cmd.verbose)
     {
         err << command << '\n';
@@ -539,7 +671,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     err.flush();
     const int status = std::system(command.c_str());
 
-    if (style == CompilerStyle::Msvc)
+    if (style == CompilerStyle::Msvc || !cFiles.empty())
     {
         fs::remove_all(objectDir, ec);
     }
@@ -551,6 +683,19 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
         }
         fs::remove(logFile, ec);
         return kExitOk;
+    }
+
+    // With Declares, a failed build is most likely theirs: a C function in
+    // no library or C file, or a library not installed (for this target,
+    // when cross-compiling). Show what the C compiler said.
+    if (declares)
+    {
+        std::string log;
+        readFile(logFile, log);
+        err << log << "tfc: error: the program could not be built with its Declares: a C "
+            << "function may be missing from its Lib, or a library not installed (the C "
+            << "compiler's messages are above; the generated C is kept in " << cFile << ")\n";
+        return kExitCompile;
     }
 
     // The program passed every check, so a C compiler that runs but fails

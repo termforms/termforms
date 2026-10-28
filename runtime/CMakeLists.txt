@@ -26,6 +26,7 @@ set(TF_RUNTIME_SOURCES
     src/core/tf_fsys.c
     src/core/tf_system.c
     src/core/tf_ref.c
+    src/core/tf_c.c
     src/tui/tf_keys.c
     src/tui/tf_screen.c
     src/tui/tf_input.c

@@ -1,0 +1,9 @@
+declare.bas:13:39: error: parameter 'a': a Declare takes no whole arrays or Dictionaries; pass an element ByRef (buffer(0)) to give C a pointer to it and what follows, as VB6 did
+declare.bas:14:38: error: parameter 'p': a Type goes to C ByRef, as a pointer to it
+declare.bas:15:39: error: parameter 'n': only a Type made of numbers (and Booleans) can go to C; Named has a String, array or Ref in it
+declare.bas:16:37: error: parameter 'r': a Declare takes numbers, Booleans, Strings and Types of numbers, not a Ref Plain
+declare.bas:17:18: error: a Declare's Function returns a number, a Boolean or a String, not a Plain
+declare.bas:18:9: error: 'double' is a word C keeps for itself, so no C function has that name
+declare.bas:19:9: error: a C function's name cannot start with 'tf_', which tfc's own C uses; rename the C function
+declare.bas:21:9: error: the C function 'twin' is declared again with different types (it was declared at line 20)
+declare.bas:24:9: error: CLong is a C type, for a Declare's parameters and result only; elsewhere use Long

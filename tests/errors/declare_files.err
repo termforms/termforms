@@ -1,0 +1,2 @@
+declare_files.bas:4:30: error: there is no C file 'no_such_file.c' (looked for no_such_file.c)
+declare_files.bas:5:29: error: 'my lib' is not a library's name (as sqlite3) nor a C file (ending .c)

@@ -138,3 +138,40 @@ TEST_CASE("a project's mistakes are reported with their lines")
     CHECK(parseProject("Name=A\n").errors.at(0) ==
           "line 1: the project lists no files (Form= or Module=)");
 }
+
+// -- The C compiler's command lines (driver/build.cpp) -------------------
+
+#include "driver/build.hpp"
+
+#include <string>
+
+using tf::driver::CompilerStyle;
+
+TEST_CASE("a Declare's libraries are linked, after the sources")
+{
+    // Quoting differs by host (' on POSIX, " on Windows): look past it.
+    const std::string gcc = tf::driver::compileCommand("cc", CompilerStyle::Gcc, {"p.tf.c"}, "inc",
+                                                       "p", "obj", false, {"sqlite3", "m2"});
+    CHECK(gcc.find("p.tf.c") < gcc.find("-l"));
+    CHECK(gcc.find("sqlite3") > gcc.find("p.tf.c"));
+    CHECK(gcc.find("m2") != std::string::npos);
+    const std::string msvc = tf::driver::compileCommand("cl", CompilerStyle::Msvc, {"p.tf.c"},
+                                                        "inc", "p.exe", "obj", false, {"sqlite3"});
+    CHECK(msvc.find("sqlite3.lib") != std::string::npos);
+}
+
+TEST_CASE("the program's own C is compiled on its own, its warnings shown")
+{
+    const std::string gcc =
+        tf::driver::compileOwnCCommand("zig cc -target x86_64-linux-musl", CompilerStyle::Gcc,
+                                       "utils.c", "inc", "c0_utils.o", true);
+    CHECK(gcc.rfind("zig cc -target x86_64-linux-musl -c", 0) == 0);
+    CHECK(gcc.find(" -w") == std::string::npos); // their warnings are theirs to see
+    CHECK(gcc.find("-std=") == std::string::npos);
+    CHECK(gcc.find("utils.c") < gcc.find(" -o "));
+    CHECK(gcc.find("c0_utils.o") > gcc.find(" -o "));
+    const std::string msvc = tf::driver::compileOwnCCommand("cl", CompilerStyle::Msvc, "utils.c",
+                                                            "inc", "c0_utils.obj", false);
+    CHECK(msvc.find(" /c") != std::string::npos);
+    CHECK(msvc.find("/Fo") < msvc.find("c0_utils.obj"));
+}

@@ -725,6 +725,31 @@ void tf_form_hide(tf_control *form);
 void tf_form_unload(tf_control *form);
 int tf_forms_run(void);
 
+/* ------------------------------------------------------------------------ */
+/* Declare: calling C (tf_c.c)                                              */
+/* ------------------------------------------------------------------------ */
+
+/* A ByRef String for C: a malloc'd copy of its bytes and a NUL. After the
+   call, unbuffer makes the String the bytes up to the first NUL, frees
+   the buffer and clears *buffer. */
+char *tf_c_buffer(const tf_string *s);
+void tf_c_unbuffer(tf_string **slot, char **buffer);
+void tf_c_free(char *buffer); /* a buffer not written back (NULL: nothing) */
+
+/* A String a C function returned (C keeps owning it): a copy; NULL is "". */
+tf_string *tf_str_from_c(const char *s); /* owned */
+
+/* CLong, CULong, CSizeT: a Long to and from C's own type; one that does
+   not fit is error 6, Overflow. */
+long tf_c_long(int64_t value);
+unsigned long tf_c_ulong(int64_t value);
+size_t tf_c_size(int64_t value);
+int64_t tf_c_from_ulong(unsigned long value);
+int64_t tf_c_from_size(size_t value);
+
+/* Platform: "Windows", "macOS" or "Linux" ("Other" elsewhere). Owned. */
+tf_string *tf_platform_name(void);
+
 /* DoEvents: redraws, then handles the events already waiting and returns. */
 void tf_do_events(void);
 
