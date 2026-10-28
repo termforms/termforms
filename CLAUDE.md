@@ -244,8 +244,16 @@ authoritative for design rationale.
   LEAVE_SEQ) and an unloaded form made afresh at its next Load
   (`tf_form_ready`, emitted after each form's settings, keeps a
   `tf_design` per control; `stale` set by Unload).
-- **Next:** decide the known gaps below (Select Case first) and Phase 5's
-  scope with Jim.
+- **Language gaps settled (Jim, 28 Oct 2026; REFERENCE.md "Select
+  Case", "Declarations with values, and in For", "DoEvents"):** VB6's
+  full Select Case (any expressions, first match wins, a warning for an
+  unreachable constant Case, matching as `=`); VB.NET's Dim initialisers
+  with As (module level: any expression, run at start in module order),
+  array initialisers in braces, `For i As Integer` and `For Each w As
+  String`; DoEvents as VB (redraw, handle what is waiting, re-entry
+  allowed, statement only; closing a form during it lets the code go on).
+- **Next:** build them, in that order (Select Case, initialisers, inline
+  For, DoEvents), then Phase 5's scope with Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -544,9 +552,8 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- No Select Case, no `For i As Integer = ...` inline declaration, no
-  `Dim x As Integer = 5` initialisers (none is in REFERENCE.md yet).
-- No DoEvents (the handover lists it with the TUI runtime).
+- Select Case, Dim initialisers, inline For declarations and DoEvents:
+  settled (28 Oct 2026), not yet built.
 - No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
   the overlay); no MouseDown/Up/Move events; the clipboard is the
   program's own.

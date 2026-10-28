@@ -181,6 +181,75 @@ For Each k In ages.Keys         ' a Dictionary's keys (Keys is an array)
   so nothing needs undoing when the loop is left early.
 - `Exit For` leaves it; `Next name` must name its variable.
 
+### Select Case (Settled, Jim, 28 Oct 2026)
+
+```vb
+Select Case score
+    Case 100
+        grade = "perfect"
+    Case 90 To 99, 85
+        grade = "A"
+    Case Is >= limit
+        grade = "pass"
+    Case Else
+        grade = "fail"
+End Select
+```
+
+- **VB6's Case forms**: a value, `a To b`, `Is <op> value` (`= <> < >
+  <= >=`), several of them in one Case separated by commas, and
+  `Case Else` last.
+- **A Case may hold any expression.** The selector is evaluated once;
+  the Cases are tried top to bottom and left to right, stopping at the
+  first match, and what follows it is not evaluated.
+- **The first matching Case runs**; the compiler warns when a constant
+  Case can never be reached because an earlier constant one covers it.
+- **Values match the selector as `=` does** (Option Strict): numbers
+  widen, Strings compare exactly (case matters), an Enum selector takes
+  its own members, and String and number do not mix.
+
+### Declarations with values, and in For (Settled, Jim, 28 Oct 2026)
+
+```vb
+Dim count As Integer = 5, name As String = "Ann"
+Dim days() As String = {"Mon", "Tue", "Wed"}
+Dim grid(,) As Integer = {{1, 2}, {3, 4}}
+For i As Integer = 1 To 10 ... Next i
+For Each w As String In words ... Next w
+```
+
+- **VB.NET's initialisers, each with its own type**: `Dim x As Integer
+  = 5`, `Dim s$ = "a"`, several in one Dim. `Dim a, b As Integer = 5` is
+  an error (as VB.NET), and there is no type inference (`Dim x = 5` stays
+  an error).
+- A local's initialiser runs where the Dim is, so inside a loop on every
+  pass (the Dim starts fresh each pass, as settled).
+- **A module-level or Public variable's initialiser may be any
+  expression**, run once at program start, modules in project order,
+  before Sub Main or the first Form_Load. An error there is reported as
+  any uncaught error. A control read there gives its form-block value.
+- **Array initialisers, as VB.NET**: a list in braces makes a dynamic
+  array sized from it, nested braces for more dimensions (rows of equal
+  length). A fixed size with a list (`Dim a(2) As Integer = {...}`) is
+  an error.
+- **`For i As Integer = ...` and `For Each w As String In ...`** declare
+  the loop variable for the loop alone (gone after Next); it may not
+  hide an enclosing local. The old form with an existing variable stays.
+
+### DoEvents (Settled, Jim, 28 Oct 2026)
+
+- **As VB**: `DoEvents` redraws the screen, then handles every key,
+  click and due Timer already waiting, without waiting for more, and
+  returns. A long loop that calls it keeps the form live and its labels
+  current.
+- **Handlers may be re-entered**, as VB: a button clicked again while its
+  Click handler is inside DoEvents runs that handler again; a program
+  that must not allow it guards with a flag.
+- **A statement only** (no VB6 return value).
+- **Closing a form during DoEvents** runs its Form_Unload (which may
+  cancel) and the code after DoEvents carries on; if no form is left
+  shown, the program ends when that code returns to the event loop.
+
 ## Scope (Settled, 27 Oct 2026)
 
 - A `Dim` inside a block (If, For, Do, While) is visible only inside that
