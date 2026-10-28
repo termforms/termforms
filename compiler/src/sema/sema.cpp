@@ -1174,6 +1174,14 @@ private:
     void checkAssignment(Stmt &s)
     {
         Expr &target = *s.target;
+        // Mid$(s, start [, length]) = text: the Mid$ statement, a library
+        // call that changes s in place.
+        if (target.kind == ExprKind::Call && target.text == "Mid" && target.procedure == nullptr &&
+            findProcedure("Mid") == nullptr)
+        {
+            checkMidStatement(s);
+            return;
+        }
         // lst.List(i) = x and lst.Selected(i) = b: calls that set them.
         if (target.kind == ExprKind::Index && target.left != nullptr &&
             target.left->kind == ExprKind::Member && target.left->left != nullptr &&
@@ -1289,6 +1297,35 @@ private:
             return;
         }
         diagnostics_.error(target.location, "this cannot be assigned to");
+    }
+
+    void checkMidStatement(Stmt &s)
+    {
+        Expr &target = *s.target;
+        if (target.args.size() < 2 || target.args.size() > 3)
+        {
+            diagnostics_.error(target.location, "the Mid$ statement takes a variable, a start and "
+                                                "an optional length: Mid$(s, start [, length]) = "
+                                                "text");
+            return;
+        }
+        auto call = std::make_unique<Expr>();
+        call->kind = ExprKind::Call;
+        call->builtin = Builtin::MidAssign;
+        call->text = "Mid$";
+        call->location = target.location;
+        call->args.push_back(std::move(target.args[0]));
+        call->args.push_back(std::move(target.args[1]));
+        call->args.push_back(std::move(s.value));
+        if (target.args.size() == 3)
+        {
+            call->args.push_back(std::move(target.args[2]));
+        }
+        s.kind = StmtKind::Library;
+        s.target.reset();
+        s.args.clear();
+        s.args.push_back(std::move(call));
+        checkExpr(*s.args[0]);
     }
 
     // Option Strict: the same type, or a numeric widening. An Enum takes only
@@ -3920,6 +3957,28 @@ private:
                 continue;
             }
             checkExpr(arg);
+            if (want == 'R')
+            {
+                // Changed in place, so a String variable, element or field.
+                if (arg.type == Type::Error)
+                {
+                    ok = false;
+                }
+                else if (!isLvalue(arg) || arg.type != Type::String || arg.rank > 0)
+                {
+                    diagnostics_.error(arg.location,
+                                       std::string("the Mid$ statement changes its first ") +
+                                           "argument in place, so it must be a String variable, "
+                                           "element or field" +
+                                           (isLvalue(arg) ? ", not " + article(infoOf(arg)) : ""));
+                    ok = false;
+                }
+                else if (readOnlyPath(arg, arg.location))
+                {
+                    ok = false;
+                }
+                continue;
+            }
             if (want == 'C' || want == 'F')
             {
                 const bool fits =
@@ -4013,6 +4072,8 @@ private:
             case Builtin::ListItem:
             case Builtin::ListSelected:
                 return "the index";
+            case Builtin::MidAssign: // Mid$(s, start, length) = text
+                return i == 1 ? "the start" : i == 2 ? "the text after =" : "the length";
             default:
                 return "argument " + std::to_string(i + 1);
         }

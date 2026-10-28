@@ -1,0 +1,6 @@
+mid_statement.bas:9:10: error: the array 'words' is a ByVal parameter, so it cannot be changed here; make it ByRef to change it
+mid_statement.bas:15:10: error: the Mid$ statement changes its first argument in place, so it must be a String variable, element or field
+mid_statement.bas:16:10: error: the Mid$ statement changes its first argument in place, so it must be a String variable, element or field, not an Integer
+mid_statement.bas:17:10: error: the Mid$ statement changes its first argument in place, so it must be a String variable, element or field
+mid_statement.bas:18:5: error: the Mid$ statement takes a variable, a start and an optional length: Mid$(s, start [, length]) = text
+mid_statement.bas:19:18: error: the text after = of 'Mid$' must be a String, not an Integer; use CStr(value) to convert

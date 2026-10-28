@@ -9,6 +9,7 @@
  */
 #include "../tf_internal.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 static const char *bytes_of(const tf_string *s)
@@ -85,6 +86,37 @@ tf_string *tf_str_mid(const tf_string *s, int32_t start, int32_t length)
     }
     const int32_t from = advance(s, 0, start - 1);
     return slice(s, from, advance(s, from, length));
+}
+
+void tf_str_mid_assign(tf_string **slot, int32_t start, const tf_string *text, int32_t length)
+{
+    const tf_string *s = *slot;
+    const int32_t points = tf_str_len(s);
+    if (start < 1 || start > points || length < 0)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    /* As many code points as the text has, the length allows and the
+       string has room for from start: the string never grows or shrinks. */
+    int32_t count = tf_str_len(text);
+    count = length < count ? length : count;
+    count = points - (start - 1) < count ? points - (start - 1) : count;
+    const int32_t from = advance(s, 0, start - 1);
+    const int32_t to = advance(s, from, count);
+    const int32_t taken = advance(text, 0, count);
+    const int64_t size = (int64_t)length_of(s) - (to - from) + taken;
+    if (size > TF_STR_MAX_LENGTH)
+    {
+        tf_raise(TF_ERR_OUT_OF_STRING_SPACE, NULL); /* a wider character, at the limit */
+        return;
+    }
+    char *buffer = tf_xmalloc((size_t)size + 1);
+    memcpy(buffer, bytes_of(s), (size_t)from);
+    memcpy(buffer + from, bytes_of(text), (size_t)taken);
+    memcpy(buffer + from + taken, bytes_of(s) + to, (size_t)(length_of(s) - to));
+    tf_str_assign(slot, tf_str_from_utf8(buffer, (int32_t)size));
+    free(buffer);
 }
 
 tf_string *tf_str_left(const tf_string *s, int32_t n)

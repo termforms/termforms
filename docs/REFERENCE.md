@@ -896,11 +896,15 @@ b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outs
   String array, or in For Each. `Join` takes a String array variable.
 - Comparison is exact (case-sensitive, byte for byte): VB's optional
   compare argument (vbTextCompare) is not provided.
-- **Full Unicode case** (é to É) comes with the Unicode tables in Phase 4;
-  until then LCase$/UCase$ change only A-Z and a-z.
-- **The `Mid$` statement** (`Mid$(s, 2, 1) = "x"`) is wanted (Jim), but
-  not urgent: deferred to a later iteration. Until then, use
-  `Left$(s, 1) & "x" & Mid$(s, 3)`.
+- **Full Unicode case** (é to É) is not built: Phase 4's tables give
+  character widths only. LCase$/UCase$ change only A-Z and a-z.
+- **The `Mid$` statement** (wanted, Jim; built 28 Oct 2026):
+  `Mid$(s, start [, length]) = text` replaces characters of s in place,
+  as VB: as many as the text has, the length allows and s has room for
+  from start, so s never grows or shrinks; counted in code points. s is a
+  String variable, element or field (not a ByVal array's element). A
+  start outside 1 to Len(s), or a negative length, is error 5 (so an
+  empty s always is). `Mid` without `$` works too.
 
 ## Modules and projects (Settled, Jim, 28 Oct 2026)
 

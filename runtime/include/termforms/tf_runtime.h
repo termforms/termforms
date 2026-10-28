@@ -319,6 +319,10 @@ tf_string *tf_str_str_f64(double value);
  */
 #define TF_STR_REST INT32_MAX /* Mid$ with no length: the rest */
 tf_string *tf_str_mid(const tf_string *s, int32_t start, int32_t length);
+/* The Mid$ statement, Mid$(s, start, length) = text: replaces code points
+   of *slot in place (its length never changes); a start outside 1 to
+   Len(s) or a negative length is error 5. */
+void tf_str_mid_assign(tf_string **slot, int32_t start, const tf_string *text, int32_t length);
 tf_string *tf_str_left(const tf_string *s, int32_t n);
 tf_string *tf_str_right(const tf_string *s, int32_t n);
 int32_t tf_str_instr(int32_t start, const tf_string *s, const tf_string *find);    /* 0: none */

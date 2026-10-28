@@ -160,14 +160,18 @@ enum class Builtin
     DictKeys,
     DictItems,
     DictRemove,
-    DictClear
+    DictClear,
+    // The Mid$ statement, Mid$(s, start [, length]) = text: never written
+    // by name; args are s (by address), start, text, length.
+    MidAssign
 };
 
 // The library functions' signatures (strings, files), for checking and for
 // C; statements such as Open are made into calls of these too. Each parameter
 // S (a String), I (an Integer), L (a Long), Y (a Boolean), A (a whole String
-// array), B (a whole Byte array with one dimension), C (a ListBox) or F (a
-// form); the first
+// array), B (a whole Byte array with one dimension), C (a ListBox), F (a
+// form) or R (a String variable, element or field, passed by address to be
+// changed); the first
 // `required` must be given and the rest default to `defaults` (S: text, I:
 // a number), except that InStr's optional parameter comes first
 // (InStr([start,] s, find)). fails: a bad argument can raise an error.
@@ -176,7 +180,7 @@ struct StringFunction
     Builtin id;
     const char *params;
     int required;
-    const char *defaults[3];
+    const char *defaults[4];
     Type result; // Split: an array of Strings
     const char *cName;
     bool fails;
@@ -186,6 +190,13 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Len, "S", 1, {}, Type::Integer, "tf_str_len", false},
     {Builtin::LenB, "S", 1, {}, Type::Integer, "tf_str_lenb", false},
     {Builtin::Mid, "SII", 2, {nullptr, nullptr, "2147483647"}, Type::String, "tf_str_mid", true},
+    {Builtin::MidAssign,
+     "RISI",
+     3,
+     {nullptr, nullptr, nullptr, "2147483647"},
+     Type::Void,
+     "tf_str_mid_assign",
+     true},
     {Builtin::Left, "SI", 2, {}, Type::String, "tf_str_left", true},
     {Builtin::Right, "SI", 2, {}, Type::String, "tf_str_right", true},
     {Builtin::InStr, "ISS", 2, {"1"}, Type::Integer, "tf_str_instr", true},

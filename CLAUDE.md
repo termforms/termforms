@@ -171,8 +171,7 @@ authoritative for design rationale.
   shared by sema and codegen; sema fills in defaulted arguments; runtime
   tf_text.c). Jim settled errors 5/14, exact comparison, ASCII-only case
   for now; the other small rules are Proposed in REFERENCE.md "String
-  functions". **Deferred, wanted later:** the Mid$ statement
-  (`Mid$(s, 2, 1) = "x"`); not urgent.
+  functions". The Mid$ statement, deferred then, was built in 5.2.
   **Binary files soon (Jim, 27 Oct 2026):** read a buffer of x bytes at
   offset y, the position advancing by x on each read, the size or position
   settable in the read or by a separate statement: done in 6b-3.
@@ -349,7 +348,11 @@ authoritative for design rationale.
   Option-key hint (Jim, 28 Oct 2026): `option_hint` in tf_forms.c, first
   in form_key after the mouse; a one-time MsgBox when an Option-layer
   symbol arrives outside a TextBox or with the menus open.
-- **Next:** 5.2, the Mid$ statement. The terminal matrix is done except
+  Step 5.2 done: the Mid$ statement (sema `checkMidStatement` turns the
+  assignment into a library call `Builtin::MidAssign`, parameter kind R
+  = a String passed by address via codegen's `address()`; runtime
+  tf_str_mid_assign).
+- **Next:** 5.3, Declare (design questions first). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

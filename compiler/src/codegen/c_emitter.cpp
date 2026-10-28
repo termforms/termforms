@@ -2541,6 +2541,7 @@ private:
                 args += (i == 0 ? "" : ", ") +
                         (kind == 'C' || kind == 'F'   ? cName(*arg.control)
                          : kind == 'A' || kind == 'B' ? wholeArrayRef(arg, scope)
+                         : kind == 'R'                ? address(arg, scope)
                          : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
                                        : settle(arg, expr(arg, scope), scope).code);
             }

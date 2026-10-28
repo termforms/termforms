@@ -73,7 +73,7 @@ End Sub
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
 | System | `Command$`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
-| Strings | `Len`, `LenB`, `Mid$`, `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
+| Strings | `Len`, `LenB`, `Mid$` (and the statement `Mid$(s, 2, 1) = "x"`), `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
 | Operators | `&` (numbers and Booleans become text), `+ - *`, `/` (always a Double), `\` (integer division), `Mod`, `^`, `= <> < > <= >=`, `And Or Not`, unary `-` |
 | Functions | `CInt`, `CLng`, `CDbl`, `CStr`, `Str$`, `Val`, `Fix`, `Int` |
