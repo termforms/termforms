@@ -394,7 +394,15 @@ authoritative for design rationale.
   the printers imported). Installed by linking the folder into
   ~/.vscode/extensions (README). Its JSON and regexes are checked; trying
   it in VS Code is Jim's (VS Code is on the Mac, CodeLLDB not yet).
-- **Next:** Jim tries the extension; then 5.5, the other examples. The terminal matrix is done except
+  Tried by Jim in VS Code 1.143 with CodeLLDB (28 Oct 2026): highlighting,
+  the build task and Problems list, breakpoints in .bas files, the call
+  stack in BASIC, Locals and Static readable (controls as "cmdQuit
+  (CommandButton)", literals as text; summaries registered for both the
+  structs and their pointers, as CodeLLDB shows a pointer as its target).
+  F5 must use the project configuration for a multi-file program.
+  **Step 5.4 is complete.**
+- **Next:** 5.5, the other examples (address book, file viewer, small
+  language samples). The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
