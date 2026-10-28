@@ -499,6 +499,24 @@ With a menu bar, controls' Top counts from the row below it.
 | Alt+letter | Open the menu whose Caption has &letter (before a control's) |
 | In the menus | Left/Right: menu to menu; Down/Enter: open; Up/Down: item to item; Enter or a letter: choose; Esc: back |
 
+### Alt keys on a Mac
+
+Access keys (Alt+letter) and the menus' Alt+letter need the terminal to
+send the Option key as Alt (an Esc before the letter). Out of the box
+macOS terminals type Option characters instead (˜, ¥), and no access key
+works:
+
+- **iTerm2**: Settings > Profiles > Keys: Left Option key: **Esc+**.
+- **Terminal.app**: Settings > Profiles > Keyboard: **Use Option as Meta
+  key**.
+- **Ghostty**: Ghostty > Settings… opens its configuration file; add
+  `macos-option-as-alt = left` (or `true` for both Option keys) and
+  reload the configuration.
+
+On a non-Apple keyboard the key to hold is the one macOS treats as
+Option (often labelled "opt" or "alt/opt"). F10 or Ctrl+B reaches the
+menus with no setting at all.
+
 ## Building programs
 
 ```sh

@@ -46,7 +46,15 @@ authoritative for design rationale.
   for all three targets ran without errors or differences on the Mac, the
   Win11 ThinkPad and a DreamHost Linux server (over SSH, static musl
   binary). Carried into the Phase 4 terminal matrix, not yet confirmed:
-  1. Terminal.app (with "Use Option as Meta key") and Ghostty on the Mac.
+  1. ~~Terminal.app and Ghostty on the Mac~~: done (Jim, 28 Oct 2026,
+     with the demo): iTerm2, Ghostty and Terminal.app all work once the
+     Option key sends Esc (iTerm2: Profiles > Keys, Left Option key
+     Esc+; Terminal.app: Profiles > Keyboard, Use Option as Meta key;
+     Ghostty: Ghostty > Settings… opens its config in TextEdit, add
+     `macos-option-as-alt = left`, then reload). Out of the box all three
+     type Option characters (˜ ¥), so no access key arrives. On Jim's
+     non-Apple keyboard it is the key labelled "opt" that works; Ctrl
+     and Alt do not give access keys (Ctrl+letter is not meant to).
   2. Dropping the SSH connection mid-run restores the terminal (SIGHUP).
   3. Windows: double-click launch (console host or Windows Terminal?).
   4. Resize behaviour: re-centring, and the "Please resize" overlay.
@@ -324,8 +332,9 @@ authoritative for design rationale.
   InputBox closing does not fire the form's Activate (as VB6):
   `come_to_top` never makes a dialog the `active` form. (The dialogs run
   test had been dumping only "Please resize": it now has a .size.)
-- **Next:** Jim runs the Mac terminal checks with the demo
-  (`tfc examples/demo/demo.vbp`); then 5.2, the Mid$ statement.
+- **Next:** the rest of the Mac-side terminal checks (SSH with
+  examples/demo/demo-linux: SIGHUP restore; resize); then 5.2, the Mid$
+  statement.
 
 ## Settled design decisions (do not relitigate without Jim)
 
