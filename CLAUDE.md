@@ -301,8 +301,20 @@ authoritative for design rationale.
   checks, the mouse test and the VS debugging question.
   Order (proposed): 5.1 every-control demo, then Jim runs the Mac
   terminal checks with it; 5.2 Mid$ statement; 5.3 Declare (questions
-  first); 5.4 lldb/gdb; 5.5 the other examples; 5.6 release archives;
-  5.7 GUIDE.md; 5.8 the ThinkPad session.
+  first); 5.4 lldb/gdb, with VS Code (below); 5.5 the other examples;
+  5.6 release archives; 5.7 GUIDE.md; 5.8 the ThinkPad session.
+  **VS Code (Jim, 28 Oct 2026), staged.** With 5.4: a VS Code extension
+  (TextMate grammar for highlighting; a build task running tfc with a
+  problem matcher for its `file:line:col:` messages) and a CodeLLDB
+  `launch.json` template (breakpoints in .bas files by `#line`, the
+  program in its own terminal); test the printers in VS Code as well as
+  on the command line. Post-v1: a language server `tfls` (diagnostics as
+  you type, completion from names and the control catalog, hover,
+  definition, outline, event-handler stubs; needs Location ranges, an
+  in-memory source, a tolerant parse at the cursor, a small JSON
+  reader/writer under the standard-library-only rule), then, only if the
+  CodeLLDB route proves too raw, our own DAP adapter over lldb/gdb (BASIC
+  names, temporaries hidden, BASIC watch expressions).
 - **Next:** Phase 5 step 1, the every-control demo.
 
 ## Settled design decisions (do not relitigate without Jim)
