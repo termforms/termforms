@@ -1,0 +1,77 @@
+{
+  "name": "termforms-basic",
+  "displayName": "TermForms BASIC",
+  "description": "TermForms BASIC: highlighting, breakpoints in .bas files, and tfc's messages in the Problems list.",
+  "version": "0.0.1",
+  "publisher": "termforms",
+  "license": "BSD-2-Clause",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "termforms",
+        "aliases": ["TermForms BASIC", "termforms"],
+        "extensions": [".bas"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "termforms-project",
+        "aliases": ["TermForms project"],
+        "extensions": [".vbp"],
+        "configuration": "./project-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "termforms",
+        "scopeName": "source.termforms",
+        "path": "./syntaxes/termforms.tmLanguage.json"
+      },
+      {
+        "language": "termforms-project",
+        "scopeName": "source.termforms-project",
+        "path": "./syntaxes/termforms-project.tmLanguage.json"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "termforms"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "tfc",
+        "label": "TermForms compiler (tfc)",
+        "owner": "termforms",
+        "source": "tfc",
+        "fileLocation": ["autoDetect", "${fileDirname}"],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    ],
+    "configuration": {
+      "title": "TermForms",
+      "properties": {
+        "termforms.tfc": {
+          "type": "string",
+          "default": "tfc",
+          "description": "The tfc compiler to build with (a full path if it is not on PATH)."
+        },
+        "termforms.home": {
+          "type": "string",
+          "default": "",
+          "description": "The TermForms folder (holding debug/lldb/termforms.py), for the debugger's printers."
+        }
+      }
+    }
+  }
+}

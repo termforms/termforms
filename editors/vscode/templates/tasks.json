@@ -1,0 +1,29 @@
+{
+  // TermForms build tasks: copy into your program's .vscode folder.
+  // Ctrl+Shift+B (Cmd+Shift+B) builds; tfc's errors go to the Problems list.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "tfc: build this file",
+      "type": "process",
+      "command": "${config:termforms.tfc}",
+      "args": ["${fileBasename}"],
+      "options": { "cwd": "${fileDirname}" },
+      "problemMatcher": "$tfc",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      // For a program of several files: name its .vbp here.
+      "label": "tfc: build the project",
+      "type": "process",
+      "command": "${config:termforms.tfc}",
+      "args": ["${workspaceFolder}/myprogram.vbp"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": {
+        "base": "$tfc",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"]
+      },
+      "group": "build"
+    }
+  ]
+}

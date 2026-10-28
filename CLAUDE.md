@@ -386,7 +386,15 @@ authoritative for design rationale.
   a BASIC line is one breakpoint location. tests/tools/tf_debug.py
   (ctest label debug; lldb on macOS, gdb on CI's Linux gcc job, which
   installs it; skipped elsewhere and on Windows).
-- **Next:** 5.4b, the VS Code extension and the CodeLLDB setup. The terminal matrix is done except
+  Step 5.4b (28 Oct 2026): editors/vscode, a declarative VS Code
+  extension (no code): TextMate grammars for .bas and .vbp, language
+  configuration (comments, indentation, folding), breakpoints in .bas,
+  the `$tfc` problem matcher, settings termforms.tfc and termforms.home;
+  templates/tasks.json and launch.json (CodeLLDB, terminal integrated,
+  the printers imported). Installed by linking the folder into
+  ~/.vscode/extensions (README). Its JSON and regexes are checked; trying
+  it in VS Code is Jim's (VS Code is on the Mac, CodeLLDB not yet).
+- **Next:** Jim tries the extension; then 5.5, the other examples. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
@@ -506,6 +514,7 @@ tests/
               {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
   runtime/    C tests linked against tfrt
 debug/{lldb,gdb}/termforms.py              debugger printers (Strings, arrays)
+editors/vscode/                            VS Code extension and templates
 examples/hello.bas                         the vertical-slice program
 examples/demo/                             every control, menus, dialogs, mouse
 ```

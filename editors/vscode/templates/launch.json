@@ -1,0 +1,35 @@
+{
+  // Debugging a TermForms program with CodeLLDB (the vadimcn.vscode-lldb
+  // extension): copy into your program's .vscode folder, beside tasks.json.
+  // Set termforms.home (the TermForms folder) in your settings, so the
+  // printers load: Strings as text, arrays and Dictionaries by element.
+  // F9 sets a breakpoint on a .bas line; F5 builds and starts.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "TermForms: debug this file",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "cwd": "${fileDirname}",
+      "preLaunchTask": "tfc: build this file",
+      // The program draws its forms: it needs a terminal of its own.
+      "terminal": "integrated",
+      "initCommands": [
+        "command script import \"${config:termforms.home}/debug/lldb/termforms.py\""
+      ]
+    },
+    {
+      "name": "TermForms: debug the project",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/myprogram",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "tfc: build the project",
+      "terminal": "integrated",
+      "initCommands": [
+        "command script import \"${config:termforms.home}/debug/lldb/termforms.py\""
+      ]
+    }
+  ]
+}

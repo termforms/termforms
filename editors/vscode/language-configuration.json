@@ -1,0 +1,29 @@
+{
+  "comments": {
+    "lineComment": "'"
+  },
+  "brackets": [["(", ")"], ["{", "}"]],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "{", "close": "}" },
+    { "open": "\"", "close": "\"", "notIn": ["string", "comment"] }
+  ],
+  "surroundingPairs": [["(", ")"], ["\"", "\""]],
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*[%&#$]?",
+  "indentationRules": {
+    "increaseIndentPattern": {
+      "pattern": "^\\s*((Public\\s+|Private\\s+)?(Sub|Function)\\b(?!.*\\bEnd\\s+(Sub|Function)\\b)|If\\b.*\\bThen\\s*('.*)?$|ElseIf\\b|Else\\s*('.*)?$|For\\b|Do\\b|While\\b|Select\\s+Case\\b|Case\\b|Try\\s*('.*)?$|Catch\\b|Finally\\s*('.*)?$|With\\b|Begin\\b|(Public\\s+|Private\\s+)?(Type|Enum)\\b)",
+      "flags": "i"
+    },
+    "decreaseIndentPattern": {
+      "pattern": "^\\s*(End\\b|Next\\b|Loop\\b|Wend\\b|Else\\b|ElseIf\\b|Case\\b|Catch\\b|Finally\\b)",
+      "flags": "i"
+    }
+  },
+  "folding": {
+    "markers": {
+      "start": "^\\s*((Public\\s+|Private\\s+)?(Sub|Function|Type|Enum)\\b|Begin\\b)",
+      "end": "^\\s*End\\b(?!\\s+(If|Select|With|Try|While))"
+    }
+  }
+}

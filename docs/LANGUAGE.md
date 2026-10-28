@@ -556,6 +556,10 @@ gdb ./myprog                          (Linux)
 (gdb) break main.bas:42
 ```
 
+In Visual Studio Code, `editors/vscode` adds highlighting, breakpoints
+in `.bas` files and tfc's errors in the Problems list, and its templates
+set up building and debugging with CodeLLDB (see its README).
+
 Variables keep their C names: `x` is `v_x` in a Sub, `g_x` at module
 level; a Type's members are `f_<name>`. A Boolean shows as 0 or 1. The
 program needs a terminal of its own while it is debugged (lldb and gdb

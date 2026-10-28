@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TermForms project",
+  "scopeName": "source.termforms-project",
+  "patterns": [
+    { "name": "comment.line.apostrophe.termforms", "match": "^\\s*'.*$" },
+    {
+      "match": "^\\s*([A-Za-z]+)\\s*(=)\\s*(.*)$",
+      "captures": {
+        "1": { "name": "keyword.other.termforms" },
+        "2": { "name": "keyword.operator.termforms" },
+        "3": { "name": "string.unquoted.termforms" }
+      }
+    }
+  ]
+}

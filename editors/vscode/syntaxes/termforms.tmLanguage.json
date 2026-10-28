@@ -1,0 +1,124 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "TermForms BASIC",
+  "scopeName": "source.termforms",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#keywords"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "patterns": [
+        {
+          "name": "comment.line.apostrophe.termforms",
+          "match": "'.*$"
+        },
+        {
+          "name": "comment.line.rem.termforms",
+          "match": "(?i)(?:^|(?<=:))\\s*\\bREM\\b.*$"
+        }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.termforms",
+      "begin": "\"",
+      "end": "\"(?!\")",
+      "patterns": [
+        {
+          "name": "constant.character.escape.termforms",
+          "match": "\"\""
+        }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.termforms",
+          "match": "\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?[%&#]?(?![A-Za-z_])|\\B\\.\\d+([eE][+-]?\\d+)?#?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "(?i)\\b(End)\\s+(Sub|Function|If|Select|With|Try|While|Type|Enum)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.termforms"
+            },
+            "2": {
+              "name": "keyword.control.termforms"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(Sub|Function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "storage.type.function.termforms"
+            },
+            "2": {
+              "name": "entity.name.function.termforms"
+            }
+          }
+        },
+        {
+          "match": "(?i)\\b(Begin)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.termforms"
+            },
+            "2": {
+              "name": "entity.name.type.termforms"
+            },
+            "3": {
+              "name": "variable.other.termforms"
+            }
+          }
+        },
+        {
+          "name": "keyword.control.termforms",
+          "match": "(?i)\\b(If|Then|Else|ElseIf|End|Select|Case|For|Each|In|To|Step|Next|Do|Loop|While|Wend|Until|Exit|Return|Try|Catch|When|Finally|Throw|With|Call|GoTo)\\b"
+        },
+        {
+          "name": "storage.modifier.termforms",
+          "match": "(?i)\\b(Dim|ReDim|Preserve|Erase|Const|Enum|Type|Public|Private|ByVal|ByRef|Option|New|Of|Sub|Function|Begin|Declare|Lib|Alias|As)\\b"
+        },
+        {
+          "name": "storage.type.termforms",
+          "match": "(?i)\\b(Integer|Long|Double|String|Boolean|Byte|Ref|Dictionary|CLong|CULong|CSizeT)\\b"
+        },
+        {
+          "name": "keyword.operator.word.termforms",
+          "match": "(?i)\\b(And|Or|Not|Mod|Is|IsNot)\\b"
+        },
+        {
+          "name": "constant.language.termforms",
+          "match": "(?i)\\b(True|False|Nothing|Me)\\b"
+        },
+        {
+          "name": "support.constant.termforms",
+          "match": "\\bvb[A-Z][A-Za-z0-9]*\\b"
+        },
+        {
+          "name": "support.function.termforms",
+          "match": "\\b(CInt|CByte|CLng|CDbl|CStr|CType|Str\\$?|Val|Fix|Int|LBound|UBound|Len|LenB|Mid\\$?|Left\\$?|Right\\$?|InStr|InStrRev|LCase\\$?|UCase\\$?|LTrim\\$?|RTrim\\$?|Trim\\$?|Space\\$?|String\\$|Chr\\$?|Asc|Replace|StrReverse|Split|Join|EOF|LOF|FreeFile|Seek|Kill|MkDir|RmDir|ChDir|FileCopy|CurDir\\$?|FileLen|FileDateTime|Exists|Dir\\$?|Command\\$?|Environ\\$?|Shell|Now|Date\\$?|Time\\$?|Timer|MsgBox|InputBox\\$?|Load|Unload|DoEvents|Platform|Open|Close|Print|Line\\s+Input|Get|Put|Name)(?![A-Za-z0-9_])"
+        },
+        {
+          "name": "keyword.operator.termforms",
+          "match": "<>|<=|>=|[-+*/\\\\^&=<>]"
+        }
+      ]
+    }
+  }
+}
