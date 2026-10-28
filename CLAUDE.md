@@ -59,9 +59,9 @@ authoritative for design rationale.
      (SIGHUP)~~: done (Jim, 28 Oct 2026): the demo's static musl build
      on the Linux server over SSH works as expected, mouse and menus
      included.
-  3. ~~Windows: double-click launch~~: done (Jim, 28 Oct 2026, on an
-     older ThinkPad with Windows 11, so Jim's own stays clean for the
-     Phase 5 gate): double-clicking the demo opens Windows Terminal, and
+  3. ~~Windows: double-click launch~~: done (Jim, 28 Oct 2026, on his
+     wife's laptop, an older ThinkPad with Windows 11 and only Office
+     365): double-clicking the demo opens Windows Terminal, and
      everything worked there and in conhost started from the command line.
   4. ~~Resize behaviour: re-centring, and the "Please resize"
      overlay~~: done on the Mac, all three terminals, and on Windows
@@ -315,13 +315,16 @@ authoritative for design rationale.
   language samples; CI-built release archives per platform (tfc +
   runtime, tfc finding the runtime next to itself) as GitHub Release
   assets; the Mid$ statement. The Phase 4 gate comes first (demo, then
-  the terminal checks); the Phase 5 gate is the ThinkPad, set up from
-  the environment doc alone, in the same session as the Windows terminal
-  checks, the mouse test and the VS debugging question.
+  the terminal checks); the Phase 5 gate is a clean Windows machine set
+  up from the environment doc alone: Jim's wife's laptop (Windows 11,
+  only Office 365), as Jim's own ThinkPad has had other development work
+  on it. (The Windows terminal checks and the mouse test are already
+  done on that laptop.)
   Order (proposed): 5.1 every-control demo, then Jim runs the Mac
   terminal checks with it; 5.2 Mid$ statement; 5.3 Declare (questions
   first); 5.4 lldb/gdb, with VS Code (below); 5.5 the other examples;
-  5.6 release archives; 5.7 GUIDE.md; 5.8 the ThinkPad session.
+  5.6 release archives; 5.7 GUIDE.md; 5.8 the clean-machine gate on
+  the laptop.
   **VS Code (Jim, 28 Oct 2026), staged.** With 5.4: a VS Code extension
   (TextMate grammar for highlighting; a build task running tfc with a
   problem matcher for its `file:line:col:` messages) and a CodeLLDB
@@ -347,8 +350,8 @@ authoritative for design rationale.
   in form_key after the mouse; a one-time MsgBox when an Option-layer
   symbol arrives outside a TextBox or with the menus open.
 - **Next:** 5.2, the Mid$ statement. The terminal matrix is done except
-  item 5 (Visual Studio debugging zig builds), which waits for the
-  ThinkPad session (5.8), where VS is installed from the environment doc.
+  item 5 (Visual Studio debugging zig builds), which can be answered on
+  Jim's own ThinkPad (it has development tools) whenever suits.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -623,7 +626,12 @@ git ls-files '*.c' '*.h' '*.cpp' '*.hpp' ':!:third_party/**' ':!:tests/golden/**
   Terminals: iTerm2 (verified), Terminal.app, Ghostty.
 - **Linux server, x86-64**: deployment target over SSH; runs static musl
   binaries, nothing installed.
-- **Lenovo ThinkPad, Windows 11 x64**: Windows testing; no dev tools yet.
+- **Lenovo ThinkPad, Windows 11 x64**: Jim's; has had other development
+  work on it (so not a clean machine). For Windows testing and the Visual
+  Studio debugging question.
+- **Jim's wife's laptop, an older ThinkPad, Windows 11**: nothing but
+  Office 365; the clean machine for the Phase 5 gate. Windows terminal
+  checks done on it (28 Oct 2026).
 
 ## CI (`.github/workflows/ci.yml`)
 
