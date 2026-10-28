@@ -515,7 +515,8 @@ works:
 
 On a non-Apple keyboard the key to hold is the one macOS treats as
 Option (often labelled "opt" or "alt/opt"). F10 or Ctrl+B reaches the
-menus with no setting at all.
+menus with no setting at all. A program notices the Option key typing characters
+(on a button or a list, or in the menus) and says, once, how to set it.
 
 ## Building programs
 

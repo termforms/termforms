@@ -332,6 +332,9 @@ authoritative for design rationale.
   InputBox closing does not fire the form's Activate (as VB6):
   `come_to_top` never makes a dialog the `active` form. (The dialogs run
   test had been dumping only "Please resize": it now has a .size.)
+  Option-key hint (Jim, 28 Oct 2026): `option_hint` in tf_forms.c, first
+  in form_key after the mouse; a one-time MsgBox when an Option-layer
+  symbol arrives outside a TextBox or with the menus open.
 - **Next:** the rest of the Mac-side terminal checks (SSH with
   examples/demo/demo-linux: SIGHUP restore; resize); then 5.2, the Mid$
   statement.

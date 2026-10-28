@@ -2537,12 +2537,79 @@ static void form_mouse(tf_control *form, tf_key key)
     }
 }
 
+/*
+ * The handover's "detect obvious failure" of the Option key on a Mac: out
+ * of the box macOS terminals type Option+letter as a character (˜, ¥, ∫)
+ * instead of sending Alt, so no access key can ever arrive. One of those
+ * characters where typing means nothing (the focus not in a TextBox, or
+ * the menus open) shows, once a run, how to set the terminal. Only the
+ * plain symbols of the US Option layer count: å, ç, ø, ß and œ are
+ * letters on European keyboards.
+ */
+static int is_option_symbol(uint32_t cp)
+{
+    static const uint32_t kSymbols[] = {0x02DC /* ˜ n */, 0x00A5 /* ¥ y */, 0x222B /* ∫ b */,
+                                        0x2202 /* ∂ d */, 0x0192 /* ƒ f */, 0x00A9 /* © g */,
+                                        0x02D9 /* ˙ h */, 0x2206 /* ∆ j */, 0x02DA /* ˚ k */,
+                                        0x00AC /* ¬ l */, 0x00B5 /* µ m */, 0x03C0 /* π p */,
+                                        0x00AE /* ® r */, 0x2020 /* † t */, 0x221A /* √ v */,
+                                        0x2211 /* ∑ w */, 0x2248 /* ≈ x */, 0x03A9 /* Ω z */,
+                                        0x00A8 /* ¨ u */, 0x02C6 /* ˆ i */, 0x00B4 /* ´ e */};
+    for (size_t i = 0; i < sizeof kSymbols / sizeof kSymbols[0]; ++i)
+    {
+        if (kSymbols[i] == cp)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int option_hint_shown = 0;
+static tf_string *text_of(const char *s);
+
+/* Returns 1 if the key was the sign of an Option key typing characters
+   (and so used up). */
+static int option_hint(tf_control *form, tf_key key)
+{
+    if (key.kind != TF_KEY_CHAR || !is_option_symbol(key.ch))
+    {
+        return 0;
+    }
+    const tf_control *focused =
+        form->focus >= 0 && form->focus < form->child_count ? form->children[form->focus] : NULL;
+    if (!form->menu_on && focused != NULL && focused->type == TF_CTL_TEXTBOX)
+    {
+        return 0; /* typing © or √ into a box is fine */
+    }
+    if (!option_hint_shown)
+    {
+        option_hint_shown = 1;
+        tf_string *prompt =
+            text_of("The Option key is typing characters, so Alt+letter keys cannot reach "
+                    "this program. Set the terminal to send Option as Alt:\n"
+                    "iTerm2: Settings > Profiles > Keys: Left Option key: Esc+\n"
+                    "Terminal.app: Settings > Profiles > Keyboard: Use Option as Meta key\n"
+                    "Ghostty: add macos-option-as-alt = left to its settings\n"
+                    "Meanwhile F10 or Ctrl+B opens the menus.");
+        tf_string *title = text_of("Alt keys");
+        tf_msgbox(prompt, 64 /* vbInformation */, title);
+        tf_str_release(prompt);
+        tf_str_release(title);
+    }
+    return 1;
+}
+
 /* One key for the form. Returns 1 if the form is to close. */
 static int form_key(tf_control *form, tf_key key)
 {
     if (key.kind == TF_KEY_MOUSE)
     {
         form_mouse(form, key);
+        return 0;
+    }
+    if (option_hint(form, key))
+    {
         return 0;
     }
     if (menu_first(form, key))

@@ -1010,6 +1010,22 @@ Module=lib/stock.bas
   script in tools/ (no download); the Unicode notice ships in
   runtime/THIRD_PARTY_NOTICES.
 
+### The Option-key hint (Settled, Jim, 28 Oct 2026; details Proposed)
+
+- Out of the box macOS terminals type Option+letter as a character (˜,
+  ¥, ∫) instead of sending Alt, so no access key can arrive. **When one
+  of those characters comes where typing means nothing, a MsgBox shows,
+  once a run, how to set the terminal** (iTerm2, Terminal.app, Ghostty)
+  and that F10 or Ctrl+B opens the menus meanwhile. The key itself does
+  nothing.
+- Details (Proposed): "where typing means nothing" is the focus on
+  anything but a TextBox (a button, a CheckBox, a list), or the menus
+  open; in a TextBox the character is typed, as it may be meant. The
+  characters are the plain symbols of the US Option layer (˜ ¥ ∫ ∂ ƒ ©
+  ˙ ∆ ˚ ¬ µ π ® † √ ∑ ≈ Ω ¨ ˆ ´); å, ç, ø, ß and œ are left out, being
+  letters on European keyboards. It happens on every platform, as the
+  terminal may be a Mac's over SSH.
+
 ### Controls (Settled, Jim, 28 Oct 2026)
 
 | Control | Shows as | Properties beyond Left, Top, Width, Height, Enabled, Visible | Events |
