@@ -97,3 +97,9 @@ foreach(debugger lldb gdb)
                 --work ${CMAKE_CURRENT_BINARY_DIR}/debug)
     set_tests_properties(debug.${debugger} PROPERTIES LABELS debug SKIP_RETURN_CODE 77)
 endforeach()
+
+# Documentation test: every complete program in docs/GUIDE.md builds.
+add_test(NAME docs.guide
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/tf_guide.py
+            --tfc $<TARGET_FILE:tfc> --work ${CMAKE_CURRENT_BINARY_DIR}/guide)
+set_tests_properties(docs.guide PROPERTIES LABELS docs)

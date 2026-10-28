@@ -50,7 +50,7 @@ One static file, nothing to install on the server.
 
 ## Learning the language
 
-- `docs/GUIDE.md`: the programmer's guide (if present in this version).
+- `docs/GUIDE.md`: the programmer's guide: start here.
 - `docs/LANGUAGE.md`: what works today, briefly.
 - `docs/REFERENCE.md`: every rule of the language, as decided.
 

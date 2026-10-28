@@ -7,6 +7,7 @@ Version 0.0.1 is the **vertical slice**: enough language to build one form
 with a TextBox and a CommandButton and react to a click. Phase 3 adds the
 language core step by step; so far: Sub and Function with parameters, the
 loops, Long and Double, Try/Catch, Const and Enum, arrays, and Types.
+For learning the language, read the guide, `docs/GUIDE.md`;
 `docs/REFERENCE.md` has every rule
 as decided, including the ones not built yet.
 

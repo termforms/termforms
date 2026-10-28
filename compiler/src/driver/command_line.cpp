@@ -152,20 +152,23 @@ CommandLine parseCommandLine(const std::vector<std::string> &args)
 
 std::string usageText()
 {
-    return "Usage: tfc [options] <file.bas>\n"
+    return "Usage: tfc [options] <file.bas> [<more.bas> ...]\n"
+           "       tfc [options] <project.vbp>\n"
            "\n"
            "Compiles a TermForms BASIC program to a native executable, via C.\n"
            "\n"
            "Options:\n"
-           "  -o <file>         Name of the executable (or, with --emit-c, the C file;\n"
-           "                    '-' writes the C to standard output)\n"
+           "  -o <file>         Name of the executable (default: the first file's, or the\n"
+           "                    project's Name=); with --emit-c, the C file ('-' writes\n"
+           "                    the C to standard output)\n"
            "  --emit-c          Write the generated C and stop\n"
            "  --keep-c          Keep the generated C next to the executable\n"
            "  --release         Optimise and leave out debug information\n"
            "  --cc <command>    C compiler command, e.g. \"zig cc -target x86_64-linux-musl\"\n"
            "                    (default: $TFC_CC, else cc; on Windows zig cc or cl)\n"
            "  --runtime <dir>   TermForms runtime directory (default: $TERMFORMS_RUNTIME,\n"
-           "                    else the runtime this tfc was built with)\n"
+           "                    else runtime/ beside tfc's bin folder, else the runtime\n"
+           "                    this tfc was built with)\n"
            "  -v, --verbose     Show the C compiler command\n"
            "  -h, --help        Show this help and exit\n"
            "  --version         Show the compiler version and exit\n";

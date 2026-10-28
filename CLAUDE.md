@@ -30,7 +30,7 @@ file edited after that step.
 - Design handover (decisions, rationale): https://claude.ai/artifact/NEp5GCrSWX11gW6HrYtA1w
 - Project plan (phases, gates, risks): https://claude.ai/artifact/AmhbZ25CTKbrz1KUx6Jg79
 - Development environment (per platform): https://claude.ai/artifact/7YUAsw8DCV3PFHxGGDq151
-- In repo: `docs/REFERENCE.md` (the language as decided: every syntax and
+- In repo: `docs/GUIDE.md` (the programmer's guide), `docs/REFERENCE.md` (the language as decided: every syntax and
   semantics rule, marked Settled or Proposed; update it with each
   decision), `docs/LANGUAGE.md` (what works today), `docs/CODING_STANDARDS.md`,
   `docs/LICENSING.md`, `toolchain.txt`.
@@ -435,10 +435,16 @@ authoritative for design rationale.
   (artifacts) and publishes a pre-release on a v* tag matching
   project(VERSION). docs/RELEASING.md says how to cut one. The Linux tfc
   is cross-built with zig (on a Mac CMake also needs zig's ar/ranlib).
-  No release published yet: v0.9.0 waits for the guide (5.7) and Jim's
-  go-ahead.
-- **Next:** 5.7, docs/GUIDE.md; then the version bump and the v0.9.0 tag
-  (with Jim's go-ahead), then 5.8, the gate on the laptop. The terminal matrix is done except
+  No release published yet: v0.9.0 waits for Jim's go-ahead.
+  Step 5.7 done (28 Oct 2026): docs/GUIDE.md, the programmer's guide
+  (getting started, coming from VB, the language, forms, the library,
+  Declare, building/debugging/deploying). The `docs.guide` test
+  (tests/tools/tf_guide.py) builds every ```vb block in it that has a
+  form block or Sub Main: keep the guide's complete programs complete,
+  and its fragments without either. tfc's usage text now shows several
+  .bas files, a .vbp and the runtime beside bin.
+- **Next:** the version bump to 0.9.0 and the v0.9.0 tag (with Jim's
+  go-ahead: the tag publishes a pre-release), then 5.8, the gate on the laptop. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

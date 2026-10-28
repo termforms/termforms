@@ -12,11 +12,12 @@ VB-DOS or QuickBASIC, while dropping what made those hard to maintain
 
 ## Status
 
-**Early development: the vertical slice works.** A program with one form, a
-TextBox, a CommandButton and a Click handler compiles to C and runs in a
-terminal on Linux, macOS and Windows, including as a static Linux binary
-cross-compiled with `zig cc`. See [`docs/LANGUAGE.md`](docs/LANGUAGE.md) for
-exactly what the language supports today.
+**Nearing v1.** The language core, the forms runtime (every v1 control,
+menus, dialogs, several forms, the mouse), files, calls into C and source-level
+debugging work on Linux, macOS and Windows, including static Linux binaries
+cross-compiled with `zig cc`. Start with the programmer's guide,
+[`docs/GUIDE.md`](docs/GUIDE.md); [`docs/LANGUAGE.md`](docs/LANGUAGE.md) lists
+what works today and [`docs/REFERENCE.md`](docs/REFERENCE.md) has every rule.
 
 ## Planned shape (v1)
 
