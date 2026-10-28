@@ -1,0 +1,7 @@
+select.bas:14:17: error: Select Case needs a number, String, Boolean or Enum, not a Point
+select.bas:18:14: error: operator '=' cannot combine an Integer and a String
+select.bas:23:14: warning: this Case can never be chosen: an earlier Case already covers it
+select.bas:24:14: warning: this Case can never be chosen: an earlier Case already covers it
+select.bas:26:14: warning: this Case can never be chosen: an earlier Case already covers it
+select.bas:27:14: warning: this Case range is empty: its first value is greater than its last, so it never matches
+select.bas:32:14: warning: this Case can never be chosen: an earlier Case already covers it

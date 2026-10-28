@@ -389,6 +389,7 @@ enum class StmtKind
     ReDim,    // ReDim [Preserve] a(bounds), ...: args are a(bounds) as Call shapes
     Erase,    // Erase a, ...: args are the array names
     With,     // With target ... End With: see Stmt::body
+    Select,   // Select Case value ... End Select: see Stmt::cases
     Method,   // x.Name args: a Dictionary's Add, Remove or Clear (see Stmt::target)
     Library,  // Open, Close, Print #, ...: args are calls of built-ins, made in order
     End       // the End statement: terminate the program
@@ -402,6 +403,23 @@ using Block = std::vector<StmtPtr>;
 struct IfArm
 {
     ExprPtr condition;
+    Block body;
+};
+
+// One test of a Case: a value, "a To b", or "Is <op> value".
+struct CaseTest
+{
+    Location location;
+    std::string op; // "" a value, "To" a range (value To upper), else Is's operator
+    ExprPtr value;
+    ExprPtr upper;
+};
+
+// One "Case test, test, ..." of a Select Case and what it runs.
+struct CaseClause
+{
+    Location location;
+    std::vector<CaseTest> tests;
     Block body;
 };
 
@@ -461,6 +479,11 @@ struct Stmt
     // hidden locals), then the body; target becomes the path each .Member
     // inside starts from.
     Block body;
+
+    // Select: value is the selector, cases the Cases in order, and Case
+    // Else is elseBody (hasElse). The semantic pass lowers it into body:
+    // the selector into a hidden local, then Ifs (the Select runs body).
+    std::vector<CaseClause> cases;
 
     // Try: its Catch clauses in order, and Finally.
     std::vector<CatchClause> catches;

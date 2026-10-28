@@ -29,7 +29,7 @@ static void p_cmdOK_Click(void)
 #line 31 "controls.bas"
     TF_LINE(31); tf_set_int(c_chkBold, TF_PROP_ENABLED, (!tf_get_int(c_chkBold, TF_PROP_ENABLED)));
 #line 32 "controls.bas"
-    TF_LINE(32); if ((tf_get_int(c_chkBold, TF_PROP_VALUE) == 1) & tf_get_int(c_optSmall, TF_PROP_VALUE))
+    TF_LINE(32); if ((int)(tf_get_int(c_chkBold, TF_PROP_VALUE) == 1) & (int)tf_get_int(c_optSmall, TF_PROP_VALUE))
     {
 #line 32 "controls.bas"
         TF_LINE(32); tf_set_int(c_lblName, TF_PROP_VISIBLE, 0);

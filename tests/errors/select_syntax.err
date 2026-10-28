@@ -1,0 +1,4 @@
+select_syntax.bas:6:14: error: a comparison in a Case is written 'Is > value'
+select_syntax.bas:10:9: error: 'Case Else' must be the last Case
+select_syntax.bas:13:9: error: expected 'Case' after 'Select Case' but found 'n'
+select_syntax.bas:18:1: error: expected 'End Select' but found 'End Sub'

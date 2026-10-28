@@ -575,11 +575,11 @@ private:
                t.isKeyword("ELSE") || t.isKeyword("ELSEIF") || t.isKeyword("SUB") ||
                t.isKeyword("FUNCTION") || t.isKeyword("CATCH") || t.isKeyword("FINALLY") ||
                isEndOf("IF") || isEndOf("SUB") || isEndOf("FUNCTION") || isEndOf("WHILE") ||
-               isEndOf("TRY") || isEndOf("WITH");
+               isEndOf("TRY") || isEndOf("WITH") || t.isKeyword("CASE") || isEndOf("SELECT");
     }
 
     // The body of a construct opened with `opener` ("FOR", "DO", "WHILE",
-    // "IF", "TRY"; empty for a procedure body).
+    // "IF", "TRY", "WITH", "SELECT"; empty for a procedure body).
     Block parseBlock(const char *opener = "")
     {
         open_.push_back(opener);
@@ -638,6 +638,10 @@ private:
         if (isEndOf("WITH"))
         {
             return "WITH";
+        }
+        if (t.isKeyword("CASE") || isEndOf("SELECT"))
+        {
+            return "SELECT";
         }
         return nullptr;
     }
@@ -705,6 +709,10 @@ private:
         if (t.isKeyword("WITH"))
         {
             return parseWith();
+        }
+        if (t.isKeyword("SELECT"))
+        {
+            return parseSelect();
         }
         if (t.isKeyword("CONST"))
         {
@@ -866,7 +874,8 @@ private:
             return parseAssignOrMethod();
         }
         if (t.isKeyword("DIM") || t.isKeyword("IF") || t.isKeyword("FOR") || t.isKeyword("DO") ||
-            t.isKeyword("WHILE") || t.isKeyword("TRY") || t.isKeyword("WITH"))
+            t.isKeyword("WHILE") || t.isKeyword("TRY") || t.isKeyword("WITH") ||
+            t.isKeyword("SELECT"))
         {
             error(t.location, "'" + t.spelling + "' cannot follow 'Then' or 'Else' on one line");
             return nullptr;
@@ -1480,6 +1489,100 @@ private:
             expectEndOfStatement();
         }
         return s;
+    }
+
+    // Select Case value EOS { Case tests EOS block } [Case Else EOS block]
+    // End Select, where a test is a value, "a To b" or "Is <op> value".
+    StmtPtr parseSelect()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Select;
+        s->location = next().location; // SELECT
+        expectKeyword("CASE", "Case");
+        s->value = parseExpression();
+        expectEndOfStatement();
+        skipStatementEnds();
+        if (!peek().isKeyword("CASE") && !isEndOf("SELECT") && !at(TokenKind::EndOfFile))
+        {
+            error(peek().location,
+                  "expected 'Case' after 'Select Case' but found " + describe(peek()));
+            skipStatement();
+            skipStatementEnds();
+        }
+        while (peek().isKeyword("CASE"))
+        {
+            const Location where = next().location;
+            if (s->hasElse)
+            {
+                error(where, "'Case Else' must be the last Case");
+            }
+            if (acceptKeyword("ELSE"))
+            {
+                s->hasElse = true;
+                expectEndOfStatement();
+                s->elseBody = parseBlock("SELECT");
+                continue;
+            }
+            CaseClause clause;
+            clause.location = where;
+            do
+            {
+                clause.tests.push_back(parseCaseTest());
+            } while (acceptSymbol(","));
+            expectEndOfStatement();
+            clause.body = parseBlock("SELECT");
+            s->cases.push_back(std::move(clause));
+        }
+        s->endLocation = peek().location;
+        if (expectEndOf("SELECT", "End Select"))
+        {
+            expectEndOfStatement();
+        }
+        return s;
+    }
+
+    CaseTest parseCaseTest()
+    {
+        CaseTest test;
+        test.location = peek().location;
+        if (acceptKeyword("IS"))
+        {
+            for (const char *op : {"=", "<>", "<", ">", "<=", ">="})
+            {
+                if (peek().isSymbol(op))
+                {
+                    next();
+                    test.op = op;
+                    break;
+                }
+            }
+            if (test.op.empty())
+            {
+                error(peek().location, "expected a comparison (=, <>, <, >, <=, >=) after 'Is'");
+                test.op = "=";
+            }
+            test.value = parseExpression();
+            return test;
+        }
+        for (const char *op : {"=", "<>", "<", ">", "<=", ">="})
+        {
+            if (peek().isSymbol(op))
+            {
+                error(peek().location,
+                      std::string("a comparison in a Case is written 'Is ") + op + " value'");
+                next();
+                test.op = op;
+                test.value = parseExpression();
+                return test;
+            }
+        }
+        test.value = parseExpression();
+        if (acceptKeyword("TO"))
+        {
+            test.op = "To";
+            test.upper = parseExpression();
+        }
+        return test;
     }
 
     // Const NAME [As type] = value, ...; the type may also come from a suffix,

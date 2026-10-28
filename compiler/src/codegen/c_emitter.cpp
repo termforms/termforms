@@ -838,6 +838,9 @@ private:
             case StmtKind::If:
                 emitIf(out, s, 0, depth);
                 return;
+            case StmtKind::Select:
+                emitBlock(out, s.body, depth); // lowered by the semantic pass
+                return;
             case StmtKind::For:
                 if (s.isForEach)
                 {
@@ -2384,7 +2387,13 @@ private:
         {
             return {opPrefix(e.type) + it->second + "(" + l + ", " + r + ")", false};
         }
-        // And/Or evaluate both sides (VB semantics); Booleans are 0 or 1.
+        // And/Or evaluate both sides (VB semantics); Booleans are 0 or 1. On
+        // Booleans the (int) casts tell clang the bitwise operator is meant
+        // (it warns of | between comparisons, suspecting a ||).
+        if (e.type == Type::Boolean && (op == "And" || op == "Or"))
+        {
+            return {"((int)" + l + " " + cOperator(op) + " (int)" + r + ")", false};
+        }
         return {"(" + l + " " + cOperator(op) + " " + r + ")", false};
     }
 

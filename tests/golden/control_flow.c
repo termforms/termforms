@@ -50,7 +50,7 @@ static void p_cmdGo_Click(void)
 #line 28 "control_flow.bas"
     TF_LINE(28); v_n = tf_i32_sub(tf_i32_div(tf_i32_mul(tf_i32_add(g_total, 2), 3), 2), tf_i32_neg(1));
 #line 29 "control_flow.bas"
-    TF_LINE(29); v_done = ((v_n >= 10) | (!(g_total < 5)));
+    TF_LINE(29); v_done = ((int)(v_n >= 10) | (int)(!(g_total < 5)));
 #line 30 "control_flow.bas"
     { TF_LINE(30); tf_string *t1 = tf_str_concat(tf_get_str(c_txtOut, TF_PROP_TEXT), tf_str_literal(&s_1, "!", 1)); const int cond_30 = (tf_str_compare(t1, tf_str_literal(&s_2, "stop!", 5)) == 0); tf_str_release(t1); if (cond_30)
     {
@@ -60,7 +60,7 @@ static void p_cmdGo_Click(void)
     else
     {
 #line 32 "control_flow.bas"
-        TF_LINE(32); if (v_done & (v_n != 0))
+        TF_LINE(32); if ((int)v_done & (int)(v_n != 0))
         {
 #line 33 "control_flow.bas"
             TF_LINE(33); { tf_string *t1 = tf_str_concat(g_label, tf_str_literal(&s_3, " ", 1)); tf_string *t2 = tf_str_from_i32(v_n); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_concat(t3, tf_str_literal(&s_3, " ", 1)); tf_string *t5 = tf_str_concat(t4, (v_done ? tf_str_literal(&s_4, "True", 4) : tf_str_literal(&s_5, "False", 5))); tf_set_str(c_txtOut, TF_PROP_TEXT, t5); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }

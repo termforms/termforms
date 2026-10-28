@@ -252,8 +252,15 @@ authoritative for design rationale.
   array initialisers in braces, `For i As Integer` and `For Each w As
   String`; DoEvents as VB (redraw, handle what is waiting, re-entry
   allowed, statement only; closing a form during it lets the code go on).
-- **Next:** build them, in that order (Select Case, initialisers, inline
-  For, DoEvents), then Phase 5's scope with Jim.
+  Select Case done (28 Oct 2026): `StmtKind::Select` with `cases`
+  (CaseClause/CaseTest); sema `checkSelect` checks each test as the
+  comparison `_select = v` (so = rules apply) and lowers into `body`: the
+  selector into a hidden local, constant Cases as one If/ElseIf chain,
+  others through a hidden `_matched` flag; codegen just emits body.
+  Boolean And/Or now cast their operands to int (clang's
+  -Wbitwise-instead-of-logical, under the strict flags).
+- **Next:** Dim initialisers, inline For, DoEvents, then Phase 5's scope
+  with Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -552,8 +559,8 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- Select Case, Dim initialisers, inline For declarations and DoEvents:
-  settled (28 Oct 2026), not yet built.
+- Dim initialisers, inline For declarations and DoEvents: settled (28
+  Oct 2026), not yet built.
 - No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
   the overlay); no MouseDown/Up/Move events; the clipboard is the
   program's own.

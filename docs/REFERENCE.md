@@ -207,6 +207,16 @@ End Select
 - **Values match the selector as `=` does** (Option Strict): numbers
   widen, Strings compare exactly (case matters), an Enum selector takes
   its own members, and String and number do not mix.
+- Details (Proposed): the selector may be a number, String, Boolean or
+  Enum (not a Type, Ref or array). A comparison needs its `Is`
+  (`Case > 5` is an error that says so, as VB6 would have written it
+  `Case Is > 5`). `Case Else` must come last. Only blank lines and
+  comments may come between `Select Case` and the first Case. The
+  warning covers constant values, ranges and (on whole numbers) `Is`
+  comparisons; a String only when the same text is repeated. A range
+  whose first value is greater than its last also gets a warning: it
+  never matches. There is no `Exit Select`; `Exit For` and the rest work
+  from inside a Case as usual.
 
 ### Declarations with values, and in For (Settled, Jim, 28 Oct 2026)
 

@@ -55,7 +55,7 @@ static void p_Form_Load(void)
         TF_LINE(46); g_current = tf_i32_add(g_current, 5);
     }
 #line 47 "constants.bas"
-    TF_LINE(47); if (1 & (g_current != 1))
+    TF_LINE(47); if ((int)1 & (int)(g_current != 1))
     {
 #line 47 "constants.bas"
         TF_LINE(47); { tf_string *t1 = tf_str_concat(v_s, tf_str_literal(&s_1, "Orders 100", 10)); tf_string *t2 = tf_str_from_f64(0.075); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_f64(0.5); tf_string *t5 = tf_str_concat(t3, t4); tf_string *t6 = tf_str_from_i32(tf_i32_from_str(tf_str_literal(&s_2, "2", 1))); tf_str_assign(&v_s, tf_str_concat(t5, t6)); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); tf_str_release(t6); }

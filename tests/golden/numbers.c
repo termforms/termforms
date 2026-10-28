@@ -54,7 +54,7 @@ static void p_Form_Load(void)
 #line 27 "numbers.bas"
     TF_LINE(27); v_d = tf_f64_add(tf_f64_add(tf_f64_add(((double)v_i), tf_val(v_s)), tf_f64_int((-2.5))), tf_f64_fix(g_ratio));
 #line 28 "numbers.bas"
-    TF_LINE(28); if ((v_n > v_d) & (v_i <= g_ratio))
+    TF_LINE(28); if ((int)(v_n > v_d) & (int)(v_i <= g_ratio))
     {
 #line 28 "numbers.bas"
         TF_LINE(28); { tf_string *t1 = tf_str_str_i64(v_n); tf_string *t2 = tf_str_str_f64(v_d); tf_string *t3 = tf_str_concat(t1, t2); tf_string *t4 = tf_str_from_i32(v_i); tf_string *t5 = tf_str_concat(t3, t4); tf_str_assign(&v_s, tf_str_concat(t5, tf_str_literal(&s_1, "True", 4))); tf_str_release(t1); tf_str_release(t2); tf_str_release(t3); tf_str_release(t4); tf_str_release(t5); }

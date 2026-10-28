@@ -1067,6 +1067,9 @@ private:
             case StmtKind::With:
                 checkWith(s);
                 break;
+            case StmtKind::Select:
+                checkSelect(s);
+                break;
             case StmtKind::Method:
                 checkMethod(s);
                 break;
@@ -3118,6 +3121,286 @@ private:
         s.body = std::move(body);
     }
 
+    // -- Select Case -------------------------------------------------------
+
+    // Checked as the comparisons it makes ("sel = v", "sel >= a And sel <=
+    // b", "sel <op> v"), so a Case matches as = does, then lowered into
+    // body: the selector into a hidden local, then Ifs. Cases whose tests
+    // are all constants become one If ... ElseIf chain (testing a constant
+    // can neither fail nor change anything, so trying all a Case's tests
+    // is the same as stopping at the first match). A Case with any other
+    // test sets a hidden flag through an ElseIf chain, which stops at the
+    // first test that matches, then tests the flag.
+    void checkSelect(Stmt &s)
+    {
+        const Type t = checkExpr(*s.value);
+        bool usable = t != Type::Error;
+        if (usable &&
+            (s.value->rank > 0 ||
+             !(t == Type::Byte || t == Type::Integer || t == Type::Long || t == Type::Double ||
+               t == Type::String || t == Type::Boolean || t == Type::Enum)))
+        {
+            diagnostics_.error(s.value->location,
+                               "Select Case needs a number, String, Boolean or Enum, not " +
+                                   article(infoOf(*s.value)));
+            usable = false;
+        }
+        scopes_.emplace_back(); // the hidden locals
+        Variable *selector = usable ? &hiddenLocal(*s.value, "_select") : nullptr;
+
+        std::vector<std::vector<ExprPtr>> conditions(s.cases.size());
+        std::vector<bool> plain(s.cases.size(), true);
+        std::vector<Span> covered;
+        for (std::size_t k = 0; k < s.cases.size(); ++k)
+        {
+            for (CaseTest &test : s.cases[k].tests)
+            {
+                if (!usable)
+                {
+                    checkExpr(*test.value);
+                    if (test.upper != nullptr)
+                    {
+                        checkExpr(*test.upper);
+                    }
+                    continue;
+                }
+                const Expr *low = test.value.get();
+                const Expr *high = test.upper.get();
+                ExprPtr condition = caseCondition(test, *selector);
+                if (checkExpr(*condition) == Type::Error)
+                {
+                    plain[k] = false;
+                    continue;
+                }
+                const auto a = fold(*low);
+                const auto b = high != nullptr ? fold(*high) : std::nullopt;
+                plain[k] = plain[k] && a && (high == nullptr || b);
+                if (a && (high == nullptr || b))
+                {
+                    noteCoverage(test, t, *a, b ? &*b : nullptr, covered);
+                }
+                conditions[k].push_back(std::move(condition));
+            }
+            checkBlock(s.cases[k].body);
+        }
+        checkBlock(s.elseBody);
+        if (!usable)
+        {
+            scopes_.pop_back();
+            return;
+        }
+        Variable *matched = nullptr;
+        for (std::size_t k = 0; k < s.cases.size(); ++k)
+        {
+            if (!plain[k] && matched == nullptr)
+            {
+                Expr like;
+                like.kind = ExprKind::BooleanLiteral;
+                like.type = Type::Boolean;
+                like.location = s.location;
+                matched = &hiddenLocal(like, "_matched");
+            }
+        }
+        scopes_.pop_back();
+
+        s.body.push_back(assign(nameOf(*selector, s.location), std::move(s.value), s.location));
+        for (StmtPtr &stmt : lowerCases(s, 0, conditions, plain, matched))
+        {
+            s.body.push_back(std::move(stmt));
+        }
+    }
+
+    // The Boolean a Case test makes of the selector (unchecked).
+    static ExprPtr caseCondition(CaseTest &test, Variable &selector)
+    {
+        if (test.op == "To")
+        {
+            return binary(
+                "And", Type::Boolean,
+                binary(">=", Type::Boolean, nameOf(selector, test.location), std::move(test.value)),
+                binary("<=", Type::Boolean, nameOf(selector, test.location),
+                       std::move(test.upper)));
+        }
+        return binary(test.op.empty() ? "=" : test.op.c_str(), Type::Boolean,
+                      nameOf(selector, test.location), std::move(test.value));
+    }
+
+    // Cases k onwards (then Case Else) as statements.
+    Block lowerCases(Stmt &s, std::size_t k, std::vector<std::vector<ExprPtr>> &conditions,
+                     const std::vector<bool> &plain, Variable *matched)
+    {
+        auto chain = std::make_unique<Stmt>();
+        chain->kind = StmtKind::If;
+        chain->location = k < s.cases.size() ? s.cases[k].location : s.location;
+        for (; k < s.cases.size() && plain[k]; ++k)
+        {
+            if (conditions[k].empty())
+            {
+                continue; // its tests had errors
+            }
+            ExprPtr any = std::move(conditions[k][0]);
+            for (std::size_t i = 1; i < conditions[k].size(); ++i)
+            {
+                any = binary("Or", Type::Boolean, std::move(any), std::move(conditions[k][i]));
+            }
+            chain->arms.push_back(IfArm{std::move(any), std::move(s.cases[k].body)});
+        }
+
+        Block rest;
+        if (k < s.cases.size())
+        {
+            // matched = (the first test that matches, if any); If matched ...
+            const Location where = s.cases[k].location;
+            auto tests = std::make_unique<Stmt>();
+            tests->kind = StmtKind::If;
+            tests->location = where;
+            for (ExprPtr &condition : conditions[k])
+            {
+                Block set;
+                set.push_back(assign(nameOf(*matched, where), boolean(true, where), where));
+                tests->arms.push_back(IfArm{std::move(condition), std::move(set)});
+            }
+            tests->hasElse = true;
+            tests->elseBody.push_back(
+                assign(nameOf(*matched, where), boolean(false, where), where));
+            auto branch = std::make_unique<Stmt>();
+            branch->kind = StmtKind::If;
+            branch->location = where;
+            branch->arms.push_back(IfArm{nameOf(*matched, where), std::move(s.cases[k].body)});
+            branch->elseBody = lowerCases(s, k + 1, conditions, plain, matched);
+            branch->hasElse = !branch->elseBody.empty();
+            if (!tests->arms.empty())
+            {
+                rest.push_back(std::move(tests));
+                rest.push_back(std::move(branch));
+            }
+            else
+            {
+                rest = std::move(branch->elseBody); // its tests had errors
+            }
+        }
+        else
+        {
+            rest = std::move(s.elseBody);
+        }
+        if (chain->arms.empty())
+        {
+            return rest;
+        }
+        chain->elseBody = std::move(rest);
+        chain->hasElse = !chain->elseBody.empty();
+        Block out;
+        out.push_back(std::move(chain));
+        return out;
+    }
+
+    static ExprPtr boolean(bool value, Location where)
+    {
+        auto e = std::make_unique<Expr>();
+        e->kind = ExprKind::BooleanLiteral;
+        e->integer = value ? 1 : 0;
+        e->type = Type::Boolean;
+        e->location = where;
+        return e;
+    }
+
+    // What constant Cases have covered so far, to warn of one that can
+    // never be chosen: closed spans of numbers (an Is that compares is a
+    // span reaching to either end), or single Strings.
+    struct Span
+    {
+        double low = 0;
+        double high = 0;
+        bool isText = false;
+        std::string text;
+    };
+
+    void noteCoverage(const CaseTest &test, Type selector, const Folded &a, const Folded *b,
+                      std::vector<Span> &covered)
+    {
+        const bool whole = selector != Type::Double && selector != Type::String;
+        const double inf = 1e300;
+        Span span;
+        if (selector == Type::String)
+        {
+            if (!(test.op.empty() || test.op == "="))
+            {
+                return; // String ranges and comparisons: not worth tracking
+            }
+            span.isText = true;
+            span.text = a.text;
+        }
+        else
+        {
+            const double v = asReal(a);
+            if (test.op.empty() || test.op == "=")
+            {
+                span.low = span.high = v;
+            }
+            else if (test.op == "To")
+            {
+                span.low = v;
+                span.high = asReal(*b);
+                if (span.low > span.high)
+                {
+                    diagnostics_.warning(test.location,
+                                         "this Case range is empty: its first value is "
+                                         "greater than its last, so it never matches");
+                    return;
+                }
+            }
+            else if (whole && test.op != "<>")
+            {
+                span.low = test.op == "<" || test.op == "<=" ? -inf : (test.op == ">" ? v + 1 : v);
+                span.high = test.op == ">" || test.op == ">=" ? inf : (test.op == "<" ? v - 1 : v);
+            }
+            else
+            {
+                return; // Is <> v, and Is < v on a Double (an open end)
+            }
+        }
+        if (covers(covered, span, whole))
+        {
+            diagnostics_.warning(test.location, "this Case can never be chosen: an earlier "
+                                                "Case already covers it");
+        }
+        covered.push_back(span);
+    }
+
+    // Whether the spans so far cover all of span (whole numbers: 1 To 3 and
+    // 4 To 6 together cover 2 To 5).
+    static bool covers(std::vector<Span> spans, const Span &span, bool whole)
+    {
+        if (span.isText)
+        {
+            return std::any_of(spans.begin(), spans.end(),
+                               [&](const Span &s) { return s.isText && s.text == span.text; });
+        }
+        spans.erase(
+            std::remove_if(spans.begin(), spans.end(), [](const Span &s) { return s.isText; }),
+            spans.end());
+        std::sort(spans.begin(), spans.end(),
+                  [](const Span &x, const Span &y) { return x.low < y.low; });
+        // Sweep up from span's start: each span that begins within what is
+        // covered so far (next to it, for whole numbers) carries it on.
+        const double gap = whole ? 1 : 0;
+        bool any = false;
+        double reach = 0;
+        for (const Span &s : spans)
+        {
+            if (s.low > (any ? reach + gap : span.low))
+            {
+                break;
+            }
+            if (s.high >= (any ? reach : span.low))
+            {
+                reach = s.high;
+                any = true;
+            }
+        }
+        return any && reach >= span.high;
+    }
+
     static StmtPtr assign(ExprPtr target, ExprPtr value, Location where)
     {
         auto s = std::make_unique<Stmt>();
@@ -3143,10 +3426,10 @@ private:
     // "Strings", "Integers", "Customers".
     static std::string plural(const TypeInfo &info) { return name(info) + "s"; }
 
-    Variable &hiddenLocal(const Expr &like)
+    Variable &hiddenLocal(const Expr &like, const char *prefix = "_with")
     {
         auto v = std::make_unique<Variable>();
-        v->name = "_with" + std::to_string(++withCount_); // no BASIC name starts with _
+        v->name = prefix + std::to_string(++withCount_); // no BASIC name starts with _
         v->type = like.type;
         v->typeDef = like.typeDef;
         v->enumDef = like.enumDef;
