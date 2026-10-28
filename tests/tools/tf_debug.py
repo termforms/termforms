@@ -85,8 +85,7 @@ def main() -> int:
                    "-ex", f"break sample.bas:{line}",
                    "-ex", "run",
                    "-ex", "print v_s", "-ex", "print v_a", "-ex", "print v_g",
-                   "-ex", "print v_p", "-ex", "print v_d", "-ex", "print *v_refs.data",
-                   "-ex", "print v_refs",
+                   "-ex", "print v_p", "-ex", "print v_d", "-ex", "print v_refs",
                    "-ex", "step", "-ex", "frame",
                    "-ex", "kill",
                    "--args", str(exe)]
@@ -101,7 +100,9 @@ def main() -> int:
         "[1,1] = 4",                    # two dimensions, by subscripts
         '"pt1"',                        # a String inside a Type
         '["k1"] = 5',                   # a Dictionary by key
-        "t_Point",                      # an array of Refs knows its Type
+        # An array of Refs knows its Type: lldb shows the pointer's type,
+        # gdb the record itself.
+        "t_Point" if args.debugger == "lldb" else "f_X = 9",
         f"sample.bas:{function_line()}",  # stepped into Twice, past tf_str_len
     ]
     missing = [e for e in expected if e not in output]

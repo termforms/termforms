@@ -49,11 +49,12 @@ class StringPrinter:
 
 
 def record_type(ops):
-    """The C struct a tf_record_ops describes, by its name."""
+    """The C struct a tf_record_ops (pointed to by ops) describes, by its
+    name."""
     if int(ops) == 0:
         return None
     try:
-        return gdb.lookup_type(ops["name"].string())
+        return gdb.lookup_type(ops.dereference()["name"].string())
     except (gdb.error, gdb.MemoryError):
         return None
 
@@ -105,12 +106,13 @@ class ArrayPrinter:
         for index in range(n):
             value = gdb.Value(base + index * element.sizeof).cast(element.pointer()).dereference()
             if elem == ELEM_REF and int(value) != 0:
-                # A Ref's record Type, from the ops in the header before it.
+                # A Ref's record, by the Type named in the ops in the header
+                # before it; shown itself (Nothing stays a 0 pointer).
                 ops_type = gdb.lookup_type("tf_record_ops").const().pointer()
                 ops = gdb.Value(int(value) - REF_HEADER_SIZE + 8).cast(ops_type.pointer())
                 t = record_type(ops.dereference())
                 if t is not None:
-                    value = value.cast(t.pointer())
+                    value = value.cast(t.pointer()).dereference()
             if keys is not None:
                 name = '["' + read_string(keys[index]) + '"]'
             else:
