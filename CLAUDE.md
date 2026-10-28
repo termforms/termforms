@@ -424,7 +424,21 @@ authoritative for design rationale.
   Windows users pointed to zig via `winget install zig.zig` (the gate
   checks that a zig newer than the pinned 0.16 works). The repository is
   public, so Release files download without a GitHub login.
-- **Next:** build 5.6. The terminal matrix is done except
+  Step 5.6 built (28 Oct 2026): tfc looks for an unpacked release's
+  runtime beside its bin (`executablePath()` in build.cpp: macOS
+  _NSGetExecutablePath, Linux /proc/self/exe, Windows GetModuleFileNameW)
+  after --runtime and $TERMFORMS_RUNTIME, before the build's own source
+  tree; tools/package.py lays out and packs an archive (git-tracked files
+  only); tools/release/README.md goes inside; tools/release/smoke_test.py
+  unpacks one and builds and runs hello with it;
+  .github/workflows/release.yml builds the three on every push to main
+  (artifacts) and publishes a pre-release on a v* tag matching
+  project(VERSION). docs/RELEASING.md says how to cut one. The Linux tfc
+  is cross-built with zig (on a Mac CMake also needs zig's ar/ranlib).
+  No release published yet: v0.9.0 waits for the guide (5.7) and Jim's
+  go-ahead.
+- **Next:** 5.7, docs/GUIDE.md; then the version bump and the v0.9.0 tag
+  (with Jim's go-ahead), then 5.8, the gate on the laptop. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
@@ -546,6 +560,7 @@ tests/
   runtime/    C tests linked against tfrt
 debug/{lldb,gdb}/termforms.py              debugger printers (Strings, arrays)
 editors/vscode/                            VS Code extension and templates
+tools/package.py, tools/release/           release archives (README, smoke test)
 examples/hello.bas                         the vertical-slice program
 examples/demo/                             every control, menus, dialogs, mouse
 examples/{addressbook,viewer,samples}/     the other examples (README.md)

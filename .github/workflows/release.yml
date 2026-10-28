@@ -1,0 +1,133 @@
+# SPDX-License-Identifier: BSD-2-Clause
+#
+# Release archives: tfc and its runtime for macOS (Apple Silicon), Linux
+# x86-64 (a static tfc, built with zig for musl, that runs on any x86-64
+# Linux) and Windows x64 (the C runtime linked in, so a clean machine needs
+# nothing else). Each archive is unpacked and used to build and run
+# examples/hello.bas before it is kept.
+#
+# Every push to main keeps the archives as this run's artifacts. Pushing a
+# tag v<version> (matching project(VERSION) in CMakeLists.txt) also
+# publishes them as a GitHub Release, marked pre-release.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  ZIG_VERSION: "0.16.0" # keep in step with toolchain.txt and ci.yml
+
+jobs:
+  archive:
+    name: Archive (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: macos-arm64,  os: macos-15 }
+          - { platform: linux-x86_64, os: ubuntu-24.04 }
+          - { platform: windows-x64,  os: windows-2025 }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install Ninja and zig
+        run: python -m pip install ninja ziglang==${{ env.ZIG_VERSION }}
+
+      - name: Build tfc (macOS)
+        if: matrix.platform == 'macos-arm64'
+        run: |
+          cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0
+          cmake --build build/rel --target tfc
+          strip build/rel/compiler/tfc
+          echo "TFC=build/rel/compiler/tfc" >> "$GITHUB_ENV"
+
+      # zig as CMake's compilers: small scripts, as a compiler path cannot
+      # carry arguments (the target) on its own.
+      - name: Build tfc (Linux, static)
+        if: matrix.platform == 'linux-x86_64'
+        run: |
+          mkdir -p "$RUNNER_TEMP/zig"
+          for tool in cc c++ ar ranlib; do
+            target=""
+            if [ "$tool" = cc ] || [ "$tool" = c++ ]; then target="-target x86_64-linux-musl"; fi
+            printf '#!/bin/sh\nexec python -m ziglang %s %s "$@"\n' "$tool" "$target" > "$RUNNER_TEMP/zig/$tool"
+            chmod +x "$RUNNER_TEMP/zig/$tool"
+          done
+          cmake -S . -B build/rel -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$RUNNER_TEMP/zig/cc" -DCMAKE_CXX_COMPILER="$RUNNER_TEMP/zig/c++" \
+            -DCMAKE_AR="$RUNNER_TEMP/zig/ar" -DCMAKE_RANLIB="$RUNNER_TEMP/zig/ranlib"
+          cmake --build build/rel --target tfc
+          strip build/rel/compiler/tfc
+          file build/rel/compiler/tfc
+          echo "TFC=build/rel/compiler/tfc" >> "$GITHUB_ENV"
+
+      - name: Build tfc (Windows)
+        if: matrix.platform == 'windows-x64'
+        run: |
+          cmake -S . -B build/rel -A x64 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          cmake --build build/rel --config Release --target tfc
+          echo "TFC=build/rel/compiler/Release/tfc.exe" >> $env:GITHUB_ENV
+
+      - name: Pack
+        shell: bash
+        run: |
+          python tools/package.py --tfc "$TFC" --platform ${{ matrix.platform }} --out dist
+          ls -l dist
+
+      # The unpacked release builds hello.bas with the machine's compiler:
+      # Apple clang, gcc, and on Windows zig (what the README tells
+      # Windows users to install).
+      - name: Smoke test
+        shell: bash
+        env:
+          TFC_CC: ${{ matrix.platform == 'windows-x64' && 'python -m ziglang cc' || '' }}
+        run: python tools/release/smoke_test.py dist/termforms-*-${{ matrix.platform }}.*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: termforms-${{ matrix.platform }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: archive
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: The tag must match the project's version
+        run: |
+          version=$(python3 -c "import re; print(re.search(r'project\(\s*TermForms\s+VERSION\s+([0-9.]+)', open('CMakeLists.txt').read()).group(1))")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match project(VERSION $version)"; exit 1
+          fi
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --prerelease \
+            --title "TermForms ${GITHUB_REF_NAME#v}" \
+            --notes "TermForms ${GITHUB_REF_NAME#v}: tfc and its runtime for macOS (Apple Silicon), Linux x86-64 and Windows x64. Unpack, add bin to your PATH and install a C compiler: see README.md inside the archive."

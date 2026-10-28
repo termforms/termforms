@@ -14,11 +14,24 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <system_error>
+
+// Finding tfc's own file, for a release's runtime beside it: an operating
+// system call on each platform (no library beyond the system's own).
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace fs = std::filesystem;
 
@@ -149,7 +162,40 @@ std::string chooseCompiler(const CommandLine &cmd, std::string &problem)
     }
 }
 
-// --runtime, then $TERMFORMS_RUNTIME, then the runtime this tfc was built with.
+// The file this tfc runs from, links followed; "" if it cannot be found.
+static fs::path executablePath()
+{
+    std::error_code ec;
+#if defined(_WIN32)
+    std::wstring buffer(32768, L'\0');
+    const DWORD length =
+        GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0 || length >= buffer.size())
+    {
+        return {};
+    }
+    buffer.resize(length);
+    return fs::path(buffer);
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) != 0)
+    {
+        return {};
+    }
+    buffer.resize(std::strlen(buffer.c_str()));
+    const fs::path real = fs::canonical(buffer, ec);
+    return ec ? fs::path(buffer) : real;
+#else
+    const fs::path real = fs::read_symlink("/proc/self/exe", ec);
+    return ec ? fs::path() : real;
+#endif
+}
+
+// --runtime, then $TERMFORMS_RUNTIME, then an unpacked release's runtime
+// (<folder>/bin/tfc beside <folder>/runtime), then the runtime this tfc
+// was built with (a developer's build, run from its build tree).
 std::string chooseRuntime(const CommandLine &cmd)
 {
     if (!cmd.runtimeDir.empty())
@@ -160,6 +206,15 @@ std::string chooseRuntime(const CommandLine &cmd)
     if (!fromEnv.empty())
     {
         return fromEnv;
+    }
+    if (const fs::path exe = executablePath(); !exe.empty())
+    {
+        const fs::path beside = exe.parent_path().parent_path() / "runtime";
+        std::error_code ec;
+        if (fs::is_regular_file(beside / "include" / "termforms" / "tf_runtime.h", ec))
+        {
+            return beside.string();
+        }
     }
     return TF_DEFAULT_RUNTIME_DIR;
 }
