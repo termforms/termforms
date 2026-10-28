@@ -1,0 +1,2 @@
+doevents.bas:10:9: error: 'DoEvents' is a statement, not a function: write it on its own, as in DoEvents
+doevents.bas:11:8: error: 'Visible' is read-only: it can be read, not set

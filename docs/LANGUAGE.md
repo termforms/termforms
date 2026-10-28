@@ -68,7 +68,7 @@ End Sub
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
 | Controls | Label, TextBox (SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar; selection, words, undo, cut/copy/paste), CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
-| Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`; events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
+| Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`, `DoEvents`, `Visible` (read only); events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
 | Menus | `Begin Menu` blocks: a menu bar with drop-downs (two levels); Caption (`-` a separator), Enabled, Visible, Checked, Shortcut; the Click event; F10 or Ctrl+B, Alt+letter |
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |

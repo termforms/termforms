@@ -88,6 +88,7 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Date", Builtin::Date, true},
                                      {"Time", Builtin::Time, true},
                                      {"Timer", Builtin::Timer, false},
+                                     {"DoEvents", Builtin::DoEvents, false},
                                      {"MsgBox", Builtin::MsgBox, false},
                                      {"InputBox", Builtin::InputBox, true},
                                      {"Load", Builtin::FormLoad, false},
@@ -1588,10 +1589,9 @@ private:
                 {
                     checkExpr(*arg);
                 }
-                diagnostics_.error(e.location, "'" + e.text +
-                                                   "' is a statement, not a function: "
-                                                   "write it on its own, as in " +
-                                                   e.text + " ...");
+                diagnostics_.error(e.location, "'" + e.text + "' is a statement, not a function: " +
+                                                   "write it on its own, as in " + e.text +
+                                                   (*f->params == '\0' ? "" : " ..."));
                 return Type::Error;
             }
             return checkStringFunction(e, b.name, *f);

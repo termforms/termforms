@@ -10,7 +10,8 @@
  *   ALT+ / SHIFT+ before F<n> or a name ({CTRL+F4}, {SHIFT+LEFT}), {WAIT n}
  *   (n ms pass, so Timers run), the mouse at cell x,y (from 0, 0 at the
  *   top left): {CLICK x,y} {DBLCLICK x,y} {PRESS x,y} {DRAG x,y}
- *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, and {{ (a literal brace)
+ *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, {IDLE} (nothing waiting:
+ *   where a DoEvents returns), and {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
@@ -51,7 +52,7 @@ static const named_key NAMED_KEYS[] = {
     {"BKSP", TF_KEY_BACKSPACE}, {"DEL", TF_KEY_DELETE}, {"LEFT", TF_KEY_LEFT},
     {"RIGHT", TF_KEY_RIGHT},    {"UP", TF_KEY_UP},      {"DOWN", TF_KEY_DOWN},
     {"HOME", TF_KEY_HOME},      {"END", TF_KEY_END},    {"ESC", TF_KEY_ESC},
-    {"PGUP", TF_KEY_PGUP},      {"PGDN", TF_KEY_PGDN},
+    {"PGUP", TF_KEY_PGUP},      {"PGDN", TF_KEY_PGDN},  {"IDLE", TF_KEY_NONE},
 };
 
 typedef struct mouse_name

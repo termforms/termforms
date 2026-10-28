@@ -721,6 +721,9 @@ void tf_form_hide(tf_control *form);
 void tf_form_unload(tf_control *form);
 int tf_forms_run(void);
 
+/* DoEvents: redraws, then handles the events already waiting and returns. */
+void tf_do_events(void);
+
 /*
  * VB's MsgBox and InputBox: a dialog over the forms shown (opening the
  * terminal first if no form is shown yet, as in Form_Load or Sub Main).

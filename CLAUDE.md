@@ -268,7 +268,17 @@ authoritative for design rationale.
   Inline For declarations done: `Stmt::loopVariable` (a procedure local
   the parser makes for `For i As T`), declared by sema in a scope of its
   own around the For.
-- **Next:** DoEvents, then Phase 5's scope with Jim.
+  DoEvents done: `tf_do_events` (tf_forms.c) shares the event loop's
+  `come_to_top` and `handle`; it returns when tf_input_wait(0) has
+  nothing (a key script's `{IDLE}`), and a script running out inside it
+  ends the program. Form.Visible readable (in_stack). **The four
+  settled language gaps are all built.** Generated C under the strict
+  flags: a parameter the body never mentions gets `(void)v_x;`
+  (`markUnusedParameters`: a handler must take Cancel even unused), and a
+  procedure nothing calls gets a `TF_MAYBE_UNUSED` prototype
+  (`uncalled_`). A local set but never read still warns; that one is the
+  program's (Jim accepted it, see errors.c above).
+- **Next:** Phase 5's scope with Jim.
 
 ## Settled design decisions (do not relitigate without Jim)
 
@@ -380,7 +390,8 @@ tests/
               (+ .stderr = must fail with that message;
               + .args = command-line arguments, one a line;
               + .with = further modules, paths one a line;
-              key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4})
+              key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4},
+              {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
   runtime/    C tests linked against tfrt
 examples/hello.bas                         the vertical-slice program
 ```
@@ -567,7 +578,6 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- DoEvents: settled (28 Oct 2026), not yet built.
 - No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
   the overlay); no MouseDown/Up/Move events; the clipboard is the
   program's own.

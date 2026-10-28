@@ -268,6 +268,13 @@ For Each w As String In words ... Next w
 - **Closing a form during DoEvents** runs its Form_Unload (which may
   cancel) and the code after DoEvents carries on; if no form is left
   shown, the program ends when that code returns to the event loop.
+- Details (Proposed): **a form's `Visible` can be read** (True while it
+  is shown; Show and Hide set it, so it is read-only), for code after a
+  DoEvents to see whether the user closed it. DoEvents before any form
+  is shown does nothing. **In a key script**, where every key is already
+  waiting, DoEvents stops at `{IDLE}`; a script that runs out inside
+  DoEvents ends the program, the screen dumped as it was (as it ends the
+  event loop), so a test of a `Do: DoEvents: Loop` cannot hang.
 
 ## Scope (Settled, 27 Oct 2026)
 

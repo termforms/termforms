@@ -48,6 +48,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <set>
 #include <sstream>
@@ -127,6 +128,21 @@ public:
             }
         }
         emitMain(body);
+
+        // A Sub nothing calls is no error in BASIC (it may be kept for
+        // later, or called only from code commented out), so its prototype
+        // keeps -Wunused-function quiet.
+        const std::string code = body.str();
+        for (const Module *m : modules_)
+        {
+            for (const auto &proc : m->procedures)
+            {
+                if (mentionCount(code, pName(*proc)) <= 1) // its definition only
+                {
+                    uncalled_.insert(proc.get());
+                }
+            }
+        }
 
         std::ostringstream out;
         emitHeader(out);
@@ -409,7 +425,11 @@ private:
             {
                 for (const auto &proc : m->procedures)
                 {
-                    out << signature(*proc) << ";\n";
+                    const std::string sig = signature(*proc);
+                    out << (uncalled_.count(proc.get()) != 0
+                                ? "static TF_MAYBE_UNUSED " + sig.substr(std::strlen("static "))
+                                : sig)
+                        << ";\n";
                 }
             }
             out << '\n';
@@ -445,6 +465,65 @@ private:
     }
 
     void emitProcedure(std::ostringstream &out, const Procedure &proc)
+    {
+        std::ostringstream text;
+        emitProcedureText(text, proc);
+        out << markUnusedParameters(text.str(), proc);
+    }
+
+    // "(void)v_x;" first in a procedure whose body never uses parameter x,
+    // so -Wunused-parameter stays quiet: an event handler must take its
+    // argument (Form_Unload's Cancel) even when it does not look at it.
+    static std::string markUnusedParameters(const std::string &text, const Procedure &proc)
+    {
+        const std::size_t open = text.find("\n{\n");
+        if (open == std::string::npos)
+        {
+            return text;
+        }
+        const std::size_t bodyStart = open + 3;
+        std::string marks;
+        for (const auto &p : proc.parameters)
+        {
+            const bool copied = p->type == Type::Record && !p->byRef && p->rank == 0;
+            const std::string name = (copied ? "a_" : "v_") + p->name;
+            if (!mentions(text, bodyStart, name))
+            {
+                marks += "    (void)" + name + ";\n";
+            }
+        }
+        return marks.empty() ? text : text.substr(0, bodyStart) + marks + text.substr(bodyStart);
+    }
+
+    // Whether C identifier name appears in text from position from on.
+    static bool mentions(const std::string &text, std::size_t from, const std::string &name)
+    {
+        return mentionCount(text, name, from, 1) > 0;
+    }
+
+    // How many times C identifier name appears in text from position from
+    // on (counting stops at most).
+    static int mentionCount(const std::string &text, const std::string &name, std::size_t from = 0,
+                            int most = 2)
+    {
+        int count = 0;
+        auto part = [](char c) {
+            return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+        };
+        for (std::size_t at = text.find(name, from); at != std::string::npos;
+             at = text.find(name, at + 1))
+        {
+            const bool before = at > 0 && part(text[at - 1]);
+            const bool after = at + name.size() < text.size() && part(text[at + name.size()]);
+            if (!before && !after && ++count >= most)
+            {
+                break;
+            }
+        }
+        return count;
+    }
+
+    void emitProcedureText(std::ostringstream &out, const Procedure &proc)
     {
         current_ = &proc;
         assignLocalNames(proc);
@@ -3110,9 +3189,10 @@ private:
     int loopCount_ = 0;
     std::vector<TryContext> tries_; // Trys around the statement, innermost last
     int tryCount_ = 0;
-    bool checks_ = false;                 // the program has a Try, so errors are tested for
-    bool usesCommandLine_ = false;        // Command$ is used: main passes argc/argv on
-    std::set<const TypeDef *> opsNeeded_; // Types whose tf_record_ops some code uses
+    bool checks_ = false;                  // the program has a Try, so errors are tested for
+    std::set<const Procedure *> uncalled_; // defined but never called: TF_MAYBE_UNUSED
+    bool usesCommandLine_ = false;         // Command$ is used: main passes argc/argv on
+    std::set<const TypeDef *> opsNeeded_;  // Types whose tf_record_ops some code uses
 };
 
 } // namespace

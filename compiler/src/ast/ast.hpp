@@ -143,6 +143,7 @@ enum class Builtin
     Date,
     Time,
     Timer,
+    DoEvents,
     // Dialogs (step 4.4).
     MsgBox,
     InputBox,
@@ -238,6 +239,9 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Command, "", 0, {}, Type::String, "tf_command", false},
     {Builtin::Environ, "S", 1, {}, Type::String, "tf_environ", false},
     {Builtin::Shell, "S", 1, {}, Type::Integer, "tf_shell", true},
+    // Handlers it runs report their own errors (an uncaught one ends the
+    // program, as in the event loop), so the statement itself cannot fail.
+    {Builtin::DoEvents, "", 0, {}, Type::Void, "tf_do_events", false},
     {Builtin::Now, "", 0, {}, Type::String, "tf_now", false},
     {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},

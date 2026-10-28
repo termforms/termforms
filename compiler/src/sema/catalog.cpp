@@ -50,7 +50,10 @@ const std::vector<ControlType> &types()
          "TF_CTL_FORM",
          {caption,
           {"Width", Type::Integer, "TF_PROP_WIDTH"},
-          {"Height", Type::Integer, "TF_PROP_HEIGHT"}},
+          {"Height", Type::Integer, "TF_PROP_HEIGHT"},
+          // Whether it is shown (Show and Hide change it), e.g. after a
+          // DoEvents in which the user may have closed it.
+          {"Visible", Type::Boolean, "TF_PROP_VISIBLE", true}},
          {{"Load", EventKind::Load, "TF_EVENT_LOAD"},
           {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
           {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}}},

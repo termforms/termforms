@@ -138,6 +138,7 @@ static int64_t virtual_now = 0; /* a key script's clock: moved only by {WAIT n} 
 #define TF_STACK_MAX 32
 static tf_control *stack[TF_STACK_MAX];
 static int depth = 0;
+static int in_stack(const tf_control *form);
 
 /* Milliseconds on the clock Timers run by: real time, or a key script's. */
 static int64_t now_ms(void)
@@ -568,7 +569,7 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
         case TF_PROP_ENABLED:
             return control->enabled;
         case TF_PROP_VISIBLE:
-            return control->visible;
+            return control->type == TF_CTL_FORM ? in_stack(control) : control->visible;
         case TF_PROP_LISTCOUNT:
             return control->item_count;
         case TF_PROP_LISTINDEX:
@@ -2778,6 +2779,61 @@ static void push(tf_control *form)
 
 static tf_control *active = NULL; /* the form last at the top (for Activate) */
 
+/* A form come to the top (shown, or uncovered) gets Activate, then the
+   focus on its first control if it has none (GotFocus), as VB. Returns 1
+   if it did (the handlers may have changed the stack). */
+static int come_to_top(void)
+{
+    tf_control *top = stack[depth - 1];
+    if (top == active)
+    {
+        return 0;
+    }
+    active = top;
+    fire(top, TF_EVENT_ACTIVATE);
+    if (in_stack(top) && top->focus < 0)
+    {
+        move_focus(top, 1);
+    }
+    return 1;
+}
+
+/* One input event for the top form (a key script's {WAIT}, a resize, a
+   key or the mouse). */
+static void handle(tf_key key)
+{
+    tf_control *top = stack[depth - 1];
+    if (key.kind == TF_KEY_WAIT)
+    {
+        wait_scripted(key.ch);
+        return;
+    }
+    if (key.kind == TF_KEY_RESIZE)
+    {
+        if (!headless)
+        {
+            int cols = 80;
+            int rows = 24;
+            tf_term_size(&cols, &rows);
+            tf_screen_init(cols, rows, 1);
+        }
+        return;
+    }
+    if (form_key(top, key))
+    {
+        /* Ctrl+F4: a form is unloaded (its Unload may refuse); a dialog
+           is answered as by Esc, if it can be. */
+        if (!top->is_dialog)
+        {
+            tf_form_unload(top);
+        }
+        else if (top->escapable)
+        {
+            tf_form_hide(top);
+        }
+    }
+}
+
 /* The event loop: keys go to the top form, while any form is shown, or
    until `until` is no longer shown (a modal form or a dialog). The key
    script running out ends every loop. Timers of all shown forms run. */
@@ -2785,18 +2841,9 @@ static void run_loop(const tf_control *until)
 {
     while (!ending && depth > 0 && (until == NULL || in_stack(until)))
     {
-        tf_control *top = stack[depth - 1];
-        if (top != active)
+        if (come_to_top())
         {
-            /* Come to the top (shown, or uncovered): Activate, then the focus
-               on its first control if it has none (GotFocus), as VB. */
-            active = top;
-            fire(top, TF_EVENT_ACTIVATE);
-            if (in_stack(top) && top->focus < 0)
-            {
-                move_focus(top, 1);
-            }
-            continue; /* the handlers may have changed the stack */
+            continue;
         }
         draw_stack();
         tf_screen_flush();
@@ -2815,38 +2862,55 @@ static void run_loop(const tf_control *until)
         }
         if (key.kind == TF_KEY_NONE)
         {
-            stack_fire(); /* the wait ended: a Timer is due */
+            stack_fire(); /* the wait ended (or a script's {IDLE}): a Timer may be due */
             continue;
         }
-        if (key.kind == TF_KEY_WAIT)
+        handle(key);
+    }
+}
+
+/*
+ * DoEvents, as VB: the screen redrawn, then every event already waiting
+ * handled (keys, the mouse, due Timers) without waiting for more. Handlers
+ * may run inside the code that called it, even the one that is running
+ * (VB allows that too). In a key script every key is waiting, so it stops
+ * at {IDLE} instead; a script that runs out here ends the program, as it
+ * would end the event loop, so a loop of DoEvents cannot spin for ever.
+ */
+void tf_do_events(void)
+{
+    if (!ui_is_open)
+    {
+        return; /* no form shown yet: nothing to draw or take keys for */
+    }
+    if (ending)
+    {
+        tf_end(0);
+    }
+    while (depth > 0)
+    {
+        if (come_to_top())
         {
-            wait_scripted(key.ch);
             continue;
         }
-        if (key.kind == TF_KEY_RESIZE)
+        draw_stack();
+        tf_screen_flush();
+        const int64_t due = stack_due();
+        if (due >= 0 && due <= now_ms())
         {
-            if (!headless)
-            {
-                int cols = 80;
-                int rows = 24;
-                tf_term_size(&cols, &rows);
-                tf_screen_init(cols, rows, 1);
-            }
+            stack_fire();
             continue;
         }
-        if (form_key(top, key))
+        const tf_key key = tf_input_wait(0);
+        if (key.kind == TF_KEY_NONE)
         {
-            /* Ctrl+F4: a form is unloaded (its Unload may refuse); a dialog
-               is answered as by Esc, if it can be. */
-            if (!top->is_dialog)
-            {
-                tf_form_unload(top);
-            }
-            else if (top->escapable)
-            {
-                tf_form_hide(top);
-            }
+            return;
         }
+        if (key.kind == TF_KEY_EOF)
+        {
+            tf_end(0); /* the shutdown hook dumps the screen */
+        }
+        handle(key);
     }
 }
 
