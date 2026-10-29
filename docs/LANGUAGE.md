@@ -600,9 +600,12 @@ so a debugger steps through the `.bas` file directly.
 Every mistake in a program is reported by `tfc` against the `.bas` file;
 the C compiler's own messages are not shown (`-v` shows them, and the
 command). If the C compiler cannot be run, `tfc` says so. If it runs and
-fails, that is a fault in `tfc` (or the C compiler), never in the program:
-`tfc` says so and keeps the generated C (`<output>.tf.c`) and the C
-compiler's messages (`<output>.tf-log`) for a bug report.
+fails, `tfc` shows its first few messages and keeps the generated C
+(`<output>.tf.c`) and all the messages (`<output>.tf-log`). With a
+compiler named by `--cc` or `TFC_CC`, it asks you to check that command
+(a missing `-target` is the usual slip); with its own choice of compiler,
+it calls it a fault in `tfc` or the C compiler, never in the program,
+for a bug report.
 
 ## Headless mode (for tests)
 

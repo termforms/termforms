@@ -824,8 +824,10 @@ tfc [options] file.bas [more.bas ...]      or      tfc [options] project.vbp
 ```
 
 Your mistakes are reported as `file:line:col: error: ...`, in BASIC's
-terms; you never see the C compiler's output unless it is about C of your
-own (Declares) or you ask with `-v`.
+terms; you never see the C compiler's warnings unless they are about C of
+your own (Declares) or you ask with `-v`. If the C compiler fails, tfc
+shows its first messages; when you named it with `--cc` or `TFC_CC`, check
+that command first (a missing `-target` is the usual slip).
 
 ### Testing without a terminal
 

@@ -80,12 +80,14 @@ set_tests_properties(cli.no-compiler PROPERTIES
     LABELS cli
     PASS_REGULAR_EXPRESSION "cannot run the C compiler 'tf-no-such-compiler'; is it installed")
 
+# A compiler named with --cc that fails: its first messages are shown, and
+# the --cc command is named as what to check (a missing -target, say).
 add_test(NAME cli.compiler-fails
-    COMMAND tfc --cc "\"${Python3_EXECUTABLE}\" -c \"raise SystemExit(1)\"" -o ${TF_CLI_WORK}/broken
-        ${PROJECT_SOURCE_DIR}/examples/hello.bas)
+    COMMAND tfc --cc "\"${Python3_EXECUTABLE}\" -c \"print('bad flag here');raise SystemExit(1)\""
+        -o ${TF_CLI_WORK}/broken ${PROJECT_SOURCE_DIR}/examples/hello.bas)
 set_tests_properties(cli.compiler-fails PROPERTIES
     LABELS cli
-    PASS_REGULAR_EXPRESSION "internal error: .*not in your program")
+    PASS_REGULAR_EXPRESSION "error: the C compiler .*It said:.*  bad flag here.*Check the --cc command")
 
 # Debugger tests: a breakpoint on a .bas line, the printers in debug/, and
 # stepping past the runtime. Each is skipped (exit 77) where its debugger

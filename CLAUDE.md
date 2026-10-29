@@ -139,7 +139,10 @@ authoritative for design rationale.
   (shown live with `-v`); "cannot run the C compiler" when its program
   is not found (`canRun`, checked before running: cmd.exe's not-found
   status is not dependable); any other C failure is reported as a tfc
-  internal error, keeping `.tf.c` and `.tf-log`.
+  internal error, keeping `.tf.c` and `.tf-log`. Changed (Jim, 29 Oct
+  2026, after a mistyped --cc on the laptop): a failure shows the log's
+  first 5 lines, and with --cc or TFC_CC it is "error" and says to check
+  that command (still offering the report).
 - **Step 6 (27 Oct 2026), Jim settled:** string positions 1-based (VB);
   v1 adds Replace, Split/Join, InStrRev, StrReverse; `Print #` simple
   (`;` joins with no spaces, trailing `;` = no newline, no comma zones);

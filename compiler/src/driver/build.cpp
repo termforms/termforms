@@ -756,14 +756,59 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     }
 
     // The program passed every check, so a C compiler that runs but fails
-    // means tfc wrote bad C (or the compiler is broken): either way not the
-    // programmer's mistake, so say so in their terms, and keep what a bug
-    // report needs.
-    err << "tfc: internal error: the C compiler '" << compiler
-        << "' could not build the C that tfc made from '" << inputPath.string() << "'.\n"
-        << "This is a problem in tfc or in the C compiler, not in your program. Please\n"
-        << "report it with your program and these files: " << cFile
-        << (cmd.verbose ? "" : " and " + logFile + " (the C compiler's messages)") << "\n";
+    // means tfc wrote bad C, the compiler is broken, or (when the programmer
+    // named it with --cc or TFC_CC) its command is wrong: a missing -target
+    // is the usual slip. Its first messages say which, so they are shown,
+    // and what a bug report needs is kept.
+    const char *named = !cmd.cCompiler.empty()      ? "--cc"
+                        : !getEnv("TFC_CC").empty() ? "TFC_CC"
+                                                    : nullptr;
+    err << "tfc: " << (named != nullptr ? "error" : "internal error") << ": the C compiler '"
+        << compiler << "' could not build the C that tfc made from '" << inputPath.string()
+        << "'.\n";
+    if (!cmd.verbose)
+    {
+        std::string log;
+        readFile(logFile, log);
+        std::istringstream lines(log);
+        std::string line;
+        int shown = 0;
+        bool more = false;
+        while (std::getline(lines, line))
+        {
+            if (!line.empty() && line.back() == '\r')
+            {
+                line.pop_back();
+            }
+            if (line.empty())
+            {
+                continue;
+            }
+            if (shown == 5)
+            {
+                more = true;
+                break;
+            }
+            err << (shown == 0 ? "It said:\n" : "") << "  " << line << '\n';
+            ++shown;
+        }
+        if (more)
+        {
+            err << "  ... (the rest is in " << logFile << ")\n";
+        }
+    }
+    if (named != nullptr)
+    {
+        err << "Check the " << named << " command. If it is right, this is a problem in tfc:\n"
+            << "please report it with your program and these files: " << cFile
+            << (cmd.verbose ? "" : " and " + logFile) << "\n";
+    }
+    else
+    {
+        err << "This is a problem in tfc or in the C compiler, not in your program. Please\n"
+            << "report it with your program and these files: " << cFile
+            << (cmd.verbose ? "" : " and " + logFile + " (the C compiler's messages)") << "\n";
+    }
     return kExitCompile;
 }
 
