@@ -775,6 +775,16 @@ a variable that is filled in only when a call succeeds.
   program's own.
 - Combining marks are not drawn (a cell holds one character); text
   that relies on them shows the base letters.
+- **Post-v1 (Jim, 29 Oct 2026): file and folder dialogs**, built at run
+  time from controls as MsgBox/InputBox are, listing the file system of
+  the machine the program runs on (over SSH, the server's); after the
+  ComboBox (for a file-type filter). About 1-2 days.
+- **Ideas from Jim (29 Oct 2026), design questions being asked:**
+  command-line arguments as an array plus the program's path (App.Path /
+  App.EXEName); console Print and Line Input for Sub Main programs. Also
+  later, perhaps: a graphical form designer (Python Tk) writing the form
+  block, with tfc printing its control catalog as JSON and a headless
+  preview; open questions: .frm or rewrite in .bas, keeping comments.
 
 ## Next work (suggested order — confirm with Jim)
 

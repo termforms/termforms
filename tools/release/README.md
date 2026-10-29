@@ -22,6 +22,9 @@ compiler build it into a single program.
    - Linux: your distribution's gcc or clang (e.g. `sudo apt install gcc`).
    - Windows: `winget install zig.zig` (tfc uses `zig cc`; Visual Studio's
      `cl` works too, from a Developer Command Prompt).
+     The first build with zig is slow (a minute or more on an older
+     machine): zig builds its C library for Windows once and keeps it,
+     and later builds are quick.
 
 Check: `tfc --version`.
 

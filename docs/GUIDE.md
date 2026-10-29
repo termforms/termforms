@@ -474,6 +474,19 @@ The form itself has Caption, Width, Height, Visible (read-only) and the
 events Load, Activate and Unload. `Me` is the form whose module the code
 is in.
 
+**Enabled and Visible** work on every control and menu, in the form block
+or in code. A disabled control is drawn dim, Tab passes over it, and it
+takes no keys, access keys or clicks; a hidden one is not drawn at all.
+Setting either on a Frame does the same to everything inside it, so a
+whole section of a form can be switched off at once:
+
+```vb
+Sub chkShip_Click()
+    fraAddress.Enabled = (chkShip.Value = vbChecked)   ' the Frame and its controls
+    cmdPrint.Visible = Not cmdPrint.Visible
+End Sub
+```
+
 A **Frame** holds the controls written inside its block; OptionButtons in
 one Frame are a group of their own, so a form can have several groups.
 A **TextBox** edits as a Windows edit box does: Shift+arrows select,
