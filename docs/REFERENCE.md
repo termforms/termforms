@@ -1258,6 +1258,17 @@ Module=lib/stock.bas
   2026: it was bright white, which vanished under his terminal's default
   scheme and under Dracula, where bright white and the forms' grey are
   alike); a control that cannot be used shows none.
+- **Colours that every scheme keeps apart** (Jim, 30 Oct 2026): only
+  the form's own pair (black on grey), it swapped (grey on black), and
+  black on cyan, checked for contrast across ten common schemes (Terminal
+  and iTerm2 defaults, xterm, Tango, Windows' Campbell, Dracula,
+  Solarized, Gruvbox, One Dark, Nord). So a TextBox is grey on black, its
+  selection black on cyan; a ListBox's selected items are black on cyan
+  with the focus, grey on black without; a focused button and menu
+  items are black on cyan; the Default button is marked by its brackets,
+  `« OK »`, not by a colour. Bright white on grey (1.1-2.1) and white on
+  blue (2.3 in three schemes) are no longer used for anything that
+  must be seen.
 - Enter and Esc in a TextBox go to the Default and Cancel buttons.
 - Tab order is the order the controls are written in the form block.
 - `Ctrl+Q` no longer closes a form (Ctrl+F4 or Alt+F4 does).

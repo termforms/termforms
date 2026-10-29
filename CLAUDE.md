@@ -513,8 +513,11 @@ authoritative for design rationale.
   keys (bright white), and Dracula did the same, so an access key is now
   underlined in its caption's colour instead (`TF_UNDERLINE`, a flag
   added to a cell's fg; tf_screen.c emits SGR 4; draw_caption's `keyed`).
-  Still bright white, so open to the same trouble: a Default button's
-  brackets and the TextBox's white field.
+  Then (Jim's go-ahead) the same for the rest, after checking contrast
+  across ten common palettes: the Default button is `« OK »`, a TextBox
+  grey on black with its selection black on cyan, a ListBox selection
+  black on cyan (focused) or grey on black. REFERENCE.md "Colours that
+  every scheme keeps apart" lists the safe pairs; keep to them.
 - **Next:** Jim deploys syncfix to the NAS servers and uses it in
   earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual

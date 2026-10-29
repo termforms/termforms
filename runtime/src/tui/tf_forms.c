@@ -889,7 +889,10 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
     {
         return;
     }
-    tf_screen_fill(x, y, w, 1, ' ', TF_BLACK, TF_WHITE);
+    /* The form's colours swapped, and the selection black on cyan: pairs
+       that stay readable under every common terminal colour scheme (a
+       white field on the grey form could not be told from it). */
+    tf_screen_fill(x, y, w, 1, ' ', TF_GREY, TF_BLACK);
 
     /* Keep the caret inside the visible window (its cell before the box's
        last). */
@@ -916,7 +919,7 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
             break;
         }
         const int lit = focused && tf_edit_selected(&tb->edit, i);
-        tf_screen_put(x + cells, y, shown_as, lit ? TF_WHITE : TF_BLACK, lit ? TF_BLUE : TF_WHITE);
+        tf_screen_put(x + cells, y, shown_as, lit ? TF_BLACK : TF_GREY, lit ? TF_CYAN : TF_BLACK);
         cells += cw;
     }
     if (focused)
@@ -1022,19 +1025,20 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
 
     char caption[256];
     strip_accelerator(tf_str_cstr(button->caption), caption, sizeof caption);
-    /* "< OK >"; a Default button's brackets stand out. */
+    /* "< OK >", or "« OK »" for the Default button: marked by its shape,
+       as bright brackets vanished under some terminal colour schemes. */
     const int cells = utf8_cells(caption) + 4;
     const int pad = cells < w ? (w - cells) / 2 : 0;
     tf_screen_fill(x, y, w, 1, ' ', fg, bg);
-    const int bracket = button->is_default && on ? TF_WHITE : fg;
+    const int marked = button->is_default && on;
     if (w - pad > 0)
     {
-        tf_screen_put(x + pad, y, '<', bracket, bg);
+        tf_screen_put(x + pad, y, marked ? 0xAB : '<', fg, bg);
     }
     const int used = draw_caption(x + pad + 2, y, button->caption, w - pad - 4, fg, bg, on);
     if (pad + 2 + used + 1 < w)
     {
-        tf_screen_put(x + pad + 2 + used + 1, y, '>', bracket, bg);
+        tf_screen_put(x + pad + 2 + used + 1, y, marked ? 0xBB : '>', fg, bg);
     }
 }
 
@@ -1176,8 +1180,10 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
         int bg = TF_GREY;
         if (i < list->item_count && list->selected[i])
         {
-            fg = TF_WHITE;
-            bg = focused ? TF_BLUE : TF_BRIGHT + TF_BLACK;
+            /* Black on cyan with the focus, as menus; else the form's
+               colours swapped (white on blue was faint in some schemes). */
+            fg = focused ? TF_BLACK : TF_GREY;
+            bg = focused ? TF_CYAN : TF_BLACK;
         }
         const int cells = inner < w - 1 ? inner : w - 1;
         tf_screen_fill(x + 1, y + 1 + r, cells, 1, ' ', fg, bg);

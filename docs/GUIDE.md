@@ -91,7 +91,8 @@ tfc greet.bas
 ```
 
 The form appears centred in the terminal. Type a name, press Enter (the
-Default button) or click Greet, and the label changes. Tab moves between
+Default button, shown as `« Greet »`) or click Greet, and the label
+changes. Tab moves between
 the controls, Alt+N jumps to the box (the `&` in a Caption makes an access
 key), and **Ctrl+F4 closes the form**, which ends the program.
 
