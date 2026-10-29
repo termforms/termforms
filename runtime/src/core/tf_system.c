@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: 0BSD */
 /*
- * tf_system.c -- Command$, Environ$, Shell and the clock (see "The system"
- * in tf_runtime.h); the operating system's part is tf_sys_<os>.c.
+ * tf_system.c -- Command$, CommandArgs(), App, Environ$, Shell and the
+ * clock (see "The system" in tf_runtime.h); the operating system's part is
+ * tf_sys_<os>.c.
  */
 #include "../tf_internal.h"
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,11 +32,124 @@ static tf_string *text(const char *s)
     return tf_str_from_utf8(s, (int32_t)strlen(s));
 }
 
+static void free_args(char **args, int32_t count)
+{
+    for (int32_t i = 0; i < count; ++i)
+    {
+        free(args[i]);
+    }
+    free(args);
+}
+
 tf_string *tf_command(void)
 {
-    char *tail = tf_platform_command(saved_argc, saved_argv);
+    int32_t count = 0;
+    char **args = tf_platform_args(saved_argc, saved_argv, &count);
+    size_t length = 1;
+    for (int32_t i = 0; i < count; ++i)
+    {
+        length += strlen(args[i]) + 1;
+    }
+    char *tail = tf_xmalloc(length);
+    tail[0] = '\0';
+    for (int32_t i = 0; i < count; ++i)
+    {
+        if (i > 0)
+        {
+            strcat(tail, " ");
+        }
+        strcat(tail, args[i]);
+    }
+    free_args(args, count);
     tf_string *s = text(tail);
     free(tail);
+    return s;
+}
+
+void tf_command_args(tf_array *to)
+{
+    if (to->locks > 0 || to->fixed)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    int32_t count = 0;
+    char **args = tf_platform_args(saved_argc, saved_argv, &count);
+    const int32_t upper = count - 1;
+    tf_array_redim(to, TF_ELEM_STRING, NULL, 0, 1, &upper);
+    for (int32_t i = 0; i < count; ++i)
+    {
+        *(tf_string **)tf_array_at1(to, i) = text(args[i]);
+    }
+    free_args(args, count);
+}
+
+/* Where the folder ends in a path: its last separator (either kind on
+   Windows), or -1. */
+static ptrdiff_t last_separator(const char *path)
+{
+    ptrdiff_t at = -1;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+#if defined(_WIN32)
+        if (*p == '/' || *p == '\\')
+#else
+        if (*p == '/')
+#endif
+        {
+            at = p - path;
+        }
+    }
+    return at;
+}
+
+tf_string *tf_app_fullpath(void)
+{
+    char *path = tf_platform_exe_path();
+    if (path == NULL)
+    {
+        return NULL;
+    }
+    tf_string *s = text(path);
+    free(path);
+    return s;
+}
+
+/* The root keeps its separator ("/", or "C:\" on Windows), as VB6's App.Path does. */
+tf_string *tf_app_path(void)
+{
+    char *path = tf_platform_exe_path();
+    if (path == NULL)
+    {
+        return NULL;
+    }
+    ptrdiff_t end = last_separator(path);
+    if (end == 0 || (end == 2 && path[1] == ':'))
+    {
+        ++end;
+    }
+    tf_string *s = tf_str_from_utf8(path, (int32_t)(end > 0 ? end : 0));
+    free(path);
+    return s;
+}
+
+tf_string *tf_app_exename(void)
+{
+    char *path = tf_platform_exe_path();
+    if (path == NULL)
+    {
+        return NULL;
+    }
+    const char *name = path + last_separator(path) + 1;
+    size_t length = strlen(name);
+#if defined(_WIN32)
+    if (length > 4 && _stricmp(name + length - 4, ".exe") == 0)
+    {
+        length -= 4;
+    }
+#endif
+    tf_string *s = tf_str_from_utf8(name, (int32_t)length);
+    free(path);
     return s;
 }
 

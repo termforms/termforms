@@ -841,7 +841,7 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
   `Timer` are built-in functions (the `$` is optional, as for the string
   functions), so they cannot name variables.
 
-### Arguments and the program's path (Settled, Jim, 29 Oct 2026; not built yet)
+### Arguments and the program's path (Settled, Jim, 29 Oct 2026)
 
 ```vb
 For Each a As String In CommandArgs()       ' the arguments, one by one
@@ -865,6 +865,11 @@ Dim cfg As String = App.Path & "/settings.txt"   ' beside the program
   quotes and expands wildcards before the program starts, and the
   original is not kept, so it could only be given on Windows. Leaving it
   out keeps programs the same everywhere.
+- `CommandArgs` may be written without its parentheses. Like Split, it
+  is only an array: assigned to a dynamic String array (error 10 if that
+  is locked) or gone through with For Each. `App` is reserved, and App's
+  properties are read-only. App.Path keeps the separator of a root
+  folder ("/", or "C:\" on Windows), as VB6 does.
 
 ### Console programs: Print, Line Input, End n (Settled, Jim, 29 Oct 2026; not built yet)
 

@@ -113,9 +113,14 @@ void tf_platform_clock(int64_t *seconds, int32_t *microseconds);
 /* Milliseconds from some fixed moment, never going back (for Timers). */
 int64_t tf_platform_monotonic_ms(void);
 
-/* Command$: the arguments after the program's name joined by single
-   spaces (quotes as the system's rules take them), to free. */
-char *tf_platform_command(int argc, char **argv);
+/* The arguments after the program's name, as UTF-8 (quotes as the
+   system's rules take them): an array of *count strings, each to free, and
+   the array too. */
+char **tf_platform_args(int argc, char **argv, int32_t *count);
+
+/* The executable's full path as UTF-8, symbolic links followed, to free;
+   NULL if the system cannot say. */
+char *tf_platform_exe_path(void);
 
 /* The forms layer hands the terminal back while Shell runs a command
    (normal mode, main screen), and takes it again after; set when a form

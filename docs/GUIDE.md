@@ -714,7 +714,9 @@ Close #1
 
 | | |
 | --- | --- |
+| `CommandArgs()` | the program's arguments, one by one, as a String array (assign it, or For Each) |
 | `Command$` | the program's arguments, joined by spaces |
+| `App.Path`, `App.EXEName`, `App.FullPath` | the executable's folder, its name (without .exe), its full path |
 | `Environ$("HOME")` | an environment variable ("" if not set) |
 | `Shell("ls -l")` | runs a command through the shell, waits, gives its exit code |
 | `Now`, `Date$`, `Time$`, `Timer` | the date and time; seconds since midnight |

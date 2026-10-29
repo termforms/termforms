@@ -496,6 +496,16 @@ tf_string *tf_date(void);
 tf_string *tf_time(void);
 double tf_timer(void);
 
+/* CommandArgs(): the program's arguments into a dynamic String array (its
+   UBound -1 when there are none); error 10 if the array is locked. App:
+   the executable's folder (no separator at the end, unless it is the
+   root), its name (without .exe on Windows) and its full path, from the
+   system, with symbolic links followed; "" if the system cannot say. */
+void tf_command_args(tf_array *to);
+tf_string *tf_app_path(void);
+tf_string *tf_app_exename(void);
+tf_string *tf_app_fullpath(void);
+
 /* The file system. Paths are UTF-8 (any name works on Windows too).
    Kill and Dir$ take * and ? in the last part (not in folder names); Dir$
    gives the matching files (not folders) in sorted order, one per call,

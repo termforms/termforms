@@ -145,6 +145,10 @@ enum class Builtin
     Timer,
     DoEvents,
     Platform,
+    CommandArgs,
+    AppPath,
+    AppExeName,
+    AppFullPath,
     // Dialogs (step 4.4).
     MsgBox,
     InputBox,
@@ -255,6 +259,12 @@ inline constexpr StringFunction kStringFunctions[] = {
     // program, as in the event loop), so the statement itself cannot fail.
     {Builtin::DoEvents, "", 0, {}, Type::Void, "tf_do_events", false},
     {Builtin::Platform, "", 0, {}, Type::String, "tf_platform_name", false},
+    // CommandArgs(): an array, filled by tf_command_args (an assignment or
+    // For Each, as Split). App.Path and the rest: App's properties.
+    {Builtin::CommandArgs, "", 0, {}, Type::String, "tf_command_args", true},
+    {Builtin::AppPath, "", 0, {}, Type::String, "tf_app_path", false},
+    {Builtin::AppExeName, "", 0, {}, Type::String, "tf_app_exename", false},
+    {Builtin::AppFullPath, "", 0, {}, Type::String, "tf_app_fullpath", false},
     {Builtin::Now, "", 0, {}, Type::String, "tf_now", false},
     {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},

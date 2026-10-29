@@ -785,7 +785,18 @@ a variable that is filled in only when a call succeeds.
   line; Print to stdout and Print #0 to stderr (held while a form or
   dialog is on screen, written when the terminal is restored), `Line
   Input [prompt;] var` from stdin with EOF(0) (error 900 while a form is
-  shown), `End n` (0-255) for the exit code. Also later, perhaps: a graphical form designer (Python Tk) writing the form
+  shown), `End n` (0-255) for the exit code.
+  Arguments and App done (29 Oct 2026): `Builtin::CommandArgs` (an
+  array like Split: `isDictionaryList`, codegen's array assignment calls
+  `tf_command_args`; it also makes main take argc/argv); `App.X` becomes
+  a call of `Builtin::AppPath`/`AppExeName`/`AppFullPath` in sema
+  (`resolveAppMember`); `App` claimed like Err. Runtime: the platform
+  layer now gives the arguments as a list (`tf_platform_args`; Windows
+  splits GetCommandLineW itself) and `tf_platform_exe_path`. Run test
+  tests/run/command_args (arguments with spaces, quotes, backslashes,
+  an empty one, non-ASCII). Found: a statement call whose first argument
+  starts with a parenthesis, `S (a + 1) & b`, does not parse (VB6 takes
+  it); a gap to raise with Jim. Also later, perhaps: a graphical form designer (Python Tk) writing the form
   block, with tfc printing its control catalog as JSON and a headless
   preview; open questions: .frm or rewrite in .bas, keeping comments.
 

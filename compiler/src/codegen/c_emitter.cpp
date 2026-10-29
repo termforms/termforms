@@ -731,7 +731,7 @@ private:
 
     void emitMain(std::ostringstream &out)
     {
-        // Only a program that uses Command$ takes main's arguments, so the
+        // Only a program that uses Command$ or CommandArgs takes main's arguments, so the
         // others' C is as before.
         glue(out);
         out << (usesCommandLine_ ? "int main(int argc, char **argv)\n{\n" : "int main(void)\n{\n");
@@ -1811,6 +1811,11 @@ private:
                     borrowed(settle(*from.args[1], expr(*from.args[1], scope), scope), scope);
                 return "tf_str_split(" + to + ", " + text.code + ", " + delimiter.code + ");";
             }
+            if (from.kind == ExprKind::Call && from.builtin == Builtin::CommandArgs)
+            {
+                usesCommandLine_ = true;
+                return "tf_command_args(" + to + ");";
+            }
             if (from.kind == ExprKind::Call && from.builtin == Builtin::DictKeys)
             {
                 return "tf_dict_keys(" + to + ", " + wholeArrayRef(*from.args[0], scope) + ");";
@@ -2786,7 +2791,8 @@ private:
         }
         if (const StringFunction *f = findStringFunction(e.builtin))
         {
-            usesCommandLine_ = usesCommandLine_ || f->id == Builtin::Command;
+            usesCommandLine_ =
+                usesCommandLine_ || f->id == Builtin::Command || f->id == Builtin::CommandArgs;
             // Every argument is there (sema supplied the defaults), in order.
             std::string args;
             for (std::size_t i = 0; i < e.args.size(); ++i)
@@ -3449,8 +3455,8 @@ private:
     bool checks_ = false;                  // the program has a Try, so errors are tested for
     std::set<const Procedure *> uncalled_; // defined but never called: TF_MAYBE_UNUSED
     mutable bool glued_ = false;           // the last #line was glue()'s
-    bool usesCommandLine_ = false;         // Command$ is used: main passes argc/argv on
-    std::set<const TypeDef *> opsNeeded_;  // Types whose tf_record_ops some code uses
+    bool usesCommandLine_ = false; // Command$ or CommandArgs is used: main passes argc/argv on
+    std::set<const TypeDef *> opsNeeded_; // Types whose tf_record_ops some code uses
 };
 
 } // namespace

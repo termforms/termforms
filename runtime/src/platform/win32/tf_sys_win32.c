@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: 0BSD */
 /*
  * tf_sys_win32.c -- the system on Windows: commands through cmd.exe as
- * UTF-16 (_wsystem), the precise system clock, and the command line's
- * arguments for Command$.
+ * UTF-16 (_wsystem), the precise system clock, the command line's
+ * arguments for Command$ and CommandArgs(), and the executable's path.
  */
 #if defined(_WIN32)
 
@@ -59,12 +59,12 @@ int64_t tf_platform_monotonic_ms(void)
     return (int64_t)GetTickCount64();
 }
 
-/* Command$: the arguments after the program's name, split by the rules
-   Windows programs use (CommandLineToArgvW's: quotes group, 2n backslashes
-   before a quote are n and the quote counts, 2n+1 are n and a literal
-   quote) and joined by single spaces, so the text is the same as on
-   Linux and macOS, where the shell has already done this. */
-char *tf_platform_command(int argc, char **argv)
+/* The arguments after the program's name, split by the rules Windows
+   programs use (CommandLineToArgvW's: quotes group, 2n backslashes before
+   a quote are n and the quote counts, 2n+1 are n and a literal quote), so
+   they are what the shell gives on Linux and macOS. Read from the UTF-16
+   command line, as argv holds them in the ANSI code page. */
+char **tf_platform_args(int argc, char **argv, int32_t *count)
 {
     (void)argc;
     (void)argv;
@@ -87,9 +87,14 @@ char *tf_platform_command(int argc, char **argv)
             ++p;
         }
     }
-    wchar_t *out = tf_xmalloc((wcslen(p) + 1) * sizeof(wchar_t));
+    /* Each argument is written into out ending with a NUL; starts[i] is
+       where argument i begins. There are at most half as many arguments
+       as characters left, plus one. */
+    const size_t left = wcslen(p);
+    wchar_t *out = tf_xmalloc((left + 1) * 2 * sizeof(wchar_t));
+    size_t *starts = tf_xmalloc((left / 2 + 1) * sizeof(size_t));
     size_t n = 0;
-    int first = 1;
+    int32_t found = 0;
     for (;;)
     {
         while (*p == L' ' || *p == L'\t')
@@ -100,11 +105,7 @@ char *tf_platform_command(int argc, char **argv)
         {
             break;
         }
-        if (!first)
-        {
-            out[n++] = L' ';
-        }
-        first = 0;
+        starts[found++] = n;
         int quoted = 0;
         while (*p != L'\0' && (quoted || (*p != L' ' && *p != L'\t')))
         {
@@ -147,11 +148,42 @@ char *tf_platform_command(int argc, char **argv)
                 }
             }
         }
+        out[n++] = L'\0';
     }
-    out[n] = L'\0';
-    char *tail = narrow(out);
+    char **args = tf_xmalloc(sizeof(char *) * (size_t)(found > 0 ? found : 1));
+    for (int32_t i = 0; i < found; ++i)
+    {
+        args[i] = narrow(out + starts[i]);
+    }
+    free(starts);
     free(out);
-    return tail;
+    *count = found;
+    return args;
+}
+
+/* GetModuleFileNameW does not say how long the path is, only that it was
+   cut short, so the buffer grows until it fits. */
+char *tf_platform_exe_path(void)
+{
+    DWORD size = MAX_PATH;
+    for (;;)
+    {
+        wchar_t *path = tf_xmalloc((size_t)size * sizeof(wchar_t));
+        const DWORD n = GetModuleFileNameW(NULL, path, size);
+        if (n == 0)
+        {
+            free(path);
+            return NULL;
+        }
+        if (n < size)
+        {
+            char *s = narrow(path);
+            free(path);
+            return s;
+        }
+        free(path);
+        size *= 2;
+    }
 }
 
 #else

@@ -1,0 +1,16 @@
+
+  ┌───────────────────── Arguments ──────────────────────┐
+  │┌────────────────────────────────────────────────┐    │
+  ││5 arguments: [one two  say "hi" back\slash\ ünï]│    │
+  ││[one two] 7                                     │    │
+  ││[] 0                                            │    │
+  ││[say "hi"] 8                                    │    │
+  ││[back\slash\] 11                                │    │
+  ││[ünï] 3                                         │    │
+  ││EXEName command_args                            │    │
+  ││FullPath is Path + name: True                   │    │
+  ││FullPath exists: True                           │    │
+  ││Path has no end separator: True                 │    │
+  │└────────────────────────────────────────────────┘    │
+  │                                                      │
+  └──────────────────────────────────────────────────────┘

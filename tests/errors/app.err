@@ -1,0 +1,6 @@
+app.bas:4:9: error: 'App' is the built-in object for the program itself
+app.bas:5:23: error: 'CommandArgs' gives an array: assign it to a dynamic array of Strings, or go through it with For Each
+app.bas:6:13: error: App has no property 'Name' (it has Path, EXEName and FullPath)
+app.bas:7:9: error: App is used through its properties, as in App.Path
+app.bas:8:9: error: App's properties are read-only
+app.bas:9:9: error: 'CommandArgs' takes 0 arguments, not 1

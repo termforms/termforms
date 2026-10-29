@@ -90,6 +90,7 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"Timer", Builtin::Timer, false},
                                      {"DoEvents", Builtin::DoEvents, false},
                                      {"Platform", Builtin::Platform, false},
+                                     {"CommandArgs", Builtin::CommandArgs, false},
                                      {"MsgBox", Builtin::MsgBox, false},
                                      {"InputBox", Builtin::InputBox, true},
                                      {"Load", Builtin::FormLoad, false},
@@ -559,6 +560,7 @@ private:
                 claimed[c.name] = "built-in constant";
             }
             claimed["Err"] = "built-in object";
+            claimed["App"] = "built-in object";
         }
         auto [it, inserted] = claimed.emplace(name, what);
         if (!inserted)
@@ -1300,6 +1302,11 @@ private:
             diagnostics_.error(v.location, "'Err' is the built-in error object");
             return;
         }
+        if (v.name == "App")
+        {
+            diagnostics_.error(v.location, "'App' is the built-in object for the program itself");
+            return;
+        }
         if (findBuiltin(v.name, 0) != nullptr)
         {
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a built-in function");
@@ -1458,6 +1465,13 @@ private:
         {
             diagnostics_.error(target.location, "cannot assign to Function '" + target.text +
                                                     "'; only its own body sets its result");
+            return;
+        }
+        if (target.kind == ExprKind::Call &&
+            (target.builtin == Builtin::AppPath || target.builtin == Builtin::AppExeName ||
+             target.builtin == Builtin::AppFullPath))
+        {
+            diagnostics_.error(target.location, "App's properties are read-only");
             return;
         }
         diagnostics_.error(target.location, "this cannot be assigned to");
@@ -2733,14 +2747,22 @@ private:
         return object.field != nullptr && object.field->isDictionary ? object.field : nullptr;
     }
 
-    // d.Keys, d.Items or Split(...), checked or not: an array value.
+    // d.Keys, d.Items, Split(...) or CommandArgs(), checked or not: an
+    // array value. CommandArgs may be written without its parentheses.
     bool isDictionaryList(Expr &e)
     {
+        const auto named = [&](const char *name) {
+            return e.builtin == Builtin::None && e.text == name && e.suffix == 0 &&
+                   lookupVariable(name) == nullptr;
+        };
         if (e.kind == ExprKind::Call &&
             (e.builtin == Builtin::DictKeys || e.builtin == Builtin::DictItems ||
-             e.builtin == Builtin::Split ||
-             (e.builtin == Builtin::None && e.text == "Split" && e.suffix == 0 &&
-              lookupVariable("Split") == nullptr)))
+             e.builtin == Builtin::Split || e.builtin == Builtin::CommandArgs || named("Split") ||
+             named("CommandArgs")))
+        {
+            return true;
+        }
+        if (e.kind == ExprKind::Name && (e.builtin == Builtin::CommandArgs || named("CommandArgs")))
         {
             return true;
         }
@@ -4201,12 +4223,14 @@ private:
         {
             return Type::Error;
         }
-        if (f.id == Builtin::Split)
+        if (f.id == Builtin::Split || f.id == Builtin::CommandArgs)
         {
             if (!whole)
             {
-                diagnostics_.error(e.location, "'Split' gives an array: assign it to a dynamic "
-                                               "array of Strings, or go through it with For Each");
+                diagnostics_.error(e.location, "'" + name +
+                                                   "' gives an array: assign it to a dynamic "
+                                                   "array of Strings, or go through it with For "
+                                                   "Each");
                 return Type::Error;
             }
             e.rank = 1;
@@ -4418,6 +4442,29 @@ private:
         }
         diagnostics_.error(e.location, "Err has no property '" + e.text +
                                            "' (it has Number, Description, Source and Line)");
+        return Type::Error;
+    }
+
+    // App.Path, App.EXEName, App.FullPath: each becomes a call of the
+    // runtime function that asks the system (read only, as in VB6).
+    Type resolveAppMember(Expr &e)
+    {
+        static const std::pair<const char *, Builtin> kMembers[] = {
+            {"Path", Builtin::AppPath},
+            {"EXEName", Builtin::AppExeName},
+            {"FullPath", Builtin::AppFullPath}};
+        for (const auto &[name, id] : kMembers)
+        {
+            if (e.text == name)
+            {
+                e.kind = ExprKind::Call;
+                e.left.reset();
+                e.args.clear();
+                return checkStringFunction(e, std::string("App.") + name, *findStringFunction(id));
+            }
+        }
+        diagnostics_.error(e.location, "App has no property '" + e.text +
+                                           "' (it has Path, EXEName and FullPath)");
         return Type::Error;
     }
 
@@ -4722,6 +4769,11 @@ private:
             diagnostics_.error(e.location, "Err is used through its properties, as in Err.Number");
             return Type::Error;
         }
+        if (e.text == "App")
+        {
+            diagnostics_.error(e.location, "App is used through its properties, as in App.Path");
+            return Type::Error;
+        }
         if (types_.count(e.text) != 0)
         {
             diagnostics_.error(e.location, "'" + e.text +
@@ -4830,6 +4882,10 @@ private:
         if (object.kind == ExprKind::Name && object.text == "Err")
         {
             return resolveErrMember(e);
+        }
+        if (object.kind == ExprKind::Name && object.text == "App")
+        {
+            return resolveAppMember(e);
         }
         if (object.kind == ExprKind::Name)
         {
