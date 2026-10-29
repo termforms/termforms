@@ -794,9 +794,12 @@ a variable that is filled in only when a call succeeds.
   layer now gives the arguments as a list (`tf_platform_args`; Windows
   splits GetCommandLineW itself) and `tf_platform_exe_path`. Run test
   tests/run/command_args (arguments with spaces, quotes, backslashes,
-  an empty one, non-ASCII). Found: a statement call whose first argument
-  starts with a parenthesis, `S (a + 1) & b`, does not parse (VB6 takes
-  it); a gap to raise with Jim.
+  an empty one, non-ASCII). Found then fixed (Jim, 29 Oct 2026): a
+  method statement whose first argument starts with a parenthesis,
+  `lst.AddItem (n + 1) & "x"`, did not parse (Subs already did, by
+  `parenthesisedToEnd`); `parseAssignOrMethod` now parses the target
+  again with that "(" left for the argument (`noListAt_`). Run test
+  tests/run/paren_args.
   Console programs done (29 Oct 2026): parser `parseConsolePrint`
   (Print not followed by = or .; `printItems` shared with Print #),
   `parseConsoleLineInput` (the first part is the prompt if `;` follows),

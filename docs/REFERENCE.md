@@ -129,6 +129,10 @@ End Function
 
 - `Show a, b`, `Show(a, b)` and `Call Show(a, b)` all mean the same.
   Unlike VB6, extra parentheses never turn a ByRef argument into ByVal.
+- When more of the statement follows the closing parenthesis, the
+  parenthesis starts the first argument instead, as VB6 reads it:
+  `lst.AddItem (n + 1) & " items"` and `d.Add (key), value` (Jim, 29 Oct
+  2026). For Subs and methods alike.
 - A Function may be called as a statement; its result is discarded.
 - Event handlers (`Sub cmdOK_Click()`) and `Sub Main` take no parameters.
 

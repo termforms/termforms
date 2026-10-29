@@ -17,7 +17,7 @@ End
 Sub Form_Load()
     Dim a() As String
     a = CommandArgs()
-    lstArgs.AddItem CStr(UBound(a) + 1) & " arguments: [" & Command$ & "]"
+    lstArgs.AddItem (UBound(a) + 1) & " arguments: [" & Command$ & "]"
     For Each s As String In CommandArgs
         lstArgs.AddItem "[" & s & "] " & Len(s)
     Next

@@ -53,6 +53,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <utility>
 
 namespace tf
@@ -1410,11 +1411,23 @@ private:
         auto s = std::make_unique<Stmt>();
         s->kind = StmtKind::Assign;
         s->location = peek().location;
+        const std::size_t start = pos_;
         s->target = parsePrimary();
         if (acceptSymbol("="))
         {
             s->value = parseExpression();
             return s;
+        }
+        // lst.AddItem (n + 1) & " items": the parenthesis, followed by more of
+        // the statement, starts the first argument (as VB6 reads it), not
+        // an argument list. Parsed again with that "(" left for the argument.
+        if (s->target->kind == ExprKind::Index && !atStatementEnd() &&
+            tokens_[pos_ - 1].isSymbol(")"))
+        {
+            noListAt_ = matchingOpen(pos_ - 1);
+            pos_ = start;
+            s->target = parsePrimary();
+            noListAt_ = SIZE_MAX;
         }
         if (s->target->kind != ExprKind::Member && s->target->kind != ExprKind::Index)
         {
@@ -1459,6 +1472,27 @@ private:
         }
         parseArguments(s->args);
         return s;
+    }
+
+    // The index of the "(" that the ")" at index close closes.
+    std::size_t matchingOpen(std::size_t close) const
+    {
+        int depth = 0;
+        for (std::size_t i = close;; --i)
+        {
+            if (tokens_[i].isSymbol(")"))
+            {
+                ++depth;
+            }
+            else if (tokens_[i].isSymbol("(") && --depth == 0)
+            {
+                return i;
+            }
+            if (i == 0)
+            {
+                return SIZE_MAX;
+            }
+        }
     }
 
     // At the '(' `ahead` tokens on: is its matching ')' followed by symbol?
@@ -2780,7 +2814,7 @@ private:
             member->text = expectMemberName();
             member->left = std::move(e);
             e = std::move(member);
-            if (peek().isSymbol("("))
+            if (peek().isSymbol("(") && pos_ != noListAt_)
             {
                 auto index = std::make_unique<Expr>();
                 index->kind = ExprKind::Index;
@@ -2800,9 +2834,10 @@ private:
     std::size_t pos_ = 0;
     int lastErrorLine_ = 0;
     Procedure *currentProcedure_ = nullptr;
-    bool dictionary_ = false;        // parseTypeName read Dictionary(Of T)
-    bool failed_ = false;            // parseFileStatement reported an error
-    std::vector<const char *> open_; // constructs around the current block
+    bool dictionary_ = false;         // parseTypeName read Dictionary(Of T)
+    bool failed_ = false;             // parseFileStatement reported an error
+    std::size_t noListAt_ = SIZE_MAX; // a "(" that starts an argument, not a list
+    std::vector<const char *> open_;  // constructs around the current block
 };
 
 } // namespace
