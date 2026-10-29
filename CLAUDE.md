@@ -454,8 +454,14 @@ authoritative for design rationale.
   first use, Defender scanning, and tfc compiling the whole runtime on
   every build); to measure: a second build of the same program. A
   possible later improvement: cache the runtime's objects per target.
-- **Next:** finish 5.8, the gate on the laptop (the other examples, the
-  environment doc's steps). The terminal matrix is done except
+  The environment doc now starts with "Setting up from a release"
+  (Windows, macOS, Linux: download, PATH, zig or the system compiler,
+  build the examples, ship to Linux with chmod +x, a console check), and
+  the project plan's status, v1 table and post-v1 list are current (29
+  Oct 2026). Additions to v1 are recorded in the plan first (its risks
+  table says so).
+- **Next:** finish 5.8: Jim runs the environment doc's "Setting up from a
+  release" on the laptop, as written. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 

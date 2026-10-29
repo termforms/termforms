@@ -47,9 +47,11 @@ zig builds for other machines. From a Mac or Windows:
 ```sh
 tfc --cc "zig cc -target x86_64-linux-musl" -o hello-linux hello.bas
 scp hello-linux server:
+ssh -t server ./hello-linux
 ```
 
-One static file, nothing to install on the server.
+One static file, nothing to install on the server. From Windows the file
+arrives without its executable bit: `chmod +x hello-linux` there once.
 
 ## Learning the language
 

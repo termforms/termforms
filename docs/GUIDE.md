@@ -111,8 +111,10 @@ scp greet-linux server:
 ssh -t server ./greet-linux
 ```
 
-Dropping the connection while it runs leaves the server's terminal as it
-was. (`aarch64-linux-musl` builds for ARM servers.)
+Copied from Windows, the file arrives without its executable bit: run
+`chmod +x greet-linux` on the server once. Dropping the connection while
+it runs leaves the server's terminal as it was. (`aarch64-linux-musl`
+builds for ARM servers.)
 
 ### Several files: modules and projects
 
