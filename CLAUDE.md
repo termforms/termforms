@@ -507,6 +507,11 @@ authoritative for design rationale.
   empty array (never sized, or erased) is -1 for its first dimension,
   LBound 0, not VB6's error 9 (`empty_first` in tf_array.c); other
   dimensions of it stay 9.
+  Jim ran syncfix on greece (30 Oct 2026): config.xml found in
+  ~/.local/state/syncthing, four folders, no conflicts. His terminal
+  profile's colours made bright white and grey alike, hiding access
+  keys, so they are now underlined too (`TF_UNDERLINE`, a flag added to
+  a cell's fg; tf_screen.c emits SGR 4; draw_caption adds it).
 - **Next:** Jim deploys syncfix to the NAS servers and uses it in
   earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual

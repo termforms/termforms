@@ -971,12 +971,14 @@ static uint32_t access_key(const tf_string *caption)
     return 0;
 }
 
-/* Draws a caption, its access key (after &) in hot; "&&" is an &. Returns
-   the cells used. */
+/* Draws a caption, its access key (after &) in hot and underlined unless
+   hot is fg (a control that cannot be used has no access key); "&&" is an
+   &. Returns the cells used. */
 static int draw_caption(int x, int y, const tf_string *caption, int max_cells, int fg, int bg,
                         int hot)
 {
     const char *p = tf_str_cstr(caption);
+    const int key = hot == fg ? fg : hot | TF_UNDERLINE;
     int cells = 0;
     int next_hot = 0;
     while (*p != '\0' && cells < max_cells)
@@ -998,7 +1000,7 @@ static int draw_caption(int x, int y, const tf_string *caption, int max_cells, i
         {
             break; /* a wide character that would not fit */
         }
-        tf_screen_put(x + cells, y, cp, next_hot ? hot : fg, bg);
+        tf_screen_put(x + cells, y, cp, next_hot ? key : fg, bg);
         next_hot = 0;
         cells += w;
     }

@@ -1254,6 +1254,10 @@ Module=lib/stock.bas
   the other's.
 - A Label's access key moves the focus to the next control in tab order
   (put a Label just before the control it names, as in VB).
+- An access key is drawn bright white and underlined (Jim, 30 Oct 2026:
+  on greece, a terminal colour scheme made bright white and the forms'
+  grey alike, and the letters vanished); a control that cannot be used
+  shows none.
 - Enter and Esc in a TextBox go to the Default and Cancel buttons.
 - Tab order is the order the controls are written in the form block.
 - `Ctrl+Q` no longer closes a form (Ctrl+F4 or Alt+F4 does).

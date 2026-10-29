@@ -69,11 +69,13 @@ static void emitf_move(int x, int y)
 
 static void emit_colours(int fg, int bg)
 {
-    /* 30-37 / 90-97 foreground, 40-47 / 100-107 background. */
+    /* 30-37 / 90-97 foreground, 40-47 / 100-107 background; 4 underlines. */
     char sequence[32];
-    const int f = fg < 8 ? 30 + fg : 90 + fg - 8;
+    const int colour = fg & 15;
+    const int f = colour < 8 ? 30 + colour : 90 + colour - 8;
     const int b = bg < 8 ? 40 + bg : 100 + bg - 8;
-    const int n = snprintf(sequence, sizeof sequence, "\x1b[0;%d;%dm", f, b);
+    const char *underline = (fg & TF_UNDERLINE) != 0 ? ";4" : "";
+    const int n = snprintf(sequence, sizeof sequence, "\x1b[0;%d;%d%sm", f, b, underline);
     emit(sequence, (size_t)n);
 }
 

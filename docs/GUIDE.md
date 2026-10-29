@@ -477,6 +477,11 @@ The form itself has Caption, Width, Height, Visible (read-only) and the
 events Load, Activate and Unload. `Me` is the form whose module the code
 is in.
 
+An access key (the letter after `&` in a Caption) is shown bright and
+underlined, so it stays visible whatever colours the terminal uses; `&&`
+shows an `&`. A Label showing data, such as a file name, should double
+any `&` in it (`Replace(text, "&", "&&")`).
+
 **Enabled and Visible** work on every control and menu, in the form block
 or in code. A disabled control is drawn dim, Tab passes over it, and it
 takes no keys, access keys or clicks; a hidden one is not drawn at all.
