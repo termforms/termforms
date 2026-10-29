@@ -871,7 +871,7 @@ Dim cfg As String = App.Path & "/settings.txt"   ' beside the program
   properties are read-only. App.Path keeps the separator of a root
   folder ("/", or "C:\" on Windows), as VB6 does.
 
-### Console programs: Print, Line Input, End n (Settled, Jim, 29 Oct 2026; not built yet)
+### Console programs: Print, Line Input, End n (Settled, Jim, 29 Oct 2026)
 
 ```vb
 Sub Main()
@@ -910,6 +910,17 @@ End Sub
 - **`End n`** ends the program with exit code n (0 to 255; error 5
   otherwise, as Linux keeps only 8 bits). Plain `End` and the end of
   Sub Main give 0; an uncaught error gives 1, as now.
+- Details as built: Print before the first form is drawn (in Sub Main,
+  or in Form_Load, which runs first) is written at once, as the terminal
+  is still normal. EOF(0) while a form is on screen is error 900 too
+  (finding the end would read the form's keys). `Print` is recognised by
+  shape, not reserved: `Print = 1` and `Print.x` still name a variable.
+  The prompt of Line Input may be any String expression. Standard input
+  is read as bytes; text that is not UTF-8 shows U+FFFD for each bad
+  byte, as Line Input # does. On Windows a console's input is read as
+  Unicode (ReadConsoleW, Ctrl+Z at a line's start ending it), and
+  standard output goes to a console as Unicode (WriteConsoleW), to a pipe
+  or file as UTF-8 bytes.
 
 ### Byte (Proposed)
 

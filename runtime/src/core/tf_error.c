@@ -73,6 +73,18 @@ void tf_end(int exit_code)
     exit(exit_code);
 }
 
+/* End n: Linux and macOS keep only the low 8 bits of an exit code, so a
+   larger one would arrive as something else. */
+void tf_end_with(int32_t exit_code)
+{
+    if (exit_code < 0 || exit_code > 255)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    tf_end((int)exit_code);
+}
+
 /* Leaves raw mode and the alternate screen first, or the message is lost. */
 static TF_NORETURN void report_and_exit(int32_t number, const char *file, int32_t line,
                                         const char *message)

@@ -1,0 +1,3 @@
+console.bas:5:9: error: the exit code of 'End' must be an Integer, not a String; use CInt(value) to convert
+console.bas:6:26: error: this cannot be assigned to
+console.bas:7:5: error: cannot assign a String to an Integer (Option Strict); use CInt(value) to convert

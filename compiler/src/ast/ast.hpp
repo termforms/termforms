@@ -149,6 +149,9 @@ enum class Builtin
     AppPath,
     AppExeName,
     AppFullPath,
+    ConsolePrint,
+    ConsoleLineInput,
+    EndWith,
     // Dialogs (step 4.4).
     MsgBox,
     InputBox,
@@ -265,6 +268,11 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::AppPath, "", 0, {}, Type::String, "tf_app_path", false},
     {Builtin::AppExeName, "", 0, {}, Type::String, "tf_app_exename", false},
     {Builtin::AppFullPath, "", 0, {}, Type::String, "tf_app_fullpath", false},
+    // Print (to standard output: the text, then 1 for a newline), Line
+    // Input from standard input (the prompt), End n (the exit code).
+    {Builtin::ConsolePrint, "SI", 2, {}, Type::Void, "tf_console_print", false},
+    {Builtin::ConsoleLineInput, "S", 1, {}, Type::String, "tf_console_line_input", true},
+    {Builtin::EndWith, "I", 1, {}, Type::Void, "tf_end_with", true},
     {Builtin::Now, "", 0, {}, Type::String, "tf_now", false},
     {Builtin::Date, "", 0, {}, Type::String, "tf_date", false},
     {Builtin::Time, "", 0, {}, Type::String, "tf_time", false},

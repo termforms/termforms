@@ -104,7 +104,7 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_PATH_ACCESS 75         /* Path/File access error */
 #define TF_ERR_PATH_NOT_FOUND 76      /* Path not found */
 #define TF_ERR_OUT_OF_STRING_SPACE 14 /* Out of string space: a string too long */
-#define TF_ERR_TERMINAL 900           /* Terminal error (always fatal) */
+#define TF_ERR_TERMINAL 900           /* Terminal error (fatal when the terminal fails) */
 #define TF_ERR_FIRST_USER 1000        /* the first number left to programs */
 
 /* The standard text for an error number (static); for a number with no
@@ -495,6 +495,17 @@ tf_string *tf_now(void);
 tf_string *tf_date(void);
 tf_string *tf_time(void);
 double tf_timer(void);
+
+/* Console programs. Print writes to standard output (Print #0 to standard
+   error, through tf_file_print), held while a form or dialog is on screen
+   and written in order when the terminal is normal again. Line Input reads
+   a line of standard input after writing the prompt: error 62 past its
+   end, 900 while the screen is in use (the keys are the form's). EOF(0)
+   is the end of standard input. End n gives the exit code: 0 to 255, else
+   error 5. */
+void tf_console_print(const tf_string *text, int32_t newline);
+tf_string *tf_console_line_input(const tf_string *prompt);
+void tf_end_with(int32_t exit_code);
 
 /* CommandArgs(): the program's arguments into a dynamic String array (its
    UBound -1 when there are none); error 10 if the array is locked. App:

@@ -912,6 +912,18 @@ private:
             s->location = next().location;
             return s;
         }
+        // End n: the exit code. A keyword after End is a block's end (End
+        // If), so only an expression that does not start with one is n.
+        if (t.isKeyword("END") && (peek(1).kind != TokenKind::Keyword || peek(1).isKeyword("NOT")))
+        {
+            auto s = std::make_unique<Stmt>();
+            s->kind = StmtKind::End;
+            s->location = next().location;
+            ExprPtr call = libraryCall(Builtin::EndWith, "End", s->location);
+            call->args.push_back(parseExpression());
+            s->args.push_back(std::move(call));
+            return s;
+        }
         if (t.isKeyword("CALL"))
         {
             next();
@@ -1060,9 +1072,19 @@ private:
         {
             return parsePrint();
         }
+        // Print to standard output: Print not being assigned to or used as
+        // a name (Print stays free for a variable).
+        if (isWord(t, "PRINT") && !peek(1).isSymbol("=") && !peek(1).isSymbol("."))
+        {
+            return parseConsolePrint();
+        }
         if (isWord(t, "LINE") && isWord(peek(1), "INPUT") && peek(2).isSymbol("#"))
         {
             return parseLineInput();
+        }
+        if (isWord(t, "LINE") && isWord(peek(1), "INPUT"))
+        {
+            return parseConsoleLineInput();
         }
         // Name old As new: As never appears in an expression, so a statement
         // with it is this one (Name stays free as a variable or member).
@@ -1238,9 +1260,38 @@ private:
         next(); // #
         ExprPtr call = libraryCall(Builtin::FilePrint, "Print #", s->location);
         call->args.push_back(parseExpression());
+        if (!atStatementEnd() && !expectSymbol(","))
+        {
+            failed_ = true;
+            return nullptr;
+        }
+        if (!printItems(*call, s->location, "Print #"))
+        {
+            return nullptr;
+        }
+        s->args.push_back(std::move(call));
+        return s;
+    }
+
+    // Print [item {; item}[;]]: as Print #, to standard output.
+    StmtPtr parseConsolePrint()
+    {
+        StmtPtr s = libraryStatement(next().location);
+        ExprPtr call = libraryCall(Builtin::ConsolePrint, "Print", s->location);
+        if (!printItems(*call, s->location, "Print"))
+        {
+            return nullptr;
+        }
+        s->args.push_back(std::move(call));
+        return s;
+    }
+
+    // Print's items to the end of the statement, added to call as the text
+    // and the newline flag.
+    bool printItems(Expr &call, Location where, const char *name)
+    {
         ExprPtr text; // item & item ... (sema makes a lone number text)
         bool newline = true;
-        if (acceptSymbol(","))
         {
             while (!atStatementEnd())
             {
@@ -1256,23 +1307,23 @@ private:
                 }
                 if (peek().isSymbol(","))
                 {
-                    error(peek().location, "Print # separates items with ';', not ','");
+                    error(peek().location,
+                          std::string(name) + " separates items with ';', not ','");
                     failed_ = true;
-                    return nullptr;
+                    return false;
                 }
                 break;
             }
         }
-        if (text == nullptr) // Print #n: just the newline
+        if (text == nullptr) // Print #n, or Print: just the newline
         {
             text = std::make_unique<Expr>();
             text->kind = ExprKind::StringLiteral;
-            text->location = s->location;
+            text->location = where;
         }
-        call->args.push_back(std::move(text));
-        call->args.push_back(integer(newline ? 1 : 0, s->location));
-        s->args.push_back(std::move(call));
-        return s;
+        call.args.push_back(std::move(text));
+        call.args.push_back(integer(newline ? 1 : 0, where));
+        return true;
     }
 
     // Get #n, [offset], buffer [, count] and Put the same: each optional part
@@ -1321,6 +1372,33 @@ private:
             return nullptr;
         }
         s->target = parsePrimary();
+        s->value = std::move(call);
+        return s;
+    }
+
+    // Line Input [prompt;] target: target = a line of standard input. The
+    // first part is the prompt when a ";" follows it, else the target.
+    StmtPtr parseConsoleLineInput()
+    {
+        auto s = std::make_unique<Stmt>();
+        s->kind = StmtKind::Assign;
+        s->location = next().location;
+        next(); // Input
+        ExprPtr call = libraryCall(Builtin::ConsoleLineInput, "Line Input", s->location);
+        ExprPtr first = parseExpression();
+        if (acceptSymbol(";"))
+        {
+            call->args.push_back(std::move(first));
+            s->target = parsePrimary();
+        }
+        else
+        {
+            auto none = std::make_unique<Expr>();
+            none->kind = ExprKind::StringLiteral;
+            none->location = s->location;
+            call->args.push_back(std::move(none));
+            s->target = std::move(first);
+        }
         s->value = std::move(call);
         return s;
     }

@@ -71,6 +71,7 @@ End Sub
 | Menus | `Begin Menu` blocks: a menu bar with drop-downs (two levels); Caption (`-` a separator), Enabled, Visible, Checked, Shortcut; the Click event; F10 or Ctrl+B, Alt+letter |
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
 | Modules | several `.bas` files (`tfc main.bas stock.bas`); `Public`/`Private`; `Module.Name`; `frmMain.control` from other modules |
+| Console | `Print` (standard output), `Print #0` (standard error), `Line Input [prompt;] var` (standard input), `EOF(0)`, `End n` (the exit code) |
 | System | `Command$`, `CommandArgs()`, `App.Path`/`EXEName`/`FullPath`, `Environ$`, `Shell`, `Now`, `Date$`, `Time$`, `Timer` |
 | Strings | `Len`, `LenB`, `Mid$` (and the statement `Mid$(s, 2, 1) = "x"`), `Left$`, `Right$`, `InStr`, `InStrRev`, `LCase$`, `UCase$`, `LTrim$`, `RTrim$`, `Trim$`, `Space$`, `String$`, `Chr$`, `Asc`, `Replace`, `StrReverse`, `Split`, `Join` |
 | Dictionary | `Dictionary(Of T)` with String keys: `d(k)`, `Add`, `Exists`, `Remove`, `Count`, `Clear`, `Keys`, `Items`; as a variable, parameter or Type member |
@@ -268,6 +269,23 @@ For Each a As String In CommandArgs()   ' the arguments one by one
 cfg = App.Path & "/settings.txt"  ' the executable's folder
 stamp = Now                       ' "2026-10-28 14:05:09"
 ```
+
+## Console programs
+
+```vb
+Sub Main()                          ' no forms: standard input and output
+    Line Input "Name: "; name       ' a line of standard input
+    Print "Hello, "; name           ' ; joins; a trailing ; leaves off the newline
+    Do While Not EOF(0)             ' the rest of the input (a pipe, a file)
+        Line Input line
+    Loop
+    Print #0, "done"                ' standard error
+    End 2                           ' exit code 2
+End Sub
+```
+
+While a form is on screen, Print's text is held and written when the
+terminal is normal again; Line Input there is error 900.
 
 ## Modules
 

@@ -2,7 +2,8 @@
 /*
  * tf_sys_win32.c -- the system on Windows: commands through cmd.exe as
  * UTF-16 (_wsystem), the precise system clock, the command line's
- * arguments for Command$ and CommandArgs(), and the executable's path.
+ * arguments for Command$ and CommandArgs(), the executable's path, and
+ * standard input and output for console programs.
  */
 #if defined(_WIN32)
 
@@ -10,7 +11,11 @@
 #include "../../tf_internal.h"
 
 #include <errno.h>
+#include <fcntl.h>
+#include <io.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <wchar.h>
 #include <windows.h>
 
@@ -159,6 +164,117 @@ char **tf_platform_args(int argc, char **argv, int32_t *count)
     free(out);
     *count = found;
     return args;
+}
+
+/* A console takes text in its own code page through WriteFile, so to one
+   the UTF-8 goes as UTF-16 with WriteConsoleW; to a pipe or a file it goes
+   as it is (UTF-8, LF line ends, as on Linux and macOS). */
+void tf_platform_console_write(int stream, const char *data, size_t n)
+{
+    fflush(stdout); /* stdio's own text first (a headless dump) */
+    HANDLE h = GetStdHandle(stream == 2 ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (h == NULL || h == INVALID_HANDLE_VALUE || n == 0)
+    {
+        return;
+    }
+    DWORD mode = 0;
+    if (GetConsoleMode(h, &mode))
+    {
+        const int wn = MultiByteToWideChar(CP_UTF8, 0, data, (int)n, NULL, 0);
+        if (wn <= 0)
+        {
+            return;
+        }
+        wchar_t *w = tf_xmalloc((size_t)wn * sizeof(wchar_t));
+        MultiByteToWideChar(CP_UTF8, 0, data, (int)n, w, wn);
+        DWORD written = 0;
+        WriteConsoleW(h, w, (DWORD)wn, &written, NULL);
+        free(w);
+        return;
+    }
+    DWORD written = 0;
+    WriteFile(h, data, (DWORD)n, &written, NULL);
+}
+
+/* From a console, ReadConsoleW gives what was typed as UTF-16, a line at a
+   time (Ctrl+Z at the start of a line is the end of the input, as cmd.exe
+   has it); from a pipe or a file, the bytes are read as they are. */
+int tf_platform_console_read_line(char **line, size_t *size)
+{
+    HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD mode = 0;
+    if (h != NULL && h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode))
+    {
+        size_t capacity = 128;
+        size_t used = 0;
+        wchar_t *w = tf_xmalloc(capacity * sizeof(wchar_t));
+        for (;;)
+        {
+            wchar_t c = 0;
+            DWORD got = 0;
+            if (!ReadConsoleW(h, &c, 1, &got, NULL) || got == 0)
+            {
+                break;
+            }
+            if (c == L'\n')
+            {
+                break;
+            }
+            if (c == 0x1A && used == 0)
+            {
+                free(w);
+                return -1;
+            }
+            if (used + 1 >= capacity)
+            {
+                capacity *= 2;
+                w = tf_xrealloc(w, capacity * sizeof(wchar_t));
+            }
+            w[used++] = c;
+        }
+        if (used > 0 && w[used - 1] == L'\r')
+        {
+            --used;
+        }
+        w[used] = L'\0';
+        *line = narrow(w);
+        *size = strlen(*line);
+        free(w);
+        return 0;
+    }
+    /* Binary, so stdio neither turns CR LF into LF (done here) nor stops
+       at a Ctrl+Z inside the data. */
+    static int binary = 0;
+    if (!binary)
+    {
+        _setmode(_fileno(stdin), _O_BINARY);
+        binary = 1;
+    }
+    size_t capacity = 128;
+    size_t used = 0;
+    char *s = tf_xmalloc(capacity);
+    int c = getchar();
+    if (c == EOF)
+    {
+        free(s);
+        return -1;
+    }
+    for (; c != EOF && c != '\n'; c = getchar())
+    {
+        if (used == capacity)
+        {
+            capacity *= 2;
+            s = tf_xrealloc(s, capacity);
+        }
+        s[used++] = (char)c;
+    }
+    if (used > 0 && s[used - 1] == '\r')
+    {
+        --used;
+    }
+    *line = s;
+    *size = used;
+    return 0;
 }
 
 /* GetModuleFileNameW does not say how long the path is, only that it was

@@ -796,7 +796,21 @@ a variable that is filled in only when a call succeeds.
   tests/run/command_args (arguments with spaces, quotes, backslashes,
   an empty one, non-ASCII). Found: a statement call whose first argument
   starts with a parenthesis, `S (a + 1) & b`, does not parse (VB6 takes
-  it); a gap to raise with Jim. Also later, perhaps: a graphical form designer (Python Tk) writing the form
+  it); a gap to raise with Jim.
+  Console programs done (29 Oct 2026): parser `parseConsolePrint`
+  (Print not followed by = or .; `printItems` shared with Print #),
+  `parseConsoleLineInput` (the first part is the prompt if `;` follows),
+  `End n` (End then a non-keyword: StmtKind::End with an `EndWith` call
+  in args); Builtin::ConsolePrint/ConsoleLineInput/EndWith. Runtime in
+  tf_file.c "Standard input and output": Print #0 and EOF(0) are file
+  number 0; text held while `tf_console_screen(1)` (tf_forms.c ui_open/
+  ui_resume set it, ui_suspend/ui_shutdown clear it and so write it out,
+  after a headless dump); EOF(0) reads a line ahead. Platform:
+  tf_platform_console_write/read_line (Windows: WriteConsoleW/
+  ReadConsoleW for a console, bytes otherwise). Run tests may have a
+  `.stdin` (else empty input) and `.exit` (the expected exit code);
+  `.keys` is optional. Tests: run/console, run/console_forms,
+  errors/console, errors/console_print. Also later, perhaps: a graphical form designer (Python Tk) writing the form
   block, with tfc printing its control catalog as JSON and a headless
   preview; open questions: .frm or rewrite in .bas, keeping comments.
 

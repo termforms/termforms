@@ -17,7 +17,8 @@ summary of what works today, [LANGUAGE.md](LANGUAGE.md).
 2. [Coming from Visual Basic](#2-coming-from-visual-basic)
 3. [The language](#3-the-language)
 4. [Forms and controls](#4-forms-and-controls)
-5. [Files, folders and the system](#5-files-folders-and-the-system)
+5. [Files, folders and the system](#5-files-folders-and-the-system),
+   and console programs
 6. [Calling C](#6-calling-c)
 7. [Building, debugging and deploying](#7-building-debugging-and-deploying)
 
@@ -721,6 +722,43 @@ Close #1
 | `Shell("ls -l")` | runs a command through the shell, waits, gives its exit code |
 | `Now`, `Date$`, `Time$`, `Timer` | the date and time; seconds since midnight |
 | `Platform` | "Windows", "macOS" or "Linux": what the program was built for |
+
+### Console programs
+
+A program with a `Sub Main` and no forms can work as an ordinary
+command-line tool: reading standard input, writing standard output and
+error, and giving the shell an exit code. This one numbers the lines it
+is given:
+
+```vb
+' number.bas -- writes its input with line numbers:  number < notes.txt
+Sub Main()
+    Dim count As Integer
+    Do While Not EOF(0)                 ' EOF(0): the end of standard input
+        Dim line As String
+        Line Input line
+        count = count + 1
+        Print Right$("    " & count, 5); "  "; line
+    Loop
+    If count = 0 Then
+        Print #0, "number: no input"    ' #0 is standard error
+        End 1                           ' the exit code
+    End If
+End Sub
+```
+
+- `Print` follows `Print #`'s rules: `;` joins items, a trailing `;`
+  leaves off the newline, and lines end with LF.
+- `Line Input "Name: "; name` writes the prompt, then reads a line (typed,
+  or from a pipe or file) without its line end. Reading past the end is
+  error 62.
+- `End n` ends the program with exit code n (0 to 255); finishing Sub Main
+  gives 0, and an uncaught error 1.
+- Text goes through as UTF-8, and to a Windows console as Unicode, so
+  accented letters and the like show properly there too.
+- A form program can Print as well: while a form is on screen the text is
+  kept, and written when the program ends (or a Shell gives the terminal
+  back). Line Input then is error 900, as the keys belong to the form.
 
 ---
 

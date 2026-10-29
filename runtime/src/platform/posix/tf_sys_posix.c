@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: 0BSD */
 /*
  * tf_sys_posix.c -- the system on POSIX: commands through /bin/sh, the
- * real-time clock, argv for Command$ and CommandArgs(), and the
- * executable's path for App.
+ * real-time clock, argv for Command$ and CommandArgs(), the executable's
+ * path for App, and standard input and output for console programs.
  */
 #if !defined(_WIN32)
 
@@ -45,6 +45,51 @@ int64_t tf_platform_monotonic_ms(void)
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+/* Through stdio, so Print's text and anything else on stdout (a headless
+   screen dump) stay in order; standard output is flushed before standard
+   error is written, so the two interleave as they were written. */
+void tf_platform_console_write(int stream, const char *data, size_t n)
+{
+    if (stream == 2)
+    {
+        fflush(stdout);
+        fwrite(data, 1, n, stderr);
+        fflush(stderr);
+        return;
+    }
+    fwrite(data, 1, n, stdout);
+}
+
+int tf_platform_console_read_line(char **line, size_t *size)
+{
+    fflush(stdout); /* the prompt, written without a newline */
+    size_t capacity = 128;
+    size_t used = 0;
+    char *s = tf_xmalloc(capacity);
+    int c = getchar();
+    if (c == EOF)
+    {
+        free(s);
+        return -1;
+    }
+    for (; c != EOF && c != '\n'; c = getchar())
+    {
+        if (used == capacity)
+        {
+            capacity *= 2;
+            s = tf_xrealloc(s, capacity);
+        }
+        s[used++] = (char)c;
+    }
+    if (used > 0 && s[used - 1] == '\r')
+    {
+        --used; /* a file with CRLF line ends */
+    }
+    *line = s;
+    *size = used;
+    return 0;
 }
 
 /* The shell has already split the command line, so argv is the answer. */

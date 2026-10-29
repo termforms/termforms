@@ -1086,7 +1086,14 @@ private:
                 code += checks_ ? " if (tf_error_pending) " + failJump() : "";
                 break;
             case StmtKind::End:
-                code = "tf_end(0);";
+                if (s.args.empty())
+                {
+                    code = "tf_end(0);";
+                    break;
+                }
+                // End n returns only when n is out of range (error 5).
+                code = wrap(scope, builtin(*s.args[0], scope).code + ";");
+                code += checks_ ? " if (tf_error_pending) " + failJump() : "";
                 break;
             default:
                 break;

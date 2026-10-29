@@ -118,6 +118,20 @@ int64_t tf_platform_monotonic_ms(void);
    the array too. */
 char **tf_platform_args(int argc, char **argv, int32_t *count);
 
+/* Standard output (stream 1) or error (2): writes n bytes of UTF-8 (as
+   UTF-16 to a Windows console, which would otherwise take them in its
+   code page). */
+void tf_platform_console_write(int stream, const char *data, size_t n);
+
+/* One line of standard input as UTF-8, without its line end, in *line
+   (to free) and *size; -1 at the end of the input. */
+int tf_platform_console_read_line(char **line, size_t *size);
+
+/* The forms layer says when the screen is in use (1: a form or dialog is
+   drawn, raw mode) and when the terminal is normal again (0), which writes
+   out what Print held meanwhile. */
+void tf_console_screen(int in_use);
+
 /* The executable's full path as UTF-8, symbolic links followed, to free;
    NULL if the system cannot say. */
 char *tf_platform_exe_path(void);

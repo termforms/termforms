@@ -94,7 +94,9 @@ def run(tfc: str, source: Path, work: Path) -> bool:
         print(f"FAIL: build exited {build.returncode}\n{build.stdout}{build.stderr}")
         return False
 
-    keys = source.with_suffix(".keys").read_text(encoding="utf-8").rstrip("\r\n")
+    # The key script; a console program (no forms) needs none.
+    keys_file = source.with_suffix(".keys")
+    keys = keys_file.read_text(encoding="utf-8").rstrip("\r\n") if keys_file.exists() else ""
     # An optional .size file ("80x24"): a screen for programs larger than
     # the usual one, such as the examples.
     size_file = source.with_suffix(".size")
@@ -118,21 +120,31 @@ def run(tfc: str, source: Path, work: Path) -> bool:
     # An optional .args file: the program's command-line arguments, one a line.
     args_file = source.with_suffix(".args")
     args = args_file.read_text(encoding="utf-8").splitlines() if args_file.exists() else []
-    result = subprocess.run([str(exe)] + args, cwd=folder, env=env, capture_output=True,
-                            timeout=60)
+    # An optional .stdin file: the program's standard input (else none, so
+    # a console program never waits on the terminal running the tests).
+    stdin_file = source.with_suffix(".stdin")
+    stdin = stdin_file.read_bytes() if stdin_file.exists() else b""
+    result = subprocess.run([str(exe)] + args, cwd=folder, env=env, input=stdin,
+                            capture_output=True, timeout=60)
     stdout = result.stdout.decode("utf-8", errors="replace")
     stderr = result.stderr.decode("utf-8", errors="replace")
 
+    # An optional .exit file: the exit code expected (End n); else 1 with a
+    # .stderr (a runtime error), 0 without.
+    exit_file = source.with_suffix(".exit")
     stderr_file = source.with_suffix(".stderr")
     ok = True
     if stderr_file.exists() or os.environ.get("TF_UPDATE_EXPECTED") == "1" and stderr:
-        if result.returncode != 1:
-            print(f"FAIL: program exited {result.returncode}, expected 1")
+        expected = int(exit_file.read_text().strip()) if exit_file.exists() else 1
+        if result.returncode != expected:
+            print(f"FAIL: program exited {result.returncode}, expected {expected}")
             ok = False
         ok = compare("stderr", stderr_file, stderr) and ok
-    elif result.returncode != 0 or stderr:
-        print(f"FAIL: program exited {result.returncode}\n{stderr}")
-        ok = False
+    else:
+        expected = int(exit_file.read_text().strip()) if exit_file.exists() else 0
+        if result.returncode != expected or stderr:
+            print(f"FAIL: program exited {result.returncode}, expected {expected}\n{stderr}")
+            ok = False
     return compare("screen", source.with_suffix(".screen"), stdout) and ok
 
 

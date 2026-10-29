@@ -2701,6 +2701,7 @@ static void parse_size(const char *text, int *cols, int *rows)
 static void ui_suspend(void)
 {
     tf_term_close();
+    tf_console_screen(0); /* what Print held, before the command's output */
 }
 
 /* Bracketed paste (2004), so a paste arrives as text (tf_keys.c), and SGR
@@ -2730,6 +2731,7 @@ static void ui_resume(void)
     int rows = 25;
     tf_term_size(&cols, &rows);
     tf_screen_init(cols, rows, 1);
+    tf_console_screen(1);
     draw_stack();
     tf_screen_flush();
 }
@@ -2761,6 +2763,7 @@ static void ui_shutdown(void)
         tf_term_close();
     }
     tf_screen_free();
+    tf_console_screen(0); /* after the dump, or with the terminal normal again */
 }
 
 static void ui_open(void)
@@ -2770,6 +2773,7 @@ static void ui_open(void)
         return; /* a dialog in Form_Load or Sub Main opened it already */
     }
     ui_is_open = 1;
+    tf_console_screen(1); /* Print is held from here (headless too, after the dump) */
     /* Copied: tf_platform_getenv's result only lives until its next call. */
     static char *script = NULL;
     const char *headless_keys = tf_platform_getenv("TERMFORMS_HEADLESS");

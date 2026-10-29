@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: 0BSD */
 /*
- * tf_file.c -- numbered files (see "Files" in tf_runtime.h). Every file is
- * opened in C's binary mode, so the runtime decides line ends itself: LF
- * written on every platform, LF or CRLF read.
+ * tf_file.c -- numbered files (see "Files" in tf_runtime.h), and standard
+ * input, output and error for console programs (Print, Print #0, Line
+ * Input, EOF(0)). Every file is opened in C's binary mode, so the runtime
+ * decides line ends itself: LF written on every platform, LF or CRLF read.
  */
 #include "../tf_internal.h"
 
@@ -148,8 +149,15 @@ int32_t tf_file_free(void)
     return 0;
 }
 
+static void console_write(int stream, const tf_string *text, int32_t newline);
+
 void tf_file_print(int32_t number, const tf_string *text, int32_t newline)
 {
+    if (number == 0) /* Print #0: standard error */
+    {
+        console_write(2, text, newline);
+        return;
+    }
     open_file *of = file_for(number);
     if (of == NULL)
     {
@@ -276,8 +284,14 @@ tf_string *tf_file_line_input(int32_t number)
     return s;
 }
 
+static int console_eof(void);
+
 int tf_file_eof(int32_t number)
 {
+    if (number == 0)
+    {
+        return console_eof();
+    }
     open_file *of = file_for(number);
     if (of == NULL)
     {
@@ -435,4 +449,127 @@ void tf_file_seek(int32_t number, int64_t offset)
     {
         tf_raise(os_error(0), NULL);
     }
+}
+
+/* -- Standard input and output ---------------------------------------------
+ *
+ * While a form or dialog is on screen the terminal is in raw mode on the
+ * alternate screen, so text written then would be drawn over the form and
+ * lost when it closes. It is kept instead, each piece with its stream, and
+ * written in order once the forms layer says the terminal is normal.
+ */
+
+typedef struct held_text
+{
+    int stream;
+    char *data;
+    size_t size;
+} held_text;
+
+static int screen_in_use = 0;
+static held_text *held = NULL;
+static size_t held_count = 0;
+static size_t held_capacity = 0;
+
+/* A line read ahead by EOF(0), given to the next Line Input. */
+static char *ahead = NULL;
+static size_t ahead_size = 0;
+static int ahead_ready = 0; /* ahead holds a line, or (NULL) the input ended */
+
+static void emit(int stream, const char *data, size_t size)
+{
+    if (screen_in_use)
+    {
+        if (held_count == held_capacity)
+        {
+            held_capacity = held_capacity == 0 ? 16 : held_capacity * 2;
+            held = tf_xrealloc(held, held_capacity * sizeof(held_text));
+        }
+        char *copy = tf_xmalloc(size > 0 ? size : 1);
+        memcpy(copy, data, size);
+        held[held_count].stream = stream;
+        held[held_count].data = copy;
+        held[held_count].size = size;
+        ++held_count;
+        return;
+    }
+    tf_platform_console_write(stream, data, size);
+}
+
+void tf_console_screen(int in_use)
+{
+    screen_in_use = in_use;
+    if (in_use)
+    {
+        return;
+    }
+    for (size_t i = 0; i < held_count; ++i)
+    {
+        tf_platform_console_write(held[i].stream, held[i].data, held[i].size);
+        free(held[i].data);
+    }
+    held_count = 0;
+}
+
+static void console_write(int stream, const tf_string *text, int32_t newline)
+{
+    const size_t length = (size_t)tf_str_lenb(text);
+    if (length > 0)
+    {
+        emit(stream, tf_str_cstr(text), length);
+    }
+    if (newline)
+    {
+        emit(stream, "\n", 1);
+    }
+}
+
+void tf_console_print(const tf_string *text, int32_t newline)
+{
+    console_write(1, text, newline);
+}
+
+/* Reads the next line into ahead, unless it is there already. */
+static void read_ahead(void)
+{
+    if (!ahead_ready)
+    {
+        if (tf_platform_console_read_line(&ahead, &ahead_size) != 0)
+        {
+            ahead = NULL;
+        }
+        ahead_ready = 1;
+    }
+}
+
+static int console_eof(void)
+{
+    if (screen_in_use)
+    {
+        tf_raise(TF_ERR_TERMINAL, NULL);
+        return 1;
+    }
+    read_ahead();
+    return ahead == NULL;
+}
+
+tf_string *tf_console_line_input(const tf_string *prompt)
+{
+    if (screen_in_use)
+    {
+        tf_raise(TF_ERR_TERMINAL, NULL);
+        return NULL;
+    }
+    console_write(1, prompt, 0);
+    read_ahead();
+    ahead_ready = 0;
+    if (ahead == NULL)
+    {
+        tf_raise(TF_ERR_PAST_END, NULL);
+        return NULL;
+    }
+    tf_string *s = text_of((const unsigned char *)ahead, ahead_size);
+    free(ahead);
+    ahead = NULL;
+    return s;
 }

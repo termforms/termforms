@@ -1256,8 +1256,13 @@ private:
                     checkExpr(*call);
                 }
                 break;
+            case StmtKind::End: // End n: the exit code's call
+                for (auto &call : s.args)
+                {
+                    checkExpr(*call);
+                }
+                break;
             case StmtKind::ErrClear:
-            case StmtKind::End:
                 break;
         }
     }
@@ -4094,9 +4099,9 @@ private:
         }
         // Print #n, 5: a lone item that is not text becomes text, as & would
         // make it ("" & 5).
-        if (f.id == Builtin::FilePrint && given == most)
+        if ((f.id == Builtin::FilePrint || f.id == Builtin::ConsolePrint) && given == most)
         {
-            ExprPtr &item = e.args[1];
+            ExprPtr &item = e.args[f.id == Builtin::FilePrint ? 1 : 0];
             const Type t = checkExpr(*item);
             if (t != Type::String && t != Type::Error)
             {
@@ -4251,6 +4256,8 @@ private:
                 return i == 0 ? "the file number" : i == 2 ? "the offset" : "the count";
             case Builtin::FileSeek:
                 return i == 0 ? "the file number" : "the offset";
+            case Builtin::EndWith:
+                return "the exit code";
             case Builtin::FileClose:
             case Builtin::FilePrint:
             case Builtin::LineInput:
