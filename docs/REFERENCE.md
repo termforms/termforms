@@ -1262,8 +1262,10 @@ Module=lib/stock.bas
   the program has a DblClick handler (else the Default button).
   MultiSelect 1: moving does not select, Space toggles the current item.
   MultiSelect 2: moving selects just the current item, Space adds or
-  removes it (VB's Shift+arrow extension comes when Shift on arrows is
-  read).
+  removes it; Shift with a move selects from the anchor (the item last
+  chosen or toggled) to the new one, and Ctrl moves without changing the
+  selection, so Space can add items apart (built 30 Oct 2026, for the
+  conflict resolver).
 - Changing the selection (by key or in code) fires Click; removing the
   current item leaves no current item (ListIndex -1), as VB.
 - **A Timer** is never shown: it raises its Timer event every Interval
@@ -1471,7 +1473,8 @@ off. The rest:
 - **TextBox**: a click places the caret, a drag selects, a double-click
   selects the word.
 - **ListBox**: a click chooses the item as the keys do (MultiSelect 1
-  toggles it; MultiSelect 2 chooses just it, Ctrl+click toggles it); a
+  toggles it; MultiSelect 2 chooses just it, Ctrl+click toggles it,
+  Shift+click selects from the anchor to it); a
   double-click on the current item is DblClick; the wheel scrolls three
   rows a notch; a click on the ↑ or ↓ in its border scrolls one.
 - **Menus**: a click on a bar menu opens it (again: closes it); a press

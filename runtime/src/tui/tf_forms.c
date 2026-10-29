@@ -78,7 +78,9 @@ struct tf_control
     tf_string *sel_text;
 
     /* ListBox only: the items, which are selected, the current item
-     * (ListIndex), the first shown (TopIndex), MultiSelect and Sorted. */
+     * (ListIndex), the first shown (TopIndex), MultiSelect and Sorted; and
+     * with MultiSelect 2, the item a Shift+move or Shift+click selects
+     * from (the last one chosen or toggled; -1 none). */
     tf_string **items;
     unsigned char *selected;
     int32_t item_count;
@@ -87,6 +89,7 @@ struct tf_control
     int32_t top_index;
     int32_t multi;
     int sorted;
+    int32_t anchor;
 
     /* Timer only: milliseconds between events (0: stopped), and when the
      * next is due on the runtime's clock (now_ms). */
@@ -184,6 +187,7 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
     control->width = type == TF_CTL_TEXTBOX || boxed ? 20 : 10;
     control->height = boxed ? 5 : 1;
     control->list_index = -1;
+    control->anchor = -1;
     control->enabled = 1;
     control->visible = 1;
 
@@ -276,6 +280,7 @@ static void list_choose(tf_control *list, int32_t item, int only)
     list->list_index = item;
     if (only)
     {
+        list->anchor = item;
         for (int32_t i = 0; i < list->item_count; ++i)
         {
             const unsigned char want = i == item;
@@ -295,6 +300,31 @@ static void list_choose(tf_control *list, int32_t item, int only)
     if (changed)
     {
         fire(list, TF_EVENT_CLICK);
+    }
+}
+
+/* MultiSelect 2's Shift+move or Shift+click: just the items from the
+   anchor to item are selected, item becoming the current one. */
+static void list_extend(tf_control *list, int32_t item)
+{
+    if (list->anchor < 0 || list->anchor >= list->item_count)
+    {
+        list->anchor = list->list_index >= 0 ? list->list_index : item;
+    }
+    const int32_t low = list->anchor < item ? list->anchor : item;
+    const int32_t high = list->anchor < item ? item : list->anchor;
+    int changed = 0;
+    for (int32_t i = 0; i < list->item_count; ++i)
+    {
+        const unsigned char want = i >= low && i <= high;
+        changed = changed || list->selected[i] != want;
+        list->selected[i] = want;
+    }
+    const int moved = list->list_index != item;
+    list_choose(list, item, 0);
+    if (changed && !moved)
+    {
+        fire(list, TF_EVENT_CLICK); /* list_choose fired only for a move */
     }
 }
 
@@ -2019,8 +2049,9 @@ static int is_space(tf_key key)
 }
 
 /* A key in a ListBox. Arrows, PgUp/PgDn, Home/End move the current item
-   (selecting it, unless MultiSelect is 1); Space toggles the current item
-   with MultiSelect; a letter goes to the next item starting with it; Enter
+   (selecting it, unless MultiSelect is 1; with MultiSelect 2, Shift
+   selects from the anchor to it, Ctrl leaves the selection alone); Space
+   toggles the current item with MultiSelect; a letter goes to the next item starting with it; Enter
    is DblClick if the program handles it. */
 static int list_key(tf_control *list, tf_key key)
 {
@@ -2061,6 +2092,7 @@ static int list_key(tf_control *list, tf_key key)
         case TF_KEY_CHAR:
             if (key.ch == ' ' && list->multi != 0 && at >= 0)
             {
+                list->anchor = at;
                 tf_list_set_selected(list, at, !list->selected[at]);
                 return 1;
             }
@@ -2087,7 +2119,17 @@ static int list_key(tf_control *list, tf_key key)
             return 0;
     }
     to = to < 0 ? 0 : to >= list->item_count ? list->item_count - 1 : to;
-    list_choose(list, to, list->multi != 1);
+    if (list->multi == 2 && (key.mods & TF_MOD_SHIFT) != 0)
+    {
+        list_extend(list, to);
+    }
+    else
+    {
+        /* MultiSelect 2: Ctrl moves without changing the selection, so
+           Space can add items apart from one another. */
+        list_choose(list, to,
+                    list->multi == 0 || (list->multi == 2 && (key.mods & TF_MOD_CTRL) == 0));
+    }
     return 1;
 }
 
@@ -2422,10 +2464,15 @@ static void list_press(tf_control *list, tf_key key, int double_click)
         fire(list, TF_EVENT_DBLCLICK);
         return;
     }
-    if (list->multi == 1 || (list->multi == 2 && (key.mods & TF_MOD_CTRL) != 0))
+    if (list->multi == 2 && (key.mods & TF_MOD_SHIFT) != 0)
+    {
+        list_extend(list, item);
+    }
+    else if (list->multi == 1 || (list->multi == 2 && (key.mods & TF_MOD_CTRL) != 0))
     {
         /* Toggling, as Space does (MultiSelect 2: Ctrl+click adds or removes). */
         list->list_index = item;
+        list->anchor = item;
         tf_list_set_selected(list, item, !list->selected[item]);
     }
     else

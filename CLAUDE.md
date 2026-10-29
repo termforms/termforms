@@ -477,9 +477,14 @@ authoritative for design rationale.
   soon the Lenovo), run over SSH on the NAS servers and on the Mac; it
   finds `*.sync-conflict-*` copies, shows them beside the originals and
   keeps the chosen copy, the other moved into a dated folder outside the
-  synced tree (keeping its path). Defaults not yet confirmed: device
-  names read from Syncthing's config.xml; .stversions only if the first
-  version earns it. Its screen design comes to Jim before it is built.
+  synced tree (keeping its path). Jim approved the screen design
+  (30 Oct 2026) and gave his manual procedure: the copy's suffix names
+  the device whose version lost, its time is UTC; `.stversions` keeps
+  old conflict-named copies (passed over); a missing original usually
+  means the file is ignored on that machine; an unknown device ID is to
+  be chased before resolving. The removed folder is on the same disk
+  (the servers have one drive); his SSH user should be able to read
+  config.xml.
   For it, settled the same day (REFERENCE.md "Listing folders"):
   `Files(pattern)` and `Folders(pattern)`, sorted String arrays as Split
   (Builtin::Files/Folders, codegen's array assignment), Folders() leaving
@@ -489,8 +494,20 @@ authoritative for design rationale.
   Errors 76/70 rather than Dir$'s "" are Proposed. Building it found a
   bug from Phase 3: a ByVal String *array* parameter was retained and
   released as a String (corrupting the array); fixed (`rank == 0`).
-- **Next:** build the conflict resolver (design to Jim first), deploy and
-  use it; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
+  Built (30 Oct 2026): examples/syncfix (syncfix.vbp: main.bas, the
+  form; conflicts.bas: config.xml read line by line, `Walk` over
+  Files()/Folders(), Keep original/conflict/both as Name moves into
+  `~/sync-conflicts-removed/<date>/<label>/<path>` with a log.txt,
+  Compare through Shell diff | less; `--config`, `--removed`, folders as
+  arguments). Run test tests/run/syncfix.vbp (+ .files tree, .args).
+  For it, MultiSelect 2 ListBoxes got Shift+arrows/Shift+click (a range
+  from `anchor`) and Ctrl+arrows (move without selecting), as REFERENCE
+  had promised. Labels show `&` as an access key, so the program doubles
+  it in data (`Plain`). Open for Jim: UBound of a never-sized dynamic
+  array is error 9 (VB6), so `ReDim Preserve a(UBound(a) + 1)` fails on
+  a fresh array; the program starts each with `ReDim a(-1)`.
+- **Next:** Jim deploys syncfix to the NAS servers and uses it in
+  earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

@@ -1,0 +1,10 @@
+' The Syncthing conflict resolver, TermForms' acceptance program: finds
+' Syncthing's *.sync-conflict-* copies in the folders its config.xml
+' lists and keeps the version chosen, the other moved to a dated folder
+' outside the synced ones.
+'
+' Build and run:   tfc syncfix.vbp && ./syncfix [--config FILE] [--removed FOLDER] [FOLDER...]
+Name=syncfix
+Startup=frmMain
+Form=main.bas
+Module=conflicts.bas

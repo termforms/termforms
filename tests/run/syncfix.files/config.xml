@@ -1,0 +1,20 @@
+<configuration version="37">
+    <folder id="jim-llm-wiki" label="LLM Wiki" path="tree/wiki" type="sendreceive" rescanIntervalS="3600">
+        <filesystemType>basic</filesystemType>
+        <device id="LJXC2LJ-AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG" introducedBy="">
+        </device>
+    </folder>
+    <folder id="notes" label="Notes &amp; plans" path="tree/notes/" type="sendreceive">
+    </folder>
+    <device id="LJXC2LJ-AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG" name="greece" compression="metadata">
+        <address>dynamic</address>
+    </device>
+    <device id="J243BEM-AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG" name="tablet" compression="metadata">
+    </device>
+    <defaults>
+        <folder id="" label="" path="~" type="sendreceive">
+            <device id="J243BEM-AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG" introducedBy=""></device>
+        </folder>
+        <device id="" compression="metadata"></device>
+    </defaults>
+</configuration>

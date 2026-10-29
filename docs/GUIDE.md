@@ -496,7 +496,8 @@ A **TextBox** edits as a Windows edit box does: Shift+arrows select,
 Ctrl+arrows move by words, Ctrl+Z undoes, Ctrl+X/C/V cut, copy and paste
 (through the program's own clipboard). Setting Text or SelText in code
 fires Change, as in VB. A **ListBox** with `MultiSelect = 1` toggles items
-with Space; with 2, arrows choose and Space adds. A **Timer** raises its
+with Space; with 2, arrows choose, Shift+arrows choose a run of items,
+and Ctrl+arrows move without choosing, so Space can add others. A **Timer** raises its
 event every Interval milliseconds while the form waits for input.
 
 ### Events

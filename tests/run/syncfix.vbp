@@ -1,0 +1,12 @@
+' Run test: the Syncthing conflict resolver in examples/syncfix, built
+' from its own files, in a folder holding syncfix.files: a config.xml
+' with two folders and two devices (a third, ZWVN7KO, unknown), and a
+' tree with four conflicts, one whose original is missing, a copy in
+' .stversions (passed over) and a name that only looks like a conflict.
+' Keys: Keep conflict for .obsidian/app.json; Keep both for Plan.md,
+' refused at the unknown-device question; the first two chosen with
+' Shift+Down and Keep original, confirmed twice; then Notes, Keep both.
+Name=syncfix
+Startup=frmMain
+Form=../../examples/syncfix/main.bas
+Module=../../examples/syncfix/conflicts.bas
