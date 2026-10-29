@@ -829,8 +829,7 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
   program received them (Windows' quoting rules applied there, as the
   shell applies its own on Linux and macOS), joined by single spaces. VB
   gave the command line's tail as typed. An argument with spaces in it
-  cannot be told from two; a way to get the arguments one by one can come
-  later if needed.
+  cannot be told from two: `CommandArgs()` gives them one by one.
 - **`Shell` waits** for the command and gives its exit code (VB's Shell
   starts a program and returns at once with its task id). The command
   goes to `sh -c` on Linux and macOS and `cmd.exe /c` on Windows, so
@@ -841,6 +840,71 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
 - The names `Command`, `Environ`, `Shell`, `Now`, `Date`, `Time` and
   `Timer` are built-in functions (the `$` is optional, as for the string
   functions), so they cannot name variables.
+
+### Arguments and the program's path (Settled, Jim, 29 Oct 2026; not built yet)
+
+```vb
+For Each a As String In CommandArgs()       ' the arguments, one by one
+    If a = "-v" Then verbose = True
+Next
+Dim cfg As String = App.Path & "/settings.txt"   ' beside the program
+```
+
+- **`CommandArgs()`** is a String array of the program's arguments, the
+  program's name not included (as VB.NET's
+  My.Application.CommandLineArgs); with none, its UBound is -1. They are
+  as the operating system gives them: split by the shell on Linux and
+  macOS, by Microsoft's C runtime rules on Windows. An argument with
+  spaces stays one element. `Command$` stays as it is.
+- **`App.Path`** is the folder the executable is in (no separator at the
+  end), **`App.EXEName`** its name without `.exe`, and **`App.FullPath`**
+  the executable's full path. They come from the operating system, not
+  from how the program was started, so they are right however it was
+  run; a symbolic link is followed to the real file.
+- **No unmodified command line**: on Linux and macOS the shell removes
+  quotes and expands wildcards before the program starts, and the
+  original is not kept, so it could only be given on Windows. Leaving it
+  out keeps programs the same everywhere.
+
+### Console programs: Print, Line Input, End n (Settled, Jim, 29 Oct 2026; not built yet)
+
+```vb
+Sub Main()
+    Dim name As String
+    Line Input "Your name: "; name
+    Print "Hello, "; name
+    Dim count As Integer
+    Do While Not EOF(0)                 ' the rest of standard input
+        Dim line As String
+        Line Input line
+        count = count + 1
+    Loop
+    If count = 0 Then
+        Print #0, "warning: no lines"   ' standard error
+        End 2                           ' the exit code
+    End If
+End Sub
+```
+
+- **`Print`** writes to standard output with `Print #`'s rules (`;` joins
+  with no spaces, a trailing `;` leaves off the newline, no comma
+  zones); **`Print #0`** writes to standard error the same way (0 is
+  never a FreeFile number). Lines end with LF, as files do. On Windows
+  the console is switched to UTF-8 output.
+- **While a form or dialog is on screen**, what Print and Print #0
+  write is held and written, in order, when the terminal goes back to
+  normal (the last form closing, End, an error, Shell), so a form
+  program can log as it goes without spoiling the screen.
+- **`Line Input [prompt;] var`** reads one line of standard input
+  (typed, or from a pipe or file), without its line end (LF or CR LF);
+  the prompt is written first, with no newline. **`EOF(0)`** is True at
+  the end of standard input; reading past it is error 62 (Input past
+  end of file), as for files. Line Input while a form or dialog is on
+  screen is error 900 (Terminal error): the keys belong to the form.
+  There is no `Input` with comma splitting (as for files).
+- **`End n`** ends the program with exit code n (0 to 255; error 5
+  otherwise, as Linux keeps only 8 bits). Plain `End` and the end of
+  Sub Main give 0; an uncaught error gives 1, as now.
 
 ### Byte (Proposed)
 

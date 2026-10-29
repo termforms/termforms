@@ -779,10 +779,13 @@ a variable that is filled in only when a call succeeds.
   time from controls as MsgBox/InputBox are, listing the file system of
   the machine the program runs on (over SSH, the server's); after the
   ComboBox (for a file-type filter). About 1-2 days.
-- **Ideas from Jim (29 Oct 2026), design questions being asked:**
-  command-line arguments as an array plus the program's path (App.Path /
-  App.EXEName); console Print and Line Input for Sub Main programs. Also
-  later, perhaps: a graphical form designer (Python Tk) writing the form
+- **Settled, to build (Jim, 29 Oct 2026; REFERENCE.md "Arguments and
+  the program's path", "Console programs"):** `CommandArgs()` (arguments
+  only), App.Path/App.EXEName/App.FullPath (from the OS), no raw command
+  line; Print to stdout and Print #0 to stderr (held while a form or
+  dialog is on screen, written when the terminal is restored), `Line
+  Input [prompt;] var` from stdin with EOF(0) (error 900 while a form is
+  shown), `End n` (0-255) for the exit code. Also later, perhaps: a graphical form designer (Python Tk) writing the form
   block, with tfc printing its control catalog as JSON and a headless
   preview; open questions: .frm or rewrite in .bas, keeping comments.
 
