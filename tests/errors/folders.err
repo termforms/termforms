@@ -1,0 +1,4 @@
+folders.bas:7:9: error: 'Files' gives an array: assign it to a dynamic array of Strings, or go through it with For Each
+folders.bas:8:21: error: argument 1 of 'Folders' must be a String, not an Integer; use CStr(value) to convert
+folders.bas:9:5: error: 'Files' gives an array of String, so it is assigned to a dynamic array: Dim fixed() As String
+folders.bas:10:15: error: argument 1 of 'IsLink' must be a String, not an Integer; use CStr(value) to convert

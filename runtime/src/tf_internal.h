@@ -83,10 +83,15 @@ int tf_platform_rename(const char *from, const char *to); /* replaces nothing: E
 int tf_platform_stat(const char *path, int64_t *size, int64_t *modified, int *folder);
 /* The current folder, to free. */
 char *tf_platform_getcwd(void);
-/* Calls each(name, folder, context) for every entry of dir but . and ..;
-   -1 with errno if dir cannot be read. */
+/* Calls each(name, folder, context) for every entry of dir but . and ..,
+   folder being one of TF_ENTRY_*; -1 with errno if dir cannot be read. */
+#define TF_ENTRY_FILE 0          /* anything but a folder or a link to one */
+#define TF_ENTRY_FOLDER 1        /* a real folder */
+#define TF_ENTRY_LINKED_FOLDER 2 /* a symbolic link (Windows: or junction) to a folder */
 int tf_platform_list(const char *dir, void (*each)(const char *name, int folder, void *context),
                      void *context);
+/* 1 if path itself is a symbolic link (Windows: or a junction), else 0. */
+int tf_platform_is_link(const char *path);
 /* Local time of a time since 1970: year, month (1-12), day, hour, minute,
    second in fields[0..5]. Windows names are matched without case. */
 void tf_platform_local_time(int64_t seconds, int32_t fields[6]);

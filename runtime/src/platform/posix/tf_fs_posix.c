@@ -113,18 +113,36 @@ int tf_platform_list(const char *dir, void (*each)(const char *name, int folder,
         {
             continue;
         }
-        /* d_type is not always filled in, so ask the file system. */
+        /* d_type is not always filled in, so ask the file system; lstat
+           first, so a link to a folder can be told from a folder. */
         char *full = tf_xmalloc(baseLength + strlen(e->d_name) + 2);
         strcpy(full, base);
         strcat(full, "/");
         strcat(full, e->d_name);
         struct stat st;
-        const int folder = stat(full, &st) == 0 && S_ISDIR(st.st_mode);
+        int folder = TF_ENTRY_FILE;
+        if (lstat(full, &st) == 0)
+        {
+            if (S_ISDIR(st.st_mode))
+            {
+                folder = TF_ENTRY_FOLDER;
+            }
+            else if (S_ISLNK(st.st_mode) && stat(full, &st) == 0 && S_ISDIR(st.st_mode))
+            {
+                folder = TF_ENTRY_LINKED_FOLDER;
+            }
+        }
         free(full);
         each(e->d_name, folder, context);
     }
     closedir(d);
     return 0;
+}
+
+int tf_platform_is_link(const char *path)
+{
+    struct stat st;
+    return lstat(path, &st) == 0 && S_ISLNK(st.st_mode);
 }
 
 void tf_platform_local_time(int64_t seconds, int32_t fields[6])

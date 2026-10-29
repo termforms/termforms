@@ -650,7 +650,7 @@ private:
         }
         for (const auto &p : proc.parameters)
         {
-            if (p->type == Type::String && !p->byRef)
+            if (p->type == Type::String && !p->byRef && p->rank == 0) // not a String array
             {
                 out << "    tf_str_retain(v_" << p->name << ");\n";
             }
@@ -664,7 +664,7 @@ private:
         cleanup_.clear();
         for (const auto &p : proc.parameters)
         {
-            if (p->type == Type::String && !p->byRef)
+            if (p->type == Type::String && !p->byRef && p->rank == 0)
             {
                 cleanup_ += " tf_str_release(v_" + p->name + ");";
             }
@@ -1817,6 +1817,15 @@ private:
                 const Value delimiter =
                     borrowed(settle(*from.args[1], expr(*from.args[1], scope), scope), scope);
                 return "tf_str_split(" + to + ", " + text.code + ", " + delimiter.code + ");";
+            }
+            if (from.kind == ExprKind::Call &&
+                (from.builtin == Builtin::Files || from.builtin == Builtin::Folders))
+            {
+                const Value pattern =
+                    borrowed(settle(*from.args[0], expr(*from.args[0], scope), scope), scope);
+                return std::string(from.builtin == Builtin::Files ? "tf_fs_files("
+                                                                  : "tf_fs_folders(") +
+                       to + ", " + pattern.code + ");";
             }
             if (from.kind == ExprKind::Call && from.builtin == Builtin::CommandArgs)
             {

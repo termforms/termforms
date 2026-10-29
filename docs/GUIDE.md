@@ -706,12 +706,31 @@ Close #1
 | | |
 | --- | --- |
 | `Dir$("*.txt")`, then `Dir$()` | each matching file in turn (sorted), then `""` |
+| `Files("photos/*")`, `Folders("photos/*")` | the names of the files, or of the folders, as a sorted String array (assign it, or For Each) |
+| `IsLink(path)` | True if path is a symbolic link (Windows: or a junction) |
 | `Exists(path)` | True if a file or folder is there |
 | `FileLen(path)`, `FileDateTime(path)` | the size; when it changed ("yyyy-mm-dd hh:mm:ss") |
 | `Kill`, `FileCopy`, `Name old As new` | delete, copy, rename |
 | `MkDir`, `RmDir`, `ChDir`, `CurDir$` | folders |
 
 `/` separates folders everywhere (and `\` too on Windows).
+
+To go through a whole tree, use `Files` and `Folders` rather than `Dir$`:
+each call gives its own list, so a Sub can call itself for each folder.
+A link to a folder is listed by `Files`, not `Folders`, so the walk
+cannot go round in a loop. Note the `/*`: `Folders("photos")` gives
+`photos` itself, not what is inside it.
+
+```vb
+Sub Walk(path As String)
+    For Each name As String In Files(path & "/*")
+        Print path & "/" & name & "  " & FileLen(path & "/" & name)
+    Next
+    For Each name As String In Folders(path & "/*")
+        Walk path & "/" & name
+    Next
+End Sub
+```
 
 ### The system
 

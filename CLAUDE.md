@@ -471,9 +471,26 @@ authoritative for design rationale.
   failure message (d00f044). **Phase 5 is complete.**
   Version 0.9.1 (29 Oct 2026, Jim's go-ahead): CommandArgs/App, console
   programs, the parenthesis fix, the failure message, chmod notes.
-- **Next:** Phase 6 (v1 release): Jim chooses the acceptance program, to
-  be built, deployed to a Linux server and used in earnest; then tag
-  v1.0.0 and review toolchain bundling. Also open: step 7 of the
+- **Phase 6 (v1 release), begun 29 Oct 2026.** The acceptance program
+  (Jim): a **Syncthing conflict resolver** (Syncthing syncs Jim's two NAS
+  servers, AU and GR, over Tailscale, plus his Macs, Android devices and
+  soon the Lenovo), run over SSH on the NAS servers and on the Mac; it
+  finds `*.sync-conflict-*` copies, shows them beside the originals and
+  keeps the chosen copy, the other moved into a dated folder outside the
+  synced tree (keeping its path). Defaults not yet confirmed: device
+  names read from Syncthing's config.xml; .stversions only if the first
+  version earns it. Its screen design comes to Jim before it is built.
+  For it, settled the same day (REFERENCE.md "Listing folders"):
+  `Files(pattern)` and `Folders(pattern)`, sorted String arrays as Split
+  (Builtin::Files/Folders, codegen's array assignment), Folders() leaving
+  out links to folders (they are in Files()), and `IsLink(path)`. The
+  platform list callback's `folder` is now TF_ENTRY_FILE / _FOLDER /
+  _LINKED_FOLDER (Windows: reparse tags SYMLINK and MOUNT_POINT only).
+  Errors 76/70 rather than Dir$'s "" are Proposed. Building it found a
+  bug from Phase 3: a ByVal String *array* parameter was retained and
+  released as a String (corrupting the array); fixed (`rank == 0`).
+- **Next:** build the conflict resolver (design to Jim first), deploy and
+  use it; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

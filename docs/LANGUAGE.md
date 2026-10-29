@@ -66,7 +66,7 @@ End Sub
 | With | `With ... End With` on a Type, an element, a Ref, a Function's result or a control; nested |
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items`; `For i As Integer = ...` and `For Each w As String In ...` declare the variable for the loop alone |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
-| File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$` |
+| File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$`, `Files()`, `Folders()`, `IsLink` |
 | Controls | Label, TextBox (SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar; selection, words, undo, cut/copy/paste), CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
 | Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`, `DoEvents`, `Visible` (read only); events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
 | Menus | `Begin Menu` blocks: a menu bar with drop-downs (two levels); Caption (`-` a separator), Enabled, Visible, Checked, Shortcut; the Click event; F10 or Ctrl+B, Alt+letter |
@@ -258,6 +258,24 @@ Do While name <> ""
 Loop
 If Exists("old.txt") Then Kill "old.txt"
 Name "a.txt" As "b.txt"
+```
+
+`Files(pattern)` and `Folders(pattern)` give the whole listing as a
+sorted String array (names only; `.` names included), so a Sub can walk a
+tree by calling itself, which `Dir$` (one listing at a time) cannot. A
+link to a folder is in `Files()`, never `Folders()`, so a walk cannot
+loop; `IsLink(path)` tells. A missing folder is error 76, an unreadable
+one 70 (`Dir$` gives "" for both).
+
+```vb
+Sub Walk(path As String)
+    For Each name As String In Files(path & "/*")
+        Print path & "/" & name
+    Next
+    For Each name As String In Folders(path & "/*")
+        Walk path & "/" & name
+    Next
+End Sub
 ```
 
 ## The system

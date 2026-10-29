@@ -135,6 +135,9 @@ enum class Builtin
     Exists,
     Dir,
     DirNext, // Dir$() with no pattern
+    Files,   // Files(pattern), Folders(pattern): arrays, as Split
+    Folders,
+    IsLink,
     // The system (step 6b-5).
     Command,
     Environ,
@@ -255,6 +258,11 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::Exists, "S", 1, {}, Type::Boolean, "tf_fs_exists", false},
     {Builtin::Dir, "S", 0, {}, Type::String, "tf_fs_dir", false},
     {Builtin::DirNext, "", 0, {}, Type::String, "tf_fs_dir_next", true},
+    // Files() and Folders(): arrays, filled by an assignment or For Each,
+    // as Split; a folder missing or unreadable is an error, unlike Dir$.
+    {Builtin::Files, "S", 1, {}, Type::String, "tf_fs_files", true},
+    {Builtin::Folders, "S", 1, {}, Type::String, "tf_fs_folders", true},
+    {Builtin::IsLink, "S", 1, {}, Type::Boolean, "tf_fs_is_link", false},
     {Builtin::Command, "", 0, {}, Type::String, "tf_command", false},
     {Builtin::Environ, "S", 1, {}, Type::String, "tf_environ", false},
     {Builtin::Shell, "S", 1, {}, Type::Integer, "tf_shell", true},

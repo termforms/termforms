@@ -81,6 +81,9 @@ constexpr BuiltinInfo kBuiltins[] = {{"CInt", Builtin::CInt, false},
                                      {"FileDateTime", Builtin::FileDateTime, false},
                                      {"Exists", Builtin::Exists, false},
                                      {"Dir", Builtin::Dir, true},
+                                     {"Files", Builtin::Files, false},
+                                     {"Folders", Builtin::Folders, false},
+                                     {"IsLink", Builtin::IsLink, false},
                                      {"Command", Builtin::Command, true},
                                      {"Environ", Builtin::Environ, true},
                                      {"Shell", Builtin::Shell, false},
@@ -2752,8 +2755,9 @@ private:
         return object.field != nullptr && object.field->isDictionary ? object.field : nullptr;
     }
 
-    // d.Keys, d.Items, Split(...) or CommandArgs(), checked or not: an
-    // array value. CommandArgs may be written without its parentheses.
+    // d.Keys, d.Items, Split(...), Files(...), Folders(...) or
+    // CommandArgs(), checked or not: an array value. CommandArgs may be
+    // written without its parentheses.
     bool isDictionaryList(Expr &e)
     {
         const auto named = [&](const char *name) {
@@ -2762,8 +2766,9 @@ private:
         };
         if (e.kind == ExprKind::Call &&
             (e.builtin == Builtin::DictKeys || e.builtin == Builtin::DictItems ||
-             e.builtin == Builtin::Split || e.builtin == Builtin::CommandArgs || named("Split") ||
-             named("CommandArgs")))
+             e.builtin == Builtin::Split || e.builtin == Builtin::CommandArgs ||
+             e.builtin == Builtin::Files || e.builtin == Builtin::Folders || named("Split") ||
+             named("CommandArgs") || named("Files") || named("Folders")))
         {
             return true;
         }
@@ -4228,7 +4233,8 @@ private:
         {
             return Type::Error;
         }
-        if (f.id == Builtin::Split || f.id == Builtin::CommandArgs)
+        if (f.id == Builtin::Split || f.id == Builtin::CommandArgs || f.id == Builtin::Files ||
+            f.id == Builtin::Folders)
         {
             if (!whole)
             {

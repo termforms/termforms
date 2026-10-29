@@ -537,6 +537,11 @@ tf_string *tf_fs_datetime(const tf_string *path);
 int tf_fs_exists(const tf_string *path); /* a file or a folder */
 tf_string *tf_fs_dir(const tf_string *pattern);
 tf_string *tf_fs_dir_next(void);
+/* Files(pattern), Folders(pattern): the matching names, sorted, into a
+   dynamic String array; IsLink(path). */
+void tf_fs_files(tf_array *to, const tf_string *pattern);
+void tf_fs_folders(tf_array *to, const tf_string *pattern);
+int tf_fs_is_link(const tf_string *path);
 
 /* Binary files (Open ... For Binary): Get reads into a Byte array, Put
    writes from one, at an offset from 0 (has_offset 0: where the last read

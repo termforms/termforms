@@ -818,6 +818,35 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
   ChDir, RmDir), 58 Name onto a file that is there, 70 not permitted, 75
   any other refusal (a folder not empty, one already there).
 
+### Listing folders: Files, Folders, IsLink (Settled, Jim, 29 Oct 2026)
+
+Added for the acceptance program (a Syncthing conflict resolver), which
+must walk a folder tree. `Dir$` lists files only and keeps one listing at
+a time, so a Sub that calls itself to walk a tree would lose its place.
+
+| Function | Gives |
+|---|---|
+| `Files(pattern)` | the names in pattern's folder matching its last part that are not folders, as a sorted array of Strings |
+| `Folders(pattern)` | the names that are folders, likewise |
+| `IsLink(path)` | True if path is itself a symbolic link (on Windows, a symbolic link or a junction) |
+
+- Settled: arrays, as `Split` and `CommandArgs()` give (assign to a
+  dynamic String array, or go through with For Each), so each call is
+  independent and recursion is simple. `Dir$` stays as it is.
+- Settled: a link to a folder is not in `Folders()`, so a walk cannot
+  loop; it is in `Files()`. Every name in a folder is in exactly one of
+  the two lists. Syncthing does not follow links either.
+- Proposed: the pattern is `Dir$`'s: wildcards `*` and `?` in the last
+  part only, names only (not paths), sorted by byte order, names starting
+  with `.` included. `Folders("photos")` gives `photos` itself if it is a
+  folder; its contents are `Folders("photos/*")`. `""` or `"*"` is the
+  current folder.
+- Proposed: unlike `Dir$` (which gives "" as VB does), a missing folder is
+  error 76 and one that cannot be read is 70, catchable, so a walk can
+  report what it skipped. No match is an empty array (UBound -1).
+- Proposed: a broken link (to nothing) is in `Files()`; `IsLink` is True
+  for it and `Exists` False.
+
 ### The system (Proposed)
 
 | Function or statement | Gives or does |

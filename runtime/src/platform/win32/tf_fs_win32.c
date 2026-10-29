@@ -136,6 +136,39 @@ char *tf_platform_getcwd(void)
     return s;
 }
 
+/* A symbolic link or a junction. Other reparse points (OneDrive's files
+   on demand, deduplication) are ordinary files and folders to a program. */
+static int is_link_tag(const WIN32_FIND_DATAW *found)
+{
+    return (found->dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 &&
+           (found->dwReserved0 == IO_REPARSE_TAG_SYMLINK ||
+            found->dwReserved0 == IO_REPARSE_TAG_MOUNT_POINT);
+}
+
+int tf_platform_is_link(const char *path)
+{
+    wchar_t *w = wide(path);
+    if (w == NULL)
+    {
+        return 0;
+    }
+    /* FindFirstFileW gives the reparse tag; wildcards would match other
+       names, so a path with them is no link. */
+    int link = 0;
+    if (wcspbrk(w, L"*?") == NULL)
+    {
+        WIN32_FIND_DATAW found;
+        HANDLE h = FindFirstFileW(w, &found);
+        if (h != INVALID_HANDLE_VALUE)
+        {
+            link = is_link_tag(&found);
+            FindClose(h);
+        }
+    }
+    free(w);
+    return link;
+}
+
 int tf_platform_list(const char *dir, void (*each)(const char *name, int folder, void *context),
                      void *context)
 {
@@ -164,7 +197,10 @@ int tf_platform_list(const char *dir, void (*each)(const char *name, int folder,
             continue;
         }
         char *name = narrow(found.cFileName);
-        each(name, (found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0, context);
+        const int folder = (found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ? TF_ENTRY_FILE
+                           : is_link_tag(&found) ? TF_ENTRY_LINKED_FOLDER
+                                                 : TF_ENTRY_FOLDER;
+        each(name, folder, context);
         free(name);
     } while (FindNextFileW(h, &found));
     FindClose(h);

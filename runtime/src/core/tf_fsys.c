@@ -113,12 +113,23 @@ typedef struct name_list
     size_t count;
     size_t capacity;
     const char *pattern;
+    int keep; /* LIST_PLAIN_FILES (0, for Dir$ and Kill), LIST_FILES or LIST_FOLDERS */
 } name_list;
+
+enum
+{
+    LIST_PLAIN_FILES, /* not folders, nor links to them */
+    LIST_FILES,       /* everything Folders() leaves out */
+    LIST_FOLDERS      /* real folders only, so a walk cannot loop through a link */
+};
 
 static void collect(const char *name, int folder, void *context)
 {
     name_list *list = context;
-    if (folder || !matches(list->pattern, name))
+    const int wanted = list->keep == LIST_FOLDERS ? folder == TF_ENTRY_FOLDER
+                       : list->keep == LIST_FILES ? folder != TF_ENTRY_FOLDER
+                                                  : folder == TF_ENTRY_FILE;
+    if (!wanted || !matches(list->pattern, name))
     {
         return;
     }
@@ -349,4 +360,47 @@ tf_string *tf_fs_dir_next(void)
     }
     const char *name = dir_list.names[dir_next++];
     return tf_str_from_utf8(name, (int32_t)strlen(name));
+}
+
+/* Files() and Folders(): the whole listing at once, unlike Dir$, so a Sub
+   walking a tree can call itself between uses. */
+static void list_into(tf_array *to, const tf_string *pattern, int keep)
+{
+    if (to->locks > 0 || to->fixed)
+    {
+        tf_raise(TF_ERR_ARRAY_LOCKED, NULL);
+        return;
+    }
+    name_list list = {0};
+    list.keep = keep;
+    char *folder = NULL;
+    if (list_matches(path_of(pattern), &list, &folder) != 0)
+    {
+        /* Unlike Dir$, say so: a walk should know what it could not see. */
+        tf_raise(fs_error(TF_ERR_PATH_NOT_FOUND), NULL);
+    }
+    free(folder);
+    const int32_t upper = (int32_t)list.count - 1;
+    tf_array_redim(to, TF_ELEM_STRING, NULL, 0, 1, &upper);
+    for (size_t i = 0; i < list.count; ++i)
+    {
+        *(tf_string **)tf_array_at1(to, (int32_t)i) =
+            tf_str_from_utf8(list.names[i], (int32_t)strlen(list.names[i]));
+    }
+    free_list(&list);
+}
+
+void tf_fs_files(tf_array *to, const tf_string *pattern)
+{
+    list_into(to, pattern, LIST_FILES);
+}
+
+void tf_fs_folders(tf_array *to, const tf_string *pattern)
+{
+    list_into(to, pattern, LIST_FOLDERS);
+}
+
+int tf_fs_is_link(const tf_string *path)
+{
+    return tf_str_lenb(path) > 0 && tf_platform_is_link(path_of(path));
 }

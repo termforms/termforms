@@ -1,0 +1,12 @@
+
+
+    ┌────────────────────────────── Folders ───────────────────────────────┐
+    │3:.hidden,a.txt,b.txt,link | 0:sub                                    │
+    │1:a.txt,b.txt | 0:box | -1:                                           │
+    │True False False False False                                          │
+    │.hidden a.txt b.txt link sub/x.txt sub/deep/y.txt                     │
+    │nope 76, file 76                                                      │
+    │                                                                      │
+    │                                                                      │
+    │                                                                      │
+    └──────────────────────────────────────────────────────────────────────┘
