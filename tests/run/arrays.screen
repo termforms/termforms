@@ -4,7 +4,7 @@
   │30 130 a(0)=0 ub=4 lb=0                               │
   │2101 xyz ub=1                                         │
   │123 a(4)=0 hand=1                                     │
-  │9 Subscript out of range / 9                          │
+  │9 Subscript out of range / -1                         │
   │10 locked; shared(3)=1 ub=3                           │
   │                                                      │
   │                                                      │

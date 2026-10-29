@@ -412,8 +412,21 @@ void *tf_array_atlin(tf_array *a, int64_t i)
     return element(a, i);
 }
 
+/* An array never sized (or erased) has no dimensions, but its first
+   gives LBound 0 and UBound -1 (Jim, 30 Oct 2026; VB6 raised 9), so
+   `For i = 0 To UBound(a)` runs no passes and `ReDim Preserve
+   a(UBound(a) + 1)` grows it from empty, as Split's empty result does. */
+static int empty_first(const tf_array *a, int32_t dimension)
+{
+    return a->rank == 0 && dimension == 1;
+}
+
 int32_t tf_array_lbound(const tf_array *a, int32_t dimension)
 {
+    if (empty_first(a, dimension))
+    {
+        return 0;
+    }
     if (a->rank == 0 || dimension < 1 || dimension > a->rank)
     {
         tf_raise(TF_ERR_SUBSCRIPT, NULL);
@@ -423,6 +436,10 @@ int32_t tf_array_lbound(const tf_array *a, int32_t dimension)
 
 int32_t tf_array_ubound(const tf_array *a, int32_t dimension)
 {
+    if (empty_first(a, dimension))
+    {
+        return -1;
+    }
     if (a->rank == 0 || dimension < 1 || dimension > a->rank)
     {
         tf_raise(TF_ERR_SUBSCRIPT, NULL);

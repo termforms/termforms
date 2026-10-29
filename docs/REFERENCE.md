@@ -252,8 +252,8 @@ For Each w As String In words ... Next w
 - Initialiser details (Proposed): the values in one Dim are given left
   to right, so a later one may use an earlier (`Dim a As Integer = 5, b
   As Long = a * 2`). A name with a suffix needs no As of its own (`Dim
-  n%, m As Integer = 3` is fine). `{}` leaves the array empty (UBound of
-  it is error 9, as for any empty array). A dynamic array may also be
+  n%, m As Integer = 3` is fine). `{}` leaves the array empty (UBound
+  -1, as for any empty array). A dynamic array may also be
   given another array (`Dim b() As Integer = a`, a copy). `As New`, a
   Dictionary and a fixed-size array take no value. Module variables are
   set after the forms are made and their event handlers wired, so a
@@ -362,7 +362,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 13 | Type mismatch | CInt/CLng/CDbl of text that is not a number | now |
 | 14 | Out of string space | joining strings into one longer than a string can hold (about 2 GB); catchable, the result is "" | now |
 | 900 | Terminal error | the terminal cannot be opened or is lost (always fatal) | now |
-| 9 | Subscript out of range | an array index outside its bounds; UBound of an empty array; ReDim Preserve changing a dimension other than the last | now |
+| 9 | Subscript out of range | an array index outside its bounds; UBound beyond an array's dimensions; ReDim Preserve changing a dimension other than the last | now |
 | 10 | This array is fixed or temporarily locked | ReDim of a fixed array passed ByRef; ReDim or Erase of an array whose element is being passed ByRef; adding to, removing from or clearing a Dictionary whose entry is being passed ByRef | now |
 | 91 | Object variable or With block variable not set | using a `Ref` that is Nothing: its members, or copying from it | now |
 | 457 | This key is already associated with an element of this collection | `d.Add` of a key that is there | now |
@@ -498,7 +498,12 @@ Erase names                       ' a dynamic array becomes empty
 - **`b = a` copies the elements** (b must be dynamic, with the same element
   type and dimensions); changing one afterwards leaves the other alone.
 - Every index is checked: one outside the array is error 9 (Subscript out
-  of range), as is UBound of an empty array.
+  of range).
+- **An empty array has UBound -1** (Settled, Jim, 30 Oct 2026; VB6 gave
+  error 9): one never sized, or emptied by Erase, gives LBound 0 and
+  UBound -1 for its first dimension, as `Split("")` does, so `For i = 0
+  To UBound(a)` runs no passes and `ReDim Preserve a(UBound(a) + 1)`
+  grows it from nothing. Any other dimension of it is still error 9.
 - Array parameters are written `values() As Integer` (or `(,)`), and take
   any array, fixed or dynamic, of that element type and dimensions. ByVal
   (the default) makes it read-only in the callee; ByRef lets the callee

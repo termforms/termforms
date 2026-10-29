@@ -116,7 +116,6 @@ Enum Choice
 End Enum
 
 Sub Form_Load()
-    ReDim items(-1)
     ReadArguments
     If UBound(folders) < 0 Then
         lblStatus.Caption = "No Syncthing config.xml found, so no folders. Give its place with --config FILE, or the folders to search as arguments."
@@ -164,7 +163,7 @@ End Sub
 ' The chosen folder's conflicts not yet resolved, the row at near chosen.
 Sub ShowConflicts(near As Integer)
     lstConflicts.Clear
-    ReDim shown(-1)
+    Erase shown
     Dim f As Integer = lstFolders.ListIndex
     If f < 0 Then
         Exit Sub
@@ -242,7 +241,7 @@ End Sub
 
 ' The rows chosen: those selected, else the current one.
 Sub Choose(ByRef rows() As Integer)
-    ReDim rows(-1)
+    Erase rows
     For i As Integer = 0 To lstConflicts.ListCount - 1
         If lstConflicts.Selected(i) Then
             ReDim Preserve rows(UBound(rows) + 1)

@@ -145,7 +145,7 @@ Dim scores(9) As Integer            ' fixed: scores(0) to scores(9)
 Dim names() As String               ' dynamic: empty until ReDim
 ReDim names(2)
 names(0) = "Ann"
-ReDim Preserve names(UBound(names) + 1)   ' grow, keeping the contents
+ReDim Preserve names(UBound(names) + 1)   ' grow, keeping the contents (from empty too: UBound -1)
 
 Function Total(values() As Integer) As Integer   ' an array parameter
     Dim i As Integer

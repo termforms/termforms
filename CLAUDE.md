@@ -503,9 +503,10 @@ authoritative for design rationale.
   For it, MultiSelect 2 ListBoxes got Shift+arrows/Shift+click (a range
   from `anchor`) and Ctrl+arrows (move without selecting), as REFERENCE
   had promised. Labels show `&` as an access key, so the program doubles
-  it in data (`Plain`). Open for Jim: UBound of a never-sized dynamic
-  array is error 9 (VB6), so `ReDim Preserve a(UBound(a) + 1)` fails on
-  a fresh array; the program starts each with `ReDim a(-1)`.
+  it in data (`Plain`). Then Jim settled (30 Oct 2026): UBound of an
+  empty array (never sized, or erased) is -1 for its first dimension,
+  LBound 0, not VB6's error 9 (`empty_first` in tf_array.c); other
+  dimensions of it stay 9.
 - **Next:** Jim deploys syncfix to the NAS servers and uses it in
   earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual

@@ -41,8 +41,6 @@ Public skipped As Integer ' folders that could not be read in the last scan
 Sub ReadArguments()
     Dim args() As String = CommandArgs()
     Dim given() As String
-    ReDim given(-1)
-    ReDim folders(-1)
     Dim i As Integer = 0
     Do While i <= UBound(args)
         If args(i) = "--config" And i < UBound(args) Then
@@ -191,7 +189,7 @@ End Function
 ' ---- Finding conflicts ----
 
 Sub Scan()
-    ReDim items(-1)
+    Erase items
     skipped = 0
     For i As Integer = 0 To UBound(folders)
         folders(i).Count = 0

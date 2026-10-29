@@ -100,8 +100,10 @@ int main(void)
     tf_array_redim(&grid, TF_ELEM_I32, NULL, 0, 2, shape);
     EXPECT(tf_error_pending && tf_err_number() == 10, "ReDim of a fixed array is error 10");
     tf_err_catch();
-    (void)tf_array_ubound(&names, 1);
-    EXPECT(tf_error_pending && tf_err_number() == 9, "UBound of an empty array is error 9");
+    EXPECT(tf_array_ubound(&names, 1) == -1 && tf_array_lbound(&names, 1) == 0 && !tf_error_pending,
+           "an empty array's first dimension: LBound 0, UBound -1");
+    (void)tf_array_ubound(&names, 2);
+    EXPECT(tf_error_pending && tf_err_number() == 9, "an empty array has no second dimension");
     tf_err_catch();
     tf_try_leave();
 

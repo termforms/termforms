@@ -299,7 +299,7 @@ Dim days() As String = {"Mon", "Tue", "Wed"}
 
 ReDim names(n)                          ' size it
 ReDim Preserve names(n + 10)            ' grow it, keeping what is there
-For i As Integer = 0 To UBound(names)   ' LBound is always 0
+For i As Integer = 0 To UBound(names)   ' LBound is always 0; UBound -1 when empty
 copy = names                            ' copies the elements
 Erase names                             ' empty again
 ```

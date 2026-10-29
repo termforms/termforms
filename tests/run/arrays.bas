@@ -1,7 +1,8 @@
 ' Run test: arrays in use: values and copies that do not share, a 2-D
 ' grid, ReDim Preserve, Erase, UBound/LBound, array parameters, a Dim in a
-' loop starting fresh, and errors 9 and 10 caught, including an element
-' passed ByRef whose array the callee tries to ReDim.
+' loop starting fresh, an erased array's UBound (-1), and errors 9 and
+' 10 caught, including an element passed ByRef whose array the callee
+' tries to ReDim.
 Begin Form f
     Caption = "Arrays"
     Width = 56
@@ -91,7 +92,7 @@ Sub Form_Load()
     End Try
     Try
         Erase b
-        i = UBound(b)
+        s = s & " / " & UBound(b)
     Catch
         s = s & " / " & Err.Number
     End Try
