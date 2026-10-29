@@ -7,3 +7,6 @@
 *.cmd text eol=crlf
 
 *.png binary
+
+# A run test's standard input is kept byte for byte: it may test CRLF lines.
+*.stdin binary
