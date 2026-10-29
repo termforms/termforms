@@ -3,9 +3,10 @@
 This page tracks the language as implemented, not as planned. It grows with
 each phase; the full design lives in the project's design documents.
 
-Version 0.9.0, the first pre-release, has the whole v1 language core, the
-forms runtime (every v1 control, menus, dialogs, several forms, the mouse),
-files and the file system, and Declare for calling C. For learning the
+Version 0.9.1 has the whole v1 language core, the forms runtime (every v1
+control, menus, dialogs, several forms, the mouse), files and the file
+system, Declare for calling C, and (new since 0.9.0) console programs,
+`CommandArgs()` and `App`. For learning the
 language, read the guide, `docs/GUIDE.md`; `docs/REFERENCE.md` has every
 rule as decided.
 

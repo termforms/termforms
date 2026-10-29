@@ -463,8 +463,19 @@ authoritative for design rationale.
   the project plan's status, v1 table and post-v1 list are current (29
   Oct 2026). Additions to v1 are recorded in the plan first (its risks
   table says so).
-- **Next:** finish 5.8: Jim runs the environment doc's "Setting up from a
-  release" on the laptop, as written. The terminal matrix is done except
+  **5.8 passed (Jim, 29 Oct 2026):** on the laptop, from the doc's
+  "Setting up from a release": the 0.9.0 zip, PATH, winget zig, the
+  examples built and run, the address book cross-built and run on the
+  DreamHost server. The console step (7) needs 0.9.1 (the doc says so);
+  not yet tried there. A mistyped --cc on the way led to the clearer
+  failure message (d00f044). **Phase 5 is complete.**
+  Version 0.9.1 (29 Oct 2026, Jim's go-ahead): CommandArgs/App, console
+  programs, the parenthesis fix, the failure message, chmod notes.
+- **Next:** Phase 6 (v1 release): Jim chooses the acceptance program, to
+  be built, deployed to a Linux server and used in earnest; then tag
+  v1.0.0 and review toolchain bundling. Also open: step 7 of the
+  environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
+  Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
 
