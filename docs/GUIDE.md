@@ -477,8 +477,8 @@ The form itself has Caption, Width, Height, Visible (read-only) and the
 events Load, Activate and Unload. `Me` is the form whose module the code
 is in.
 
-An access key (the letter after `&` in a Caption) is shown bright and
-underlined, so it stays visible whatever colours the terminal uses; `&&`
+An access key (the letter after `&` in a Caption) is underlined, in
+the caption's own colour, so it shows wherever the caption does; `&&`
 shows an `&`. A Label showing data, such as a file name, should double
 any `&` in it (`Replace(text, "&", "&&")`).
 

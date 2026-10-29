@@ -136,9 +136,8 @@ enum
     TF_GREY = 7,
     TF_BRIGHT = 8, /* add to any of the above */
     TF_WHITE = 15,
-    /* Added to a foreground colour: the character is also underlined. An
-       access key is marked this way as well as by its colour, as a
-       terminal's colour scheme may make bright white and grey alike. */
+    /* Added to a foreground colour: the character is also underlined, as
+       an access key is (its only mark: see draw_caption). */
     TF_UNDERLINE = 16
 };
 

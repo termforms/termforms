@@ -510,8 +510,11 @@ authoritative for design rationale.
   Jim ran syncfix on greece (30 Oct 2026): config.xml found in
   ~/.local/state/syncthing, four folders, no conflicts. His terminal
   profile's colours made bright white and grey alike, hiding access
-  keys, so they are now underlined too (`TF_UNDERLINE`, a flag added to
-  a cell's fg; tf_screen.c emits SGR 4; draw_caption adds it).
+  keys (bright white), and Dracula did the same, so an access key is now
+  underlined in its caption's colour instead (`TF_UNDERLINE`, a flag
+  added to a cell's fg; tf_screen.c emits SGR 4; draw_caption's `keyed`).
+  Still bright white, so open to the same trouble: a Default button's
+  brackets and the TextBox's white field.
 - **Next:** Jim deploys syncfix to the NAS servers and uses it in
   earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual

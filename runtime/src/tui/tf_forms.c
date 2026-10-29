@@ -971,14 +971,16 @@ static uint32_t access_key(const tf_string *caption)
     return 0;
 }
 
-/* Draws a caption, its access key (after &) in hot and underlined unless
-   hot is fg (a control that cannot be used has no access key); "&&" is an
-   &. Returns the cells used. */
+/* Draws a caption, its access key (after &) underlined when keyed (a
+   control that cannot be used shows none); "&&" is an &. The key keeps
+   the caption's colour: a brighter one vanished under some terminal
+   colour schemes (Dracula's among them), which make bright white and
+   the forms' grey alike. Returns the cells used. */
 static int draw_caption(int x, int y, const tf_string *caption, int max_cells, int fg, int bg,
-                        int hot)
+                        int keyed)
 {
     const char *p = tf_str_cstr(caption);
-    const int key = hot == fg ? fg : hot | TF_UNDERLINE;
+    const int key = keyed ? fg | TF_UNDERLINE : fg;
     int cells = 0;
     int next_hot = 0;
     while (*p != '\0' && cells < max_cells)
@@ -1029,8 +1031,7 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
     {
         tf_screen_put(x + pad, y, '<', bracket, bg);
     }
-    const int used =
-        draw_caption(x + pad + 2, y, button->caption, w - pad - 4, fg, bg, on ? TF_WHITE : fg);
+    const int used = draw_caption(x + pad + 2, y, button->caption, w - pad - 4, fg, bg, on);
     if (pad + 2 + used + 1 < w)
     {
         tf_screen_put(x + pad + 2 + used + 1, y, '>', bracket, bg);
@@ -1075,7 +1076,7 @@ static void draw_label(const tf_control *label, int x, int y, int w, int h)
     const int fg = usable(label) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
     if (h <= 1 || utf8_cells(tf_str_cstr(label->caption)) <= w)
     {
-        draw_caption(x, y, label->caption, w, fg, TF_GREY, TF_WHITE);
+        draw_caption(x, y, label->caption, w, fg, TF_GREY, 1);
         return;
     }
     /* Taller than a line: words wrapped (the access key is not shown). */
@@ -1143,7 +1144,7 @@ static void draw_check(const tf_control *c, int x, int y, int w, int focused)
     }
     if (w > 4)
     {
-        draw_caption(x + 4, y, c->caption, w - 4, fg, TF_GREY, on ? TF_WHITE : fg);
+        draw_caption(x + 4, y, c->caption, w - 4, fg, TF_GREY, on);
     }
     if (focused)
     {
@@ -1242,7 +1243,7 @@ static void draw_frame(const tf_control *frame, int x, int y, int w, int h)
     {
         tf_screen_put(x + 1, y, ' ', fg, TF_GREY);
         const int used =
-            draw_caption(x + 2, y, frame->caption, (int)frame->width - 4, fg, TF_GREY, TF_WHITE);
+            draw_caption(x + 2, y, frame->caption, (int)frame->width - 4, fg, TF_GREY, 1);
         tf_screen_put(x + 2 + used, y, ' ', fg, TF_GREY);
     }
 }
@@ -1677,7 +1678,7 @@ static void draw_menu_bar(const tf_control *form, int x, int y, int w)
         const int fg = usable(c) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
         const int bg = lit ? TF_CYAN : TF_GREY;
         tf_screen_fill(at, y, cells, 1, ' ', fg, bg);
-        draw_caption(at + 1, y, c->caption, cells - 2, fg, bg, usable(c) ? TF_WHITE : fg);
+        draw_caption(at + 1, y, c->caption, cells - 2, fg, bg, usable(c));
     }
 }
 
@@ -1765,7 +1766,7 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
         {
             tf_screen_put(x + 2, row, box(0x2713, 'x'), fg, bg);
         }
-        draw_caption(x + 4, row, c->caption, caption_cells, fg, bg, on ? TF_WHITE : fg);
+        draw_caption(x + 4, row, c->caption, caption_cells, fg, bg, on);
         const char *keys = tf_str_cstr(c->text);
         const int key_cells = utf8_cells(keys);
         if (key_cells > 0)
