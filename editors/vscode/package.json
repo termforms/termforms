@@ -2,7 +2,7 @@
   "name": "termforms-basic",
   "displayName": "TermForms BASIC",
   "description": "TermForms BASIC: highlighting, breakpoints in .bas files, and tfc's messages in the Problems list.",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "termforms",
   "license": "BSD-2-Clause",
   "engines": {
