@@ -530,9 +530,19 @@ authoritative for design rationale.
   (Jim, 30 Oct 2026):** his first try on the laptop failed; the templates
   now give `.exe` on Windows (launch.json `windows` entries) and the
   README a junction (`cmd /c mklink /J`), PATH before starting VS Code,
-  and forward slashes in settings.json. Next: Jim reinstalls cleanly and
-  we go step by step, writing a Windows section from what works (does
-  CodeLLDB on Windows bring the Python the printers need?).
+  and forward slashes in settings.json. Then, step by step on the laptop
+  (30 Oct 2026): the junction failed (a PowerShell slip), a copy into
+  the extensions folder worked; under CodeLLDB the program's standard
+  input refused VT input (error 900, also in an external console), fixed
+  by opening CONIN$ (tf_term_win32.c, a7c2192); CodeLLDB on Windows runs
+  the printers (Python is there); VS Code takes Ctrl+Q (Quick Open View)
+  and Ctrl+B, so the README gives keybindings sending \u0011/\u0002 when
+  terminalFocus; Alt+F4 closes VS Code/Windows Terminal (use Ctrl+F4).
+  Ctrl+Q by itself does nothing in TermForms (a menu Shortcut only).
+  Now: each release carries `editors/termforms-basic-<version>.vsix`
+  (tools/vsix.py, no Node), installed with Install from VSIX, and
+  editors/vscode/README.md has "Windows, step by step". Next: Jim's
+  clean run from that README with 0.9.2.
 
 ## Settled design decisions (do not relitigate without Jim)
 

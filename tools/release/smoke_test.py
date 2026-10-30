@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 
@@ -44,6 +45,19 @@ def main() -> int:
         screen = run.stdout.decode("utf-8", errors="replace")
         if run.returncode != 0 or "Hello, Jim" not in screen:
             print("FAIL: hello did not greet\n" + screen + run.stderr.decode("utf-8", "replace"))
+            return 1
+        # The VS Code extension as a .vsix, its manifest naming this version.
+        packed = list((root / "editors").glob("termforms-basic-*.vsix"))
+        if len(packed) != 1:
+            print("FAIL: no editors/termforms-basic-*.vsix")
+            return 1
+        with zipfile.ZipFile(packed[0]) as extension:
+            names = extension.namelist()
+            if "extension.vsixmanifest" not in names or "extension/package.json" not in names:
+                print("FAIL: " + packed[0].name + " lacks its manifest or package.json")
+                return 1
+        if root.name.split("-")[1] not in packed[0].name:
+            print("FAIL: " + packed[0].name + " is not this release's version")
             return 1
         print("ok: " + archive.name)
     return 0

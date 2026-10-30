@@ -66,9 +66,12 @@ arrives without its executable bit: `chmod +x hello-linux` there once.
 
 ## Editing and debugging
 
-- `editors/vscode`: a Visual Studio Code extension (highlighting, tfc's
-  errors in the Problems list, breakpoints in `.bas` files) and templates
-  for building and debugging with CodeLLDB; see its README.
+- `editors/termforms-basic-<version>.vsix`: a Visual Studio Code
+  extension (highlighting, tfc's errors in the Problems list, breakpoints
+  in `.bas` files), installed with VS Code's Install from VSIX.
+  `editors/vscode` holds its files and the templates for building and
+  debugging with CodeLLDB; its README says how to set it all up,
+  Windows step by step.
 - `debug/lldb/termforms.py` and `debug/gdb/termforms.py`: printers that
   show Strings, arrays and Dictionaries as BASIC would.
 

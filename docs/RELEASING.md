@@ -29,3 +29,6 @@ Archives: `termforms-<version>-<platform>.tar.gz` (macOS, Linux) and
 `.zip` (Windows), laid out by `tools/package.py`, with
 `tools/release/README.md` as their README. tfc finds the runtime beside
 its `bin`, so an archive works wherever it is unpacked.
+Each holds the VS Code extension as `editors/termforms-basic-<version>.vsix`
+(`tools/vsix.py`, which needs no Node; the smoke test checks it is
+there), its version from `editors/vscode/package.json`.

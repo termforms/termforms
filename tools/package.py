@@ -8,6 +8,8 @@
                             every program, for whatever target)
         debug/              lldb and gdb printers
         editors/vscode/     the VS Code extension and templates
+        editors/termforms-basic-<version>.vsix
+                            the extension, for VS Code's Install from VSIX
         examples/           the example programs
         docs/               the guide, the reference, what works today
         README.md, LICENSE  (runtime/LICENSE and THIRD_PARTY_NOTICES inside)
@@ -25,6 +27,8 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+
+import vsix
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("macos-arm64", "linux-x86_64", "windows-x64")
@@ -74,6 +78,7 @@ def main() -> int:
             target = stage / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / relative, target)
+    vsix.make(stage / "editors")
     (stage / "docs").mkdir()
     for doc in DOCS:
         if (ROOT / "docs" / doc).exists():
