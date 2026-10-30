@@ -3,6 +3,8 @@
   // extension): copy into your program's .vscode folder, beside tasks.json.
   // Set termforms.home (the TermForms folder) in your settings, so the
   // printers load: Strings as text, arrays and Dictionaries by element.
+  // On Windows, in settings.json write it with forward slashes
+  // (C:/Users/me/termforms): JSON reads \t in C:\Users\me\termforms as a tab.
   // F9 sets a breakpoint on a .bas line; F5 builds and starts.
   "version": "0.2.0",
   "configurations": [
@@ -11,6 +13,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${fileDirname}/${fileBasenameNoExtension}",
+      "windows": { "program": "${fileDirname}/${fileBasenameNoExtension}.exe" },
       "cwd": "${fileDirname}",
       "preLaunchTask": "tfc: build this file",
       // The program draws its forms: it needs a terminal of its own.
@@ -24,6 +27,7 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/myprogram",
+      "windows": { "program": "${workspaceFolder}/myprogram.exe" },
       "cwd": "${workspaceFolder}",
       "preLaunchTask": "tfc: build the project",
       "terminal": "integrated",

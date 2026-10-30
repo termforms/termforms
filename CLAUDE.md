@@ -524,6 +524,15 @@ authoritative for design rationale.
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
   Jim's own ThinkPad (it has development tools) whenever suits.
+  Found (30 Oct 2026): zig's x86_64-windows-gnu builds write a `.pdb`
+  (CodeView) beside the `.exe`, not DWARF; lldb reads it (`hello.bas:31`
+  resolves), so VS very likely can too. **Windows VS Code on-boarding
+  (Jim, 30 Oct 2026):** his first try on the laptop failed; the templates
+  now give `.exe` on Windows (launch.json `windows` entries) and the
+  README a junction (`cmd /c mklink /J`), PATH before starting VS Code,
+  and forward slashes in settings.json. Next: Jim reinstalls cleanly and
+  we go step by step, writing a Windows section from what works (does
+  CodeLLDB on Windows bring the Python the printers need?).
 
 ## Settled design decisions (do not relitigate without Jim)
 

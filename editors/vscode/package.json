@@ -69,7 +69,7 @@
         "termforms.home": {
           "type": "string",
           "default": "",
-          "description": "The TermForms folder (holding debug/lldb/termforms.py), for the debugger's printers."
+          "description": "The TermForms folder (holding debug/lldb/termforms.py), for the debugger's printers. In settings.json on Windows, use forward slashes: C:/Users/me/termforms."
         }
       }
     }

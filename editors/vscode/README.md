@@ -15,17 +15,30 @@ VS Code:
 ln -s /path/to/termforms/editors/vscode ~/.vscode/extensions/termforms.termforms-basic
 ```
 
-(Windows: `mklink /D "%USERPROFILE%\.vscode\extensions\termforms.termforms-basic" C:\path\to\termforms\editors\vscode`.)
+On Windows, link it as a junction, which needs neither an administrator
+prompt nor Developer Mode. `mklink` belongs to the Command Prompt, so from
+PowerShell run it through `cmd /c`:
+
+```powershell
+cmd /c mklink /J "%USERPROFILE%\.vscode\extensions\termforms.termforms-basic" "C:\path\to\termforms\editors\vscode"
+```
 
 For debugging, also install **CodeLLDB** (`vadimcn.vscode-lldb`) from the
 Marketplace.
+
+Put TermForms' `bin` on your PATH before starting VS Code: VS Code reads
+PATH when it starts, so after changing it, quit VS Code and start it again,
+or the build task cannot find `tfc`.
 
 ## Settings
 
 - `termforms.tfc`: the compiler, if `tfc` is not on your PATH (e.g.
   `/path/to/termforms/build/dev/compiler/tfc`).
 - `termforms.home`: the TermForms folder, so the debugger finds
-  `debug/lldb/termforms.py`.
+  `debug/lldb/termforms.py`. On Windows, if you type it into
+  `settings.json` by hand, use forward slashes, `C:/Users/me/termforms`
+  (or double each backslash): JSON reads `\t` in `C:\Users\me\termforms`
+  as a tab. The Settings screen (Ctrl+,) takes the path as it is.
 
 ## Build and debug
 
@@ -50,5 +63,7 @@ name where they say `myprogram`).
   as 0 or 1.
 - Step Into goes into your Subs and Functions, past the runtime's own.
 
-Windows: CodeLLDB needs the program's `.exe` in `program`; whether
-Visual Studio's debugger suits zig-built programs is still to be checked.
+Windows: `launch.json` names the program with `.exe` there (its
+`windows` entries). A program built with zig has its debug information in
+a `.pdb` file beside the `.exe`; keep the two together. Whether Visual
+Studio's own debugger suits these programs is still to be checked.
