@@ -16,6 +16,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include "../../tui/tf_tui.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <windows.h>
@@ -39,6 +40,7 @@ static const char LEAVE_SEQ[] = "\x1b[?1002l\x1b[?1006l\x1b[?2004l" /* mouse, pa
 
 static HANDLE input_handle;
 static HANDLE output_handle;
+static HANDLE opened_input = INVALID_HANDLE_VALUE; /* CONIN$, when we opened it */
 static DWORD saved_input_mode;
 static DWORD saved_output_mode;
 static UINT saved_output_cp;
@@ -54,6 +56,15 @@ static BOOL WINAPI on_console_event(DWORD event)
         tf_term_close();
     }
     return FALSE; /* let the default handler end the process */
+}
+
+static void close_opened_input(void)
+{
+    if (opened_input != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(opened_input);
+        opened_input = INVALID_HANDLE_VALUE;
+    }
 }
 
 int tf_term_open(const char **reason)
@@ -85,9 +96,29 @@ int tf_term_open(const char **reason)
                              (tf_mouse_wanted() ? ENABLE_EXTENDED_FLAGS : 0);
     if (!SetConsoleMode(input_handle, input_mode))
     {
-        SetConsoleMode(output_handle, saved_output_mode);
-        *reason = "this console does not support VT input (Windows 10 1809 or later needed)";
-        return -1;
+        /* A debugger (lldb, under CodeLLDB) may hand the program a standard
+           input that is a console handle yet refuses the input modes, perhaps
+           opened for output. The console's own input buffer, CONIN$, takes
+           them, as /dev/tty would on Unix. */
+        opened_input =
+            CreateFileW(L"CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                        NULL, OPEN_EXISTING, 0, NULL);
+        DWORD mode = 0;
+        if (opened_input == INVALID_HANDLE_VALUE || !GetConsoleMode(opened_input, &mode) ||
+            !SetConsoleMode(opened_input, input_mode))
+        {
+            static char message[120];
+            snprintf(message, sizeof message,
+                     "this console does not support VT input (Windows 10 1809 or later "
+                     "needed; Windows error %lu)",
+                     (unsigned long)GetLastError());
+            close_opened_input();
+            SetConsoleMode(output_handle, saved_output_mode);
+            *reason = message;
+            return -1;
+        }
+        input_handle = opened_input;
+        saved_input_mode = mode;
     }
 
     saved_output_cp = GetConsoleOutputCP();
@@ -109,6 +140,7 @@ void tf_term_close(void)
         SetConsoleMode(output_handle, saved_output_mode);
         SetConsoleOutputCP(saved_output_cp);
         SetConsoleCtrlHandler(on_console_event, FALSE);
+        close_opened_input();
     }
 }
 
