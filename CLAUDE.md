@@ -541,8 +541,10 @@ authoritative for design rationale.
   Ctrl+Q by itself does nothing in TermForms (a menu Shortcut only).
   Now: each release carries `editors/termforms-basic-<version>.vsix`
   (tools/vsix.py, no Node), installed with Install from VSIX, and
-  editors/vscode/README.md has "Windows, step by step". Next: Jim's
-  clean run from that README with 0.9.2.
+  editors/vscode/README.md has "Windows, step by step". Version 0.9.2
+  (30 Oct 2026, Jim's go-ahead) published as a pre-release with these;
+  the environment doc's paths now say 0.9.2 and its step 8 points to the
+  .vsix and the README. Next: Jim's clean run from that README with 0.9.2.
 
 ## Settled design decisions (do not relitigate without Jim)
 
