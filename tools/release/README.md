@@ -13,10 +13,15 @@ compiler build it into a single program.
      shell's profile (`~/.zprofile`, `~/.bashrc`).
    - Windows: Settings > System > About > Advanced system settings >
      Environment Variables > Path > New, and the folder's `bin`.
-2. **macOS:** the program is not signed. If you downloaded the archive
-   with a browser, clear the quarantine once:
-   `xattr -dr com.apple.quarantine /path/to/termforms`
-   (downloading with `curl -LO` instead leaves no quarantine).
+2. **macOS:** tfc is not signed. If you downloaded the archive with a
+   browser, macOS marks it as quarantined, and unpacking passes the mark
+   to every file, so macOS refuses to run `bin/tfc`. Clear it once, giving
+   the unpacked folder (the one holding `bin`, `runtime` and `examples`):
+   `xattr -dr com.apple.quarantine ~/termforms` (if you unpacked it
+   to `~/termforms`). `-r` clears every file in it; `bin/tfc` is the only
+   one that matters, so `xattr -d com.apple.quarantine ~/termforms/bin/tfc`
+   does as well. Programs tfc builds are never quarantined. Downloading
+   with `curl -LO` instead leaves no quarantine at all.
 3. Install a C compiler, which tfc drives:
    - macOS: `xcode-select --install` (the Command Line Tools).
    - Linux: your distribution's gcc or clang (e.g. `sudo apt install gcc`).
