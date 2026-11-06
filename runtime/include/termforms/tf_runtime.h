@@ -752,6 +752,46 @@ void tf_form_hide(tf_control *form);
 void tf_form_unload(tf_control *form);
 int tf_forms_run(void);
 
+/*
+ * The colours forms are drawn in, by role (tf_colour.c). They are exact
+ * colours, not the terminal's sixteen named ones, which its colour scheme
+ * may make anything: forms look the same in every terminal (Jim, 6 Nov
+ * 2026). A project's <Role>Color= lines set them (0xRRGGBB) before the
+ * first form shows; tfc's catalog of the names is in driver/project.cpp,
+ * so keep the two alike.
+ */
+typedef enum tf_colour_role
+{
+    TF_COLOUR_BACKDROP,        /* the screen around the forms */
+    TF_COLOUR_FORM_BACK,       /* a form, and what is drawn on it */
+    TF_COLOUR_FORM_TEXT,       /* captions, borders, list items */
+    TF_COLOUR_FORM_DISABLED,   /* a control that cannot be used */
+    TF_COLOUR_FORM_KEY,        /* an access key (also underlined) */
+    TF_COLOUR_DIALOG_BACK,     /* MsgBox and InputBox, likewise */
+    TF_COLOUR_DIALOG_TEXT,     /* */
+    TF_COLOUR_DIALOG_DISABLED, /* */
+    TF_COLOUR_DIALOG_KEY,      /* */
+    TF_COLOUR_MENU_BACK,       /* the menu bar and its drop-downs */
+    TF_COLOUR_MENU_TEXT,       /* */
+    TF_COLOUR_MENU_DISABLED,   /* */
+    TF_COLOUR_MENU_KEY,        /* */
+    TF_COLOUR_BUTTON_BACK,     /* a CommandButton without the focus */
+    TF_COLOUR_BUTTON_TEXT,     /* */
+    TF_COLOUR_BUTTON_DISABLED, /* */
+    TF_COLOUR_BUTTON_KEY,      /* */
+    TF_COLOUR_HIGHLIGHT_BACK,  /* what has the focus: a button, the menu item
+                                  under the cursor, selected items and text */
+    TF_COLOUR_HIGHLIGHT_TEXT,  /* */
+    TF_COLOUR_INACTIVE_BACK,   /* a ListBox's selection without the focus */
+    TF_COLOUR_INACTIVE_TEXT,   /* */
+    TF_COLOUR_FIELD_BACK,      /* a TextBox */
+    TF_COLOUR_FIELD_TEXT,      /* */
+    TF_COLOUR_COUNT
+} tf_colour_role;
+
+/* Sets a role's colour; rgb is 0xRRGGBB. */
+void tf_colour_set(tf_colour_role role, int32_t rgb);
+
 /* ------------------------------------------------------------------------ */
 /* Declare: calling C (tf_c.c)                                              */
 /* ------------------------------------------------------------------------ */

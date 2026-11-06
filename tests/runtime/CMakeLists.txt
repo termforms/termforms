@@ -59,3 +59,10 @@ tf_set_warnings(test_width)
 
 add_test(NAME runtime.width COMMAND test_width)
 set_tests_properties(runtime.width PROPERTIES LABELS runtime)
+
+add_executable(test_colour test_colour.c)
+target_link_libraries(test_colour PRIVATE tfrt)
+tf_set_warnings(test_colour)
+
+add_test(NAME runtime.colour COMMAND test_colour)
+set_tests_properties(runtime.colour PROPERTIES LABELS runtime)

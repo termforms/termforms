@@ -20,8 +20,8 @@
 typedef struct tf_cell
 {
     uint32_t ch;
-    uint8_t fg;
-    uint8_t bg;
+    uint32_t fg; /* 0xRRGGBB, perhaps with TF_UNDERLINE */
+    uint32_t bg;
 } tf_cell;
 
 /* A front-buffer value that never matches a real cell, forcing a redraw. */
@@ -67,15 +67,10 @@ static void emitf_move(int x, int y)
     emit(sequence, (size_t)n);
 }
 
-static void emit_colours(int fg, int bg)
+static void emit_colours(uint32_t fg, uint32_t bg)
 {
-    /* 30-37 / 90-97 foreground, 40-47 / 100-107 background; 4 underlines. */
-    char sequence[32];
-    const int colour = fg & 15;
-    const int f = colour < 8 ? 30 + colour : 90 + colour - 8;
-    const int b = bg < 8 ? 40 + bg : 100 + bg - 8;
-    const char *underline = (fg & TF_UNDERLINE) != 0 ? ";4" : "";
-    const int n = snprintf(sequence, sizeof sequence, "\x1b[0;%d;%d%sm", f, b, underline);
+    char sequence[64];
+    const int n = tf_colour_sgr(fg, bg, sequence, sizeof sequence);
     emit(sequence, (size_t)n);
 }
 
@@ -165,7 +160,8 @@ void tf_screen_init(int cols, int rows, int to_terminal)
     width = cols;
     height = rows;
     terminal = to_terminal;
-    tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLACK);
+    tf_screen_fill(0, 0, cols, rows, ' ', tf_colour(TF_COLOUR_BACKDROP),
+                   tf_colour(TF_COLOUR_BACKDROP));
     tf_screen_invalidate();
 }
 
@@ -208,7 +204,7 @@ static void break_wide(tf_cell *row, int x)
     }
 }
 
-void tf_screen_put(int x, int y, uint32_t ch, int fg, int bg)
+void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg)
 {
     if (x < 0 || y < 0 || x >= width || y >= height)
     {
@@ -226,18 +222,18 @@ void tf_screen_put(int x, int y, uint32_t ch, int fg, int bg)
     }
     break_wide(row, x);
     row[x].ch = ch;
-    row[x].fg = (uint8_t)fg;
-    row[x].bg = (uint8_t)bg;
+    row[x].fg = fg;
+    row[x].bg = bg;
     if (cells == 2 && ch != ' ')
     {
         break_wide(row, x + 1);
         row[x + 1].ch = TF_CELL_TAIL;
-        row[x + 1].fg = (uint8_t)fg;
-        row[x + 1].bg = (uint8_t)bg;
+        row[x + 1].fg = fg;
+        row[x + 1].bg = bg;
     }
 }
 
-void tf_screen_fill(int x, int y, int w, int h, uint32_t ch, int fg, int bg)
+void tf_screen_fill(int x, int y, int w, int h, uint32_t ch, uint32_t fg, uint32_t bg)
 {
     for (int row = y; row < y + h; ++row)
     {
@@ -248,7 +244,7 @@ void tf_screen_fill(int x, int y, int w, int h, uint32_t ch, int fg, int bg)
     }
 }
 
-int tf_screen_text(int x, int y, const char *utf8, int max_cells, int fg, int bg)
+int tf_screen_text(int x, int y, const char *utf8, int max_cells, uint32_t fg, uint32_t bg)
 {
     /* A wide character that would cross max_cells ends the text there. */
     int cells = 0;
@@ -289,8 +285,9 @@ void tf_screen_flush(void)
 
     int last_x = -1;
     int last_y = -1;
-    int last_fg = -1;
-    int last_bg = -1;
+    /* No colour is ever this (a foreground's flags stop below it). */
+    uint32_t last_fg = 0xFFFFFFFFu;
+    uint32_t last_bg = 0xFFFFFFFFu;
 
     for (int y = 0; y < height; ++y)
     {

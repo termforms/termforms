@@ -123,32 +123,30 @@ int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape);
 /* Screen                                                                   */
 /* ------------------------------------------------------------------------ */
 
-/* The 16 standard terminal colours. */
-enum
-{
-    TF_BLACK = 0,
-    TF_RED = 1,
-    TF_GREEN = 2,
-    TF_YELLOW = 3,
-    TF_BLUE = 4,
-    TF_MAGENTA = 5,
-    TF_CYAN = 6,
-    TF_GREY = 7,
-    TF_BRIGHT = 8, /* add to any of the above */
-    TF_WHITE = 15,
-    /* Added to a foreground colour: the character is also underlined, as
-       an access key is (its only mark: see draw_caption). */
-    TF_UNDERLINE = 16
-};
+/* Colours are exact, 0xRRGGBB (see tf_colour.c). A foreground may also
+   carry TF_UNDERLINE, as an access key does. */
+#define TF_UNDERLINE 0x01000000u
+
+/* The colour a role is drawn in now (its default, or the project's). */
+uint32_t tf_colour(tf_colour_role role);
+
+/* The SGR sequence that selects a foreground and background, written into
+   buffer (at least 64 bytes): exact colours, or the nearest of the 256 or
+   16 the terminal has when TERMFORMS_COLOR says it has no more. Returns
+   its length. */
+int tf_colour_sgr(uint32_t fg, uint32_t bg, char *buffer, size_t size);
+
+/* The same for a given depth: 24 (exact), 256 or 16 (tests use it). */
+int tf_colour_sgr_at(uint32_t fg, uint32_t bg, int bits, char *buffer, size_t size);
 
 void tf_screen_init(int cols, int rows, int to_terminal);
 void tf_screen_free(void);
 void tf_screen_size(int *cols, int *rows);
-void tf_screen_fill(int x, int y, int width, int height, uint32_t ch, int fg, int bg);
-void tf_screen_put(int x, int y, uint32_t ch, int fg, int bg);
+void tf_screen_fill(int x, int y, int width, int height, uint32_t ch, uint32_t fg, uint32_t bg);
+void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg);
 
 /* Writes UTF-8 text from (x, y), at most max_cells wide. Returns cells used. */
-int tf_screen_text(int x, int y, const char *utf8, int max_cells, int fg, int bg);
+int tf_screen_text(int x, int y, const char *utf8, int max_cells, uint32_t fg, uint32_t bg);
 
 void tf_screen_cursor(int x, int y, int visible);
 

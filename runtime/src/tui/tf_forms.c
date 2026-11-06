@@ -879,6 +879,22 @@ static int32_t box_code_point_at(const tf_control *tb, int cells)
     return i;
 }
 
+/* The colours a surface draws in, from four consecutive roles (form,
+   dialog, menu or button: back, text, disabled, key). */
+typedef struct shade
+{
+    uint32_t back, text, disabled, key;
+} shade;
+
+static shade shade_of(tf_colour_role first)
+{
+    return (shade){tf_colour(first), tf_colour((tf_colour_role)(first + 1)),
+                   tf_colour((tf_colour_role)(first + 2)), tf_colour((tf_colour_role)(first + 3))};
+}
+
+/* The form or dialog being drawn: what its controls are drawn on. */
+static shade surface;
+
 /* The text from the first code point shown; the selection stands out while
    the box has the focus (as Windows hides it otherwise). The window scrolls
    by code points but is measured in cells, so wide characters fit. */
@@ -889,10 +905,9 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
     {
         return;
     }
-    /* The form's colours swapped, and the selection black on cyan: pairs
-       that stay readable under every common terminal colour scheme (a
-       white field on the grey form could not be told from it). */
-    tf_screen_fill(x, y, w, 1, ' ', TF_GREY, TF_BLACK);
+    const uint32_t text = tf_colour(TF_COLOUR_FIELD_TEXT);
+    const uint32_t back = tf_colour(TF_COLOUR_FIELD_BACK);
+    tf_screen_fill(x, y, w, 1, ' ', text, back);
 
     /* Keep the caret inside the visible window (its cell before the box's
        last). */
@@ -919,7 +934,8 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
             break;
         }
         const int lit = focused && tf_edit_selected(&tb->edit, i);
-        tf_screen_put(x + cells, y, shown_as, lit ? TF_BLACK : TF_GREY, lit ? TF_CYAN : TF_BLACK);
+        tf_screen_put(x + cells, y, shown_as, lit ? tf_colour(TF_COLOUR_HIGHLIGHT_TEXT) : text,
+                      lit ? tf_colour(TF_COLOUR_HIGHLIGHT_BACK) : back);
         cells += cw;
     }
     if (focused)
@@ -974,16 +990,20 @@ static uint32_t access_key(const tf_string *caption)
     return 0;
 }
 
-/* Draws a caption, its access key (after &) underlined when keyed (a
-   control that cannot be used shows none); "&&" is an &. The key keeps
-   the caption's colour: a brighter one vanished under some terminal
-   colour schemes (Dracula's among them), which make bright white and
-   the forms' grey alike. Returns the cells used. */
-static int draw_caption(int x, int y, const tf_string *caption, int max_cells, int fg, int bg,
-                        int keyed)
+/* An access key in its colour, and underlined as well, for whoever cannot
+   tell the colours apart; none (the caption's own) when not keyed. */
+static uint32_t key_mark(uint32_t colour, int keyed, uint32_t fg)
+{
+    return keyed ? colour | TF_UNDERLINE : fg;
+}
+
+/* Draws a caption, its access key (after &) in the colour key, which a
+   caller makes fg for a control that cannot be used; "&&" is an &.
+   Returns the cells used. */
+static int draw_caption(int x, int y, const tf_string *caption, int max_cells, uint32_t fg,
+                        uint32_t bg, uint32_t key)
 {
     const char *p = tf_str_cstr(caption);
-    const int key = keyed ? fg | TF_UNDERLINE : fg;
     int cells = 0;
     int next_hot = 0;
     while (*p != '\0' && cells < max_cells)
@@ -1020,13 +1040,16 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
         return;
     }
     const int on = usable(button);
-    const int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
-    const int bg = focused ? TF_CYAN : TF_GREY;
+    const shade b = shade_of(TF_COLOUR_BUTTON_BACK);
+    const uint32_t lit = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
+    const uint32_t fg = !on ? b.disabled : focused ? lit : b.text;
+    const uint32_t bg = focused ? tf_colour(TF_COLOUR_HIGHLIGHT_BACK) : b.back;
+    const uint32_t key = key_mark(focused ? lit : b.key, on, fg);
 
     char caption[256];
     strip_accelerator(tf_str_cstr(button->caption), caption, sizeof caption);
     /* "< OK >", or "« OK »" for the Default button: marked by its shape,
-       as bright brackets vanished under some terminal colour schemes. */
+       which shows in any colours. */
     const int cells = utf8_cells(caption) + 4;
     const int pad = cells < w ? (w - cells) / 2 : 0;
     tf_screen_fill(x, y, w, 1, ' ', fg, bg);
@@ -1035,7 +1058,7 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
     {
         tf_screen_put(x + pad, y, marked ? 0xAB : '<', fg, bg);
     }
-    const int used = draw_caption(x + pad + 2, y, button->caption, w - pad - 4, fg, bg, on);
+    const int used = draw_caption(x + pad + 2, y, button->caption, w - pad - 4, fg, bg, key);
     if (pad + 2 + used + 1 < w)
     {
         tf_screen_put(x + pad + 2 + used + 1, y, marked ? 0xBB : '>', fg, bg);
@@ -1061,14 +1084,16 @@ static void draw_stack(void)
             char message[96];
             snprintf(message, sizeof message, "Please resize the terminal to at least %dx%d", fw,
                      fh);
-            tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLACK);
+            const uint32_t backdrop = tf_colour(TF_COLOUR_BACKDROP);
+            tf_screen_fill(0, 0, cols, rows, ' ', backdrop, backdrop);
             const int length = (int)strlen(message);
             const int x = length < cols ? (cols - length) / 2 : 0;
-            tf_screen_text(x, rows / 2, message, cols, TF_WHITE, TF_BLACK);
+            tf_screen_text(x, rows / 2, message, cols, 0xFFFFFF, backdrop);
             return;
         }
     }
-    tf_screen_fill(0, 0, cols, rows, ' ', TF_GREY, TF_BLUE);
+    tf_screen_fill(0, 0, cols, rows, ' ', tf_colour(TF_COLOUR_BACKDROP),
+                   tf_colour(TF_COLOUR_BACKDROP));
     for (int i = 0; i < depth; ++i)
     {
         draw_one(stack[i]);
@@ -1077,10 +1102,11 @@ static void draw_stack(void)
 
 static void draw_label(const tf_control *label, int x, int y, int w, int h)
 {
-    const int fg = usable(label) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+    const int on = usable(label);
+    const uint32_t fg = on ? surface.text : surface.disabled;
     if (h <= 1 || utf8_cells(tf_str_cstr(label->caption)) <= w)
     {
-        draw_caption(x, y, label->caption, w, fg, TF_GREY, 1);
+        draw_caption(x, y, label->caption, w, fg, surface.back, key_mark(surface.key, on, fg));
         return;
     }
     /* Taller than a line: words wrapped (the access key is not shown). */
@@ -1120,7 +1146,7 @@ static void draw_label(const tf_control *label, int x, int y, int w, int h)
         const size_t n = (size_t)(line_end - p);
         memcpy(line, p, n);
         line[n] = '\0';
-        tf_screen_text(x, y + row, line, w, fg, TF_GREY);
+        tf_screen_text(x, y + row, line, w, fg, surface.back);
         p = line_end;
     }
 }
@@ -1129,7 +1155,7 @@ static void draw_label(const tf_control *label, int x, int y, int w, int h)
 static void draw_check(const tf_control *c, int x, int y, int w, int focused)
 {
     const int on = usable(c);
-    const int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+    const uint32_t fg = on ? surface.text : surface.disabled;
     uint32_t mark = ' ';
     if (c->type == TF_CTL_CHECKBOX)
     {
@@ -1142,13 +1168,13 @@ static void draw_check(const tf_control *c, int x, int y, int w, int focused)
     const int round = c->type == TF_CTL_OPTIONBUTTON;
     if (w >= 3)
     {
-        tf_screen_put(x, y, round ? '(' : '[', fg, TF_GREY);
-        tf_screen_put(x + 1, y, mark, fg, TF_GREY);
-        tf_screen_put(x + 2, y, round ? ')' : ']', fg, TF_GREY);
+        tf_screen_put(x, y, round ? '(' : '[', fg, surface.back);
+        tf_screen_put(x + 1, y, mark, fg, surface.back);
+        tf_screen_put(x + 2, y, round ? ')' : ']', fg, surface.back);
     }
     if (w > 4)
     {
-        draw_caption(x + 4, y, c->caption, w - 4, fg, TF_GREY, on);
+        draw_caption(x + 4, y, c->caption, w - 4, fg, surface.back, key_mark(surface.key, on, fg));
     }
     if (focused)
     {
@@ -1176,14 +1202,13 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
     for (int r = 0; r < rows && r + 1 < h; ++r)
     {
         const int32_t i = list->top_index + r;
-        int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
-        int bg = TF_GREY;
+        uint32_t fg = on ? surface.text : surface.disabled;
+        uint32_t bg = surface.back;
         if (i < list->item_count && list->selected[i])
         {
-            /* Black on cyan with the focus, as menus; else the form's
-               colours swapped (white on blue was faint in some schemes). */
-            fg = focused ? TF_BLACK : TF_GREY;
-            bg = focused ? TF_CYAN : TF_BLACK;
+            /* Highlighted with the focus, as menus; dimmer without it. */
+            fg = tf_colour(focused ? TF_COLOUR_HIGHLIGHT_TEXT : TF_COLOUR_INACTIVE_TEXT);
+            bg = tf_colour(focused ? TF_COLOUR_HIGHLIGHT_BACK : TF_COLOUR_INACTIVE_BACK);
         }
         const int cells = inner < w - 1 ? inner : w - 1;
         tf_screen_fill(x + 1, y + 1 + r, cells, 1, ' ', fg, bg);
@@ -1197,11 +1222,11 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
     {
         if (list->top_index > 0)
         {
-            tf_screen_put(right, y + 1, box(0x2191, '^'), TF_BLACK, TF_GREY);
+            tf_screen_put(right, y + 1, box(0x2191, '^'), surface.text, surface.back);
         }
         if (list->top_index + rows < list->item_count && rows > 0)
         {
-            tf_screen_put(right, y + rows, box(0x2193, 'v'), TF_BLACK, TF_GREY);
+            tf_screen_put(right, y + rows, box(0x2193, 'v'), surface.text, surface.back);
         }
     }
     const int32_t current = list->list_index;
@@ -1213,44 +1238,45 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
 
 static void draw_frame(const tf_control *frame, int x, int y, int w, int h)
 {
-    const int fg = usable(frame) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
+    const int on = usable(frame);
+    const uint32_t fg = on ? surface.text : surface.disabled;
     const int right = x + (int)frame->width - 1;
     const int bottom = y + (int)frame->height - 1;
     for (int i = x; i <= right && i < x + w; ++i)
     {
-        tf_screen_put(i, y, box(0x2500, '-'), fg, TF_GREY);
+        tf_screen_put(i, y, box(0x2500, '-'), fg, surface.back);
         if (bottom < y + h)
         {
-            tf_screen_put(i, bottom, box(0x2500, '-'), fg, TF_GREY);
+            tf_screen_put(i, bottom, box(0x2500, '-'), fg, surface.back);
         }
     }
     for (int j = y; j <= bottom && j < y + h; ++j)
     {
-        tf_screen_put(x, j, box(0x2502, '|'), fg, TF_GREY);
+        tf_screen_put(x, j, box(0x2502, '|'), fg, surface.back);
         if (right < x + w)
         {
-            tf_screen_put(right, j, box(0x2502, '|'), fg, TF_GREY);
+            tf_screen_put(right, j, box(0x2502, '|'), fg, surface.back);
         }
     }
-    tf_screen_put(x, y, box(0x250C, '+'), fg, TF_GREY);
+    tf_screen_put(x, y, box(0x250C, '+'), fg, surface.back);
     if (right < x + w)
     {
-        tf_screen_put(right, y, box(0x2510, '+'), fg, TF_GREY);
+        tf_screen_put(right, y, box(0x2510, '+'), fg, surface.back);
     }
     if (bottom < y + h)
     {
-        tf_screen_put(x, bottom, box(0x2514, '+'), fg, TF_GREY);
+        tf_screen_put(x, bottom, box(0x2514, '+'), fg, surface.back);
         if (right < x + w)
         {
-            tf_screen_put(right, bottom, box(0x2518, '+'), fg, TF_GREY);
+            tf_screen_put(right, bottom, box(0x2518, '+'), fg, surface.back);
         }
     }
     if (tf_str_lenb(frame->caption) > 0 && w > 4)
     {
-        tf_screen_put(x + 1, y, ' ', fg, TF_GREY);
-        const int used =
-            draw_caption(x + 2, y, frame->caption, (int)frame->width - 4, fg, TF_GREY, 1);
-        tf_screen_put(x + 2 + used, y, ' ', fg, TF_GREY);
+        tf_screen_put(x + 1, y, ' ', fg, surface.back);
+        const int used = draw_caption(x + 2, y, frame->caption, (int)frame->width - 4, fg,
+                                      surface.back, key_mark(surface.key, on, fg));
+        tf_screen_put(x + 2 + used, y, ' ', fg, surface.back);
     }
 }
 
@@ -1658,7 +1684,9 @@ static int bar_x(const tf_control *form, int index, int bar_left)
 
 static void draw_menu_bar(const tf_control *form, int x, int y, int w)
 {
-    tf_screen_fill(x, y, w, 1, ' ', TF_BLACK, TF_GREY);
+    const shade m = shade_of(TF_COLOUR_MENU_BACK);
+    const uint32_t lit_text = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
+    tf_screen_fill(x, y, w, 1, ' ', m.text, m.back);
     for (int i = 0; i < form->child_count; ++i)
     {
         const tf_control *c = form->children[i];
@@ -1681,10 +1709,12 @@ static void draw_menu_bar(const tf_control *form, int x, int y, int w)
         placed->at_y = y;
         placed->at_w = cells;
         placed->at_h = 1;
-        const int fg = usable(c) ? TF_BLACK : TF_BRIGHT + TF_BLACK;
-        const int bg = lit ? TF_CYAN : TF_GREY;
+        const int on = usable(c);
+        const uint32_t fg = !on ? m.disabled : lit ? lit_text : m.text;
+        const uint32_t bg = lit ? tf_colour(TF_COLOUR_HIGHLIGHT_BACK) : m.back;
         tf_screen_fill(at, y, cells, 1, ' ', fg, bg);
-        draw_caption(at + 1, y, c->caption, cells - 2, fg, bg, usable(c));
+        draw_caption(at + 1, y, c->caption, cells - 2, fg, bg,
+                     key_mark(lit ? lit_text : m.key, on, fg));
     }
 }
 
@@ -1723,21 +1753,23 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
     x = x + w > cols ? (cols - w < 0 ? 0 : cols - w) : x;
     const int y = bar_y + 1;
 
-    tf_screen_fill(x, y, w, h, ' ', TF_BLACK, TF_GREY);
+    const shade m = shade_of(TF_COLOUR_MENU_BACK);
+    const uint32_t lit_text = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
+    tf_screen_fill(x, y, w, h, ' ', m.text, m.back);
     for (int i = 1; i < w - 1; ++i)
     {
-        tf_screen_put(x + i, y, box(0x2500, '-'), TF_BLACK, TF_GREY);
-        tf_screen_put(x + i, y + h - 1, box(0x2500, '-'), TF_BLACK, TF_GREY);
+        tf_screen_put(x + i, y, box(0x2500, '-'), m.text, m.back);
+        tf_screen_put(x + i, y + h - 1, box(0x2500, '-'), m.text, m.back);
     }
     for (int j = 1; j < h - 1; ++j)
     {
-        tf_screen_put(x, y + j, box(0x2502, '|'), TF_BLACK, TF_GREY);
-        tf_screen_put(x + w - 1, y + j, box(0x2502, '|'), TF_BLACK, TF_GREY);
+        tf_screen_put(x, y + j, box(0x2502, '|'), m.text, m.back);
+        tf_screen_put(x + w - 1, y + j, box(0x2502, '|'), m.text, m.back);
     }
-    tf_screen_put(x, y, box(0x250C, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(x + w - 1, y, box(0x2510, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(x, y + h - 1, box(0x2514, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(x + w - 1, y + h - 1, box(0x2518, '+'), TF_BLACK, TF_GREY);
+    tf_screen_put(x, y, box(0x250C, '+'), m.text, m.back);
+    tf_screen_put(x + w - 1, y, box(0x2510, '+'), m.text, m.back);
+    tf_screen_put(x, y + h - 1, box(0x2514, '+'), m.text, m.back);
+    tf_screen_put(x + w - 1, y + h - 1, box(0x2518, '+'), m.text, m.back);
 
     int row = y + 1;
     for (int i = 0; i < form->child_count; ++i)
@@ -1755,24 +1787,26 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
         placed->at_h = 1;
         if (is_separator(c))
         {
-            tf_screen_put(x, row, box(0x251C, '+'), TF_BLACK, TF_GREY);
+            tf_screen_put(x, row, box(0x251C, '+'), m.text, m.back);
             for (int k = 1; k < w - 1; ++k)
             {
-                tf_screen_put(x + k, row, box(0x2500, '-'), TF_BLACK, TF_GREY);
+                tf_screen_put(x + k, row, box(0x2500, '-'), m.text, m.back);
             }
-            tf_screen_put(x + w - 1, row, box(0x2524, '+'), TF_BLACK, TF_GREY);
+            tf_screen_put(x + w - 1, row, box(0x2524, '+'), m.text, m.back);
             ++row;
             continue;
         }
         const int on = usable(c);
-        const int fg = on ? TF_BLACK : TF_BRIGHT + TF_BLACK;
-        const int bg = i == form->menu_item ? TF_CYAN : TF_GREY;
+        const int lit = i == form->menu_item;
+        const uint32_t fg = !on ? m.disabled : lit ? lit_text : m.text;
+        const uint32_t bg = lit ? tf_colour(TF_COLOUR_HIGHLIGHT_BACK) : m.back;
         tf_screen_fill(x + 1, row, inner, 1, ' ', fg, bg);
         if (c->checked)
         {
             tf_screen_put(x + 2, row, box(0x2713, 'x'), fg, bg);
         }
-        draw_caption(x + 4, row, c->caption, caption_cells, fg, bg, on);
+        draw_caption(x + 4, row, c->caption, caption_cells, fg, bg,
+                     key_mark(lit ? lit_text : m.key, on, fg));
         const char *keys = tf_str_cstr(c->text);
         const int key_cells = utf8_cells(keys);
         if (key_cells > 0)
@@ -1793,23 +1827,24 @@ static void draw_one(tf_control *form)
     const int fh = (int)form->height;
     const int ox = (cols - fw) / 2;
     const int oy = (rows - fh) / 2;
-    tf_screen_fill(ox, oy, fw, fh, ' ', TF_BLACK, TF_GREY);
+    surface = shade_of(form->is_dialog ? TF_COLOUR_DIALOG_BACK : TF_COLOUR_FORM_BACK);
+    tf_screen_fill(ox, oy, fw, fh, ' ', surface.text, surface.back);
 
     /* Border. */
     for (int x = ox + 1; x < ox + fw - 1; ++x)
     {
-        tf_screen_put(x, oy, box(0x2500, '-'), TF_BLACK, TF_GREY);
-        tf_screen_put(x, oy + fh - 1, box(0x2500, '-'), TF_BLACK, TF_GREY);
+        tf_screen_put(x, oy, box(0x2500, '-'), surface.text, surface.back);
+        tf_screen_put(x, oy + fh - 1, box(0x2500, '-'), surface.text, surface.back);
     }
     for (int y = oy + 1; y < oy + fh - 1; ++y)
     {
-        tf_screen_put(ox, y, box(0x2502, '|'), TF_BLACK, TF_GREY);
-        tf_screen_put(ox + fw - 1, y, box(0x2502, '|'), TF_BLACK, TF_GREY);
+        tf_screen_put(ox, y, box(0x2502, '|'), surface.text, surface.back);
+        tf_screen_put(ox + fw - 1, y, box(0x2502, '|'), surface.text, surface.back);
     }
-    tf_screen_put(ox, oy, box(0x250C, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(ox + fw - 1, oy, box(0x2510, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(ox, oy + fh - 1, box(0x2514, '+'), TF_BLACK, TF_GREY);
-    tf_screen_put(ox + fw - 1, oy + fh - 1, box(0x2518, '+'), TF_BLACK, TF_GREY);
+    tf_screen_put(ox, oy, box(0x250C, '+'), surface.text, surface.back);
+    tf_screen_put(ox + fw - 1, oy, box(0x2510, '+'), surface.text, surface.back);
+    tf_screen_put(ox, oy + fh - 1, box(0x2514, '+'), surface.text, surface.back);
+    tf_screen_put(ox + fw - 1, oy + fh - 1, box(0x2518, '+'), surface.text, surface.back);
 
     /* Title, centred in the top border. */
     if (tf_str_lenb(form->caption) > 0)
@@ -1819,7 +1854,7 @@ static void draw_one(tf_control *form)
         const int cells = utf8_cells(title);
         if (cells <= fw - 2)
         {
-            tf_screen_text(ox + (fw - cells) / 2, oy, title, cells, TF_BLACK, TF_GREY);
+            tf_screen_text(ox + (fw - cells) / 2, oy, title, cells, surface.text, surface.back);
         }
     }
 

@@ -17,6 +17,7 @@
 #include "ast/ast.hpp"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tf
@@ -31,6 +32,9 @@ struct EmitOptions
     // there is one, else the first form.
     std::string startup;
     std::string version; // compiler version, for the header comment
+    // A project's colours: each role's C name (tf_colour_role) and 0xRRGGBB,
+    // set before anything is drawn.
+    std::vector<std::pair<std::string, unsigned long>> colours;
 };
 
 // The module must have passed checkModule() without errors.

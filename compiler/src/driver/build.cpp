@@ -589,6 +589,10 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     options.sourcePath = input;
     options.sourcePaths = inputs;
     options.startup = project.startup;
+    for (const driver::ProjectColour &c : project.colours)
+    {
+        options.colours.emplace_back(c.role, c.rgb);
+    }
     options.version = kVersion;
     const std::string cSource =
         emitC(std::vector<const ast::Module *>(program.begin(), program.end()), options);

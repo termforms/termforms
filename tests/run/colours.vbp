@@ -1,0 +1,8 @@
+' Run test: a project's colour lines (any case, #RRGGBB) become
+' tf_colour_set calls before the form shows.
+Name=colours
+Form=colours/main.bas
+FormBackColor=#003366
+formtextcolor=#F0F0F0
+HighlightBackColor=#FFCC00
+BackdropColor=#000000

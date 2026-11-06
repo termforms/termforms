@@ -1182,6 +1182,50 @@ Module=lib/stock.bas
   Name or Startup, or no files at all is an error, reported with the
   `.vbp`'s line.
 - A `.vbp` is given on its own (not with `.bas` files).
+- Colour lines, `<Role>Color=#RRGGBB`, set the colours the program's
+  forms are drawn in (see "Colours"); a colour line names one of the
+  roles, in any case, written as `#` and six hex digits. An unknown role,
+  a colour written otherwise, or a role given twice is an error.
+
+### Colours (Settled, Jim, 6 Nov 2026)
+
+Forms are drawn in exact colours (24-bit), never in the terminal's
+sixteen named ones. A colour scheme may make those anything: under some
+(Dracula, Jim's own profile) white and grey or white and blue came out
+alike, and captions or access keys vanished. Exact colours look the same
+in every terminal, whatever its scheme, and the whole screen is the
+program's while a form shows, backdrop included. Programs that only
+`Print` keep the terminal's own colours.
+
+The defaults are the DOS look (the VGA palette's values):
+
+| Role | Colour | Used for |
+| --- | --- | --- |
+| Backdrop | `#303030` dark grey | the screen around the forms |
+| FormBack, FormText | `#0000AA` blue, `#FFFFFF` white | a form, its captions, borders, list items |
+| FormDisabled, FormKey | `#AAAAAA` grey, `#FFFF55` yellow | a control that cannot be used; an access key |
+| DialogBack, DialogText | `#AAAAAA` grey, `#000000` black | MsgBox and InputBox |
+| DialogDisabled, DialogKey | `#555555` dark grey, `#AA0000` red | |
+| MenuBack, MenuText | `#AAAAAA` grey, `#000000` black | the menu bar and drop-downs |
+| MenuDisabled, MenuKey | `#555555` dark grey, `#AA0000` red | |
+| ButtonBack, ButtonText | `#AAAAAA` grey, `#000000` black | a CommandButton without the focus |
+| ButtonDisabled, ButtonKey | `#555555` dark grey, `#AA0000` red | |
+| HighlightBack, HighlightText | `#00AAAA` cyan, `#000000` black | what has the focus: a button, the menu item under the cursor, selected items and text |
+| InactiveBack, InactiveText | `#555555` dark grey, `#FFFFFF` white | a ListBox's selection without the focus |
+| FieldBack, FieldText | `#000000` black, `#FFFFFF` white | a TextBox |
+
+- **The programmer sets them**, in the project file: `FormBackColor=#003366`,
+  one line per role changed. A program of `.bas` files without a project
+  keeps the defaults. (Jim: how a program looks is the programmer's
+  choice, not the user's.)
+- **The user's one setting is the terminal's depth.** Every terminal
+  TermForms supports takes exact colours (Windows Terminal, conhost,
+  iTerm2, Ghostty, Terminal.app from macOS 26, VS Code, PuTTY from 0.71).
+  For one that does not (tmux without its RGB setting, older terminals),
+  `TERMFORMS_COLOR=256` draws in the nearest of the 256-colour palette's
+  fixed part (its cube and grey ramp, which schemes leave alone), and
+  `TERMFORMS_COLOR=16` in the nearest named colours (which the scheme
+  then decides).
 
 ## Phase 4: controls, forms and keys (Settled, Jim, 28 Oct 2026)
 
@@ -1254,21 +1298,10 @@ Module=lib/stock.bas
   the other's.
 - A Label's access key moves the focus to the next control in tab order
   (put a Label just before the control it names, as in VB).
-- An access key is underlined, in the caption's own colour (Jim, 30 Oct
-  2026: it was bright white, which vanished under his terminal's default
-  scheme and under Dracula, where bright white and the forms' grey are
-  alike); a control that cannot be used shows none.
-- **Colours that every scheme keeps apart** (Jim, 30 Oct 2026): only
-  the form's own pair (black on grey), it swapped (grey on black), and
-  black on cyan, checked for contrast across ten common schemes (Terminal
-  and iTerm2 defaults, xterm, Tango, Windows' Campbell, Dracula,
-  Solarized, Gruvbox, One Dark, Nord). So a TextBox is grey on black, its
-  selection black on cyan; a ListBox's selected items are black on cyan
-  with the focus, grey on black without; a focused button and menu
-  items are black on cyan; the Default button is marked by its brackets,
-  `« OK »`, not by a colour. Bright white on grey (1.1-2.1) and white on
-  blue (2.3 in three schemes) are no longer used for anything that
-  must be seen.
+- An access key is in its own colour and underlined too (for anyone who
+  cannot tell the colours apart); a control that cannot be used shows
+  none. The colours are in "Colours" below.
+- The Default button is marked by its brackets, `« OK »`.
 - Enter and Esc in a TextBox go to the Default and Cancel buttons.
 - Tab order is the order the controls are written in the form block.
 - `Ctrl+Q` no longer closes a form (Ctrl+F4 or Alt+F4 does).

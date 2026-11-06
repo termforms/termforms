@@ -545,6 +545,23 @@ authoritative for design rationale.
   (30 Oct 2026, Jim's go-ahead) published as a pre-release with these;
   the environment doc's paths now say 0.9.2 and its step 8 points to the
   .vsix and the README. Next: Jim's clean run from that README with 0.9.2.
+- **Fixed colours (Jim, 6 Nov 2026; REFERENCE.md "Colours"):** forms
+  are drawn in exact 24-bit colours, never the terminal's themed sixteen,
+  so they look the same everywhere; the DOS look (VGA values): blue forms,
+  white text, yellow access keys; grey menus, dialogs (MsgBox/InputBox)
+  and buttons, black text, red access keys; focus black on cyan; TextBox
+  white on black; a plain dark grey backdrop (#303030), the whole screen
+  ours while a form shows. Access keys keep the underline too. Overrides
+  are the programmer's, in the .vbp (`FormBackColor=#003366`, one line a
+  role); the user's only setting is `TERMFORMS_COLOR=256|16` for a
+  terminal without exact colours. Built: tf_colour.c (the palette,
+  `tf_colour_sgr`, nearest 256/16), cells hold 0xRRGGBB (TF_UNDERLINE =
+  0x01000000), tf_forms.c draws by role (`shade`, `surface` set per
+  form or dialog in draw_one, `key_mark`); the role names are in
+  tf_runtime.h's tf_colour_role and driver/project.cpp's kColourRoles
+  (keep alike); codegen emits tf_colour_set after tf_runtime_init. Tests:
+  runtime.colour, the project unit tests, run/colours.vbp. The "colours
+  every scheme keeps apart" rule is gone.
 
 ## Settled design decisions (do not relitigate without Jim)
 

@@ -736,6 +736,12 @@ private:
         glue(out);
         out << (usesCommandLine_ ? "int main(int argc, char **argv)\n{\n" : "int main(void)\n{\n");
         out << "    tf_runtime_init(" << cString(options_.sourcePath) << ");\n";
+        for (const auto &[role, rgb] : options_.colours)
+        {
+            char value[16];
+            std::snprintf(value, sizeof value, "0x%06lX", rgb);
+            out << "    tf_colour_set(" << role << ", " << value << ");\n";
+        }
         if (usesCommandLine_)
         {
             out << "    tf_runtime_args(argc, argv);\n";

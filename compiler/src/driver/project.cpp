@@ -37,6 +37,63 @@ std::string lower(std::string s)
     return s;
 }
 
+// The roles forms are drawn in, as a project names them (FormBackColor=)
+// and as the runtime does (tf_colour_role in tf_runtime.h): keep the two
+// lists alike.
+struct ColourRole
+{
+    const char *name;
+    const char *role;
+};
+
+constexpr ColourRole kColourRoles[] = {
+    {"Backdrop", "TF_COLOUR_BACKDROP"},
+    {"FormBack", "TF_COLOUR_FORM_BACK"},
+    {"FormText", "TF_COLOUR_FORM_TEXT"},
+    {"FormDisabled", "TF_COLOUR_FORM_DISABLED"},
+    {"FormKey", "TF_COLOUR_FORM_KEY"},
+    {"DialogBack", "TF_COLOUR_DIALOG_BACK"},
+    {"DialogText", "TF_COLOUR_DIALOG_TEXT"},
+    {"DialogDisabled", "TF_COLOUR_DIALOG_DISABLED"},
+    {"DialogKey", "TF_COLOUR_DIALOG_KEY"},
+    {"MenuBack", "TF_COLOUR_MENU_BACK"},
+    {"MenuText", "TF_COLOUR_MENU_TEXT"},
+    {"MenuDisabled", "TF_COLOUR_MENU_DISABLED"},
+    {"MenuKey", "TF_COLOUR_MENU_KEY"},
+    {"ButtonBack", "TF_COLOUR_BUTTON_BACK"},
+    {"ButtonText", "TF_COLOUR_BUTTON_TEXT"},
+    {"ButtonDisabled", "TF_COLOUR_BUTTON_DISABLED"},
+    {"ButtonKey", "TF_COLOUR_BUTTON_KEY"},
+    {"HighlightBack", "TF_COLOUR_HIGHLIGHT_BACK"},
+    {"HighlightText", "TF_COLOUR_HIGHLIGHT_TEXT"},
+    {"InactiveBack", "TF_COLOUR_INACTIVE_BACK"},
+    {"InactiveText", "TF_COLOUR_INACTIVE_TEXT"},
+    {"FieldBack", "TF_COLOUR_FIELD_BACK"},
+    {"FieldText", "TF_COLOUR_FIELD_TEXT"},
+};
+
+// "#RRGGBB" as 0xRRGGBB; false if it is not written so.
+bool parseColour(const std::string &value, unsigned long &rgb)
+{
+    if (value.size() != 7 || value[0] != '#')
+    {
+        return false;
+    }
+    rgb = 0;
+    for (std::size_t i = 1; i < value.size(); ++i)
+    {
+        const char c = value[i];
+        if (std::isxdigit(static_cast<unsigned char>(c)) == 0)
+        {
+            return false;
+        }
+        rgb = rgb * 16 + static_cast<unsigned long>(std::isdigit(static_cast<unsigned char>(c)) != 0
+                                                        ? c - '0'
+                                                        : std::tolower(c) - 'a' + 10);
+    }
+    return true;
+}
+
 } // namespace
 
 Project parseProject(const std::string &text)
@@ -92,10 +149,48 @@ Project parseProject(const std::string &text)
             project.startup = value;
             project.startupLine = line;
         }
+        else if (key.size() > 5 && key.compare(key.size() - 5, 5, "color") == 0)
+        {
+            const std::string written = trim(entry.substr(0, equals));
+            const std::string name = key.substr(0, key.size() - 5);
+            const ColourRole *found = nullptr;
+            for (const ColourRole &r : kColourRoles)
+            {
+                found = lower(r.name) == name ? &r : found;
+            }
+            unsigned long rgb = 0;
+            if (found == nullptr)
+            {
+                std::string names;
+                for (const ColourRole &r : kColourRoles)
+                {
+                    names += std::string(names.empty() ? "" : ", ") + r.name + "Color";
+                }
+                error("unknown colour '" + written + "' (the colours are " + names + ")");
+            }
+            else if (!parseColour(value, rgb))
+            {
+                error(written + " needs a colour written #RRGGBB, as in #0000AA");
+            }
+            else
+            {
+                bool repeated = false;
+                for (const ProjectColour &c : project.colours)
+                {
+                    repeated = repeated || c.role == found->role;
+                }
+                if (repeated)
+                {
+                    error(written + " is given twice");
+                }
+                project.colours.push_back({found->role, rgb, line});
+            }
+        }
         else
         {
             error("unknown key '" + trim(entry.substr(0, equals)) +
-                  "' (a project has Name, Startup, Form and Module)");
+                  "' (a project has Name, Startup, Form, Module and colours such as "
+                  "FormBackColor)");
         }
     }
     if (project.files.empty() && project.errors.empty())

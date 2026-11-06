@@ -139,6 +139,32 @@ TEST_CASE("a project's mistakes are reported with their lines")
           "line 1: the project lists no files (Form= or Module=)");
 }
 
+TEST_CASE("a project sets colours by role, in any case, written #RRGGBB")
+{
+    const auto p = parseProject("Form=a.bas\nFormBackColor=#0000aa\nmenukeycolor = #FF5500\n");
+    REQUIRE(p.ok());
+    REQUIRE(p.colours.size() == 2);
+    CHECK(p.colours[0].role == "TF_COLOUR_FORM_BACK");
+    CHECK(p.colours[0].rgb == 0x0000AA);
+    CHECK(p.colours[1].role == "TF_COLOUR_MENU_KEY");
+    CHECK(p.colours[1].rgb == 0xFF5500);
+    CHECK(p.colours[1].line == 3);
+}
+
+TEST_CASE("a project's colour mistakes are reported")
+{
+    const auto p = parseProject("Form=a.bas\nPinkColor=#FFC0CB\nFormBackColor=blue\n"
+                                "FormTextColor=#FFF\nFieldBackColor=#000000\n"
+                                "FieldBackColor=#111111\n");
+    REQUIRE(p.errors.size() == 4);
+    CHECK(p.errors[0].rfind("line 2: unknown colour 'PinkColor' (the colours are "
+                            "BackdropColor, FormBackColor,",
+                            0) == 0);
+    CHECK(p.errors[1] == "line 3: FormBackColor needs a colour written #RRGGBB, as in #0000AA");
+    CHECK(p.errors[2] == "line 4: FormTextColor needs a colour written #RRGGBB, as in #0000AA");
+    CHECK(p.errors[3] == "line 6: FieldBackColor is given twice");
+}
+
 // -- The C compiler's command lines (driver/build.cpp) -------------------
 
 #include "driver/build.hpp"

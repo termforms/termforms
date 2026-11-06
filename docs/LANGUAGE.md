@@ -330,6 +330,11 @@ Module=stock.bas
   Windows and macOS.
 - Other modules reach the form's controls through the form:
   `frmMain.txtName.Text`.
+- `<Role>Color=#RRGGBB` lines set the colours forms are drawn in
+  (`FormBackColor=#003366`); REFERENCE.md "Colours" lists the roles and
+  the defaults (blue forms, grey menus and dialogs). Forms use exact
+  colours, the same in every terminal; `TERMFORMS_COLOR=256` or `16` is
+  for a terminal that cannot show them.
 
 ## Dictionaries
 

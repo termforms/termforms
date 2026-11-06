@@ -136,6 +136,20 @@ first, or `Sub Main` to start in code; without it the program starts at
 Sub Main if there is one, else the first form. See
 [Modules](#modules-and-visibility) for how the files see each other.
 
+A project can also set the colours its forms are drawn in, one line per
+colour changed, each written `#RRGGBB`:
+
+```text
+FormBackColor=#003366
+HighlightBackColor=#FFCC00
+```
+
+Forms are drawn in exact colours, so they look the same in every
+terminal whatever its colour scheme. The defaults are the DOS look: blue
+forms with white text and yellow access keys, grey menus and dialogs
+with black text and red access keys, the focus black on cyan, on a dark
+grey backdrop. REFERENCE.md "Colours" lists every colour you can set.
+
 ---
 
 ## 2. Coming from Visual Basic
@@ -478,8 +492,8 @@ The form itself has Caption, Width, Height, Visible (read-only) and the
 events Load, Activate and Unload. `Me` is the form whose module the code
 is in.
 
-An access key (the letter after `&` in a Caption) is underlined, in
-the caption's own colour, so it shows wherever the caption does; `&&`
+An access key (the letter after `&` in a Caption) is shown in its own
+colour (yellow on a form, red on a menu or dialog) and underlined; `&&`
 shows an `&`. A Label showing data, such as a file name, should double
 any `&` in it (`Replace(text, "&", "&&")`).
 
@@ -556,6 +570,14 @@ double-click chooses a word or a list item, and the wheel scrolls a list.
 Menus open and choose by clicking. Shift+drag still selects text on the
 screen for copying. Set `TERMFORMS_MOUSE=0` to leave the mouse to the
 terminal.
+
+### Colours in older terminals
+
+Forms are drawn in exact colours, which every current terminal shows. In
+one that cannot (tmux without its RGB setting, some older terminals),
+the colours come out wrong or not at all; there, the user sets
+`TERMFORMS_COLOR=256` (the nearest of 256 colours) or `TERMFORMS_COLOR=16`
+(the terminal's sixteen, as its scheme shows them).
 
 ### Menus
 
