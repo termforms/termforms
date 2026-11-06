@@ -561,7 +561,8 @@ authoritative for design rationale.
   tf_runtime.h's tf_colour_role and driver/project.cpp's kColourRoles
   (keep alike); codegen emits tf_colour_set after tf_runtime_init. Tests:
   runtime.colour, the project unit tests, run/colours.vbp. The "colours
-  every scheme keeps apart" rule is gone.
+  every scheme keeps apart" rule is gone. Version 0.9.3 (6 Nov 2026,
+  Jim's go-ahead) published as a pre-release with it.
 
 ## Settled design decisions (do not relitigate without Jim)
 
