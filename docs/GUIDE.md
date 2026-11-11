@@ -489,6 +489,12 @@ End Sub
 Values in the form block are literals: numbers, `"text"`, `True`/`False`.
 Tab order is the order the controls are written in.
 
+The form block may instead be in a file of its own, with the same name
+and `.frm` in place of `.bas` (`main.frm` beside `main.bas`): tfc reads it
+as that module's form. The `.frm` holds only the block; the code stays
+in the `.bas`, and a form in both is an error. Nothing else changes: the
+project file and the command line still name the `.bas`.
+
 ### The controls
 
 | Control | Properties (besides Left, Top, Width, Height, Enabled, Visible) | Events |

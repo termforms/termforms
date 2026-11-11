@@ -1,0 +1,1 @@
+form_both.bas:2:1: error: this form is also in 'form_both.frm'; keep it in one place (the designer writes the .frm)

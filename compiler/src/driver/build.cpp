@@ -47,6 +47,50 @@ constexpr bool kWindowsHost = true;
 constexpr bool kWindowsHost = false;
 #endif
 
+bool readFile(const std::string &path, std::string &contents);
+
+// A form kept in its own file: main.frm beside main.bas holds main's form
+// block (only that), as the visual designer writes it. A form in both
+// files is an error: which one is meant cannot be guessed.
+void takeFormFile(const std::string &basFile, ast::Module &module, Diagnostics &diagnostics,
+                  std::vector<std::string> &sourcePaths)
+{
+    const fs::path frm = fs::path(basFile).replace_extension(".frm");
+    std::error_code ec;
+    if (!fs::is_regular_file(frm, ec))
+    {
+        return;
+    }
+    std::string text;
+    const std::string frmFile = frm.string();
+    const int index = diagnostics.addFile(frmFile);
+    sourcePaths.push_back(frmFile);
+    if (!readFile(frmFile, text))
+    {
+        diagnostics.error(Location{1, 1, index}, "cannot read the form file '" + frmFile + "'");
+        return;
+    }
+    const std::vector<Token> tokens = tokenize(text, diagnostics, index);
+    ast::Module part = parseModule(tokens, diagnostics);
+    const bool onlyForm = part.globals.empty() && part.moduleStatements.empty() &&
+                          part.enums.empty() && part.types.empty() && part.procedures.empty();
+    if (part.form == nullptr || !onlyForm)
+    {
+        diagnostics.error(Location{1, 1, index},
+                          "a .frm file holds its form's block (Begin Form ... End) and nothing "
+                          "else; the code goes in the .bas");
+        return;
+    }
+    if (module.form != nullptr)
+    {
+        diagnostics.error(module.form->location,
+                          "this form is also in '" + frmFile +
+                              "'; keep it in one place (the designer writes the .frm)");
+        return;
+    }
+    module.form = std::move(part.form);
+}
+
 bool readFile(const std::string &path, std::string &contents)
 {
     std::ifstream in(path, std::ios::binary);
@@ -519,6 +563,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
     // The files are the program's modules, in order: module variables are
     // set up in this order too.
     Diagnostics diagnostics(input);
+    std::vector<std::string> sourcePaths{input}; // by diagnostics' file index, .frm files too
     std::vector<ast::Module> modules;
     std::map<std::string, std::string> names; // a module's name, any case -> its file
     for (std::size_t i = 0; i < inputs.size(); ++i)
@@ -551,10 +596,16 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
                 << "' (module names ignore case, as file names do on Windows and macOS)\n";
             return kExitCompile;
         }
-        const int index = i == 0 ? 0 : diagnostics.addFile(file);
+        int index = 0;
+        if (i > 0)
+        {
+            index = diagnostics.addFile(file);
+            sourcePaths.push_back(file);
+        }
         const std::vector<Token> tokens = tokenize(source, diagnostics, index);
         modules.push_back(parseModule(tokens, diagnostics));
         modules.back().name = name;
+        takeFormFile(file, modules.back(), diagnostics, sourcePaths);
     }
     std::vector<ast::Module *> program;
     for (ast::Module &m : modules)
@@ -587,7 +638,7 @@ int runBuild(const CommandLine &cmd, std::ostream &out, std::ostream &err)
 
     EmitOptions options;
     options.sourcePath = input;
-    options.sourcePaths = inputs;
+    options.sourcePaths = sourcePaths;
     options.startup = project.startup;
     for (const driver::ProjectColour &c : project.colours)
     {

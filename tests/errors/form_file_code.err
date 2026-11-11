@@ -1,0 +1,1 @@
+form_file_code.frm:1:1: error: a .frm file holds its form's block (Begin Form ... End) and nothing else; the code goes in the .bas

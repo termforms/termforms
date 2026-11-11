@@ -658,8 +658,13 @@ authoritative for design rationale.
   `.Method` inside With its target first, so ListBox methods work in a
   With too (they did not). Errors 383 and 438 added. Run tests formview,
   with_controls; errors/formview. **Steps 1-3 of the designer's
-  language pieces are built**; next is the designer itself (check with
-  Jim first). Also open: step 7 of the
+  language pieces are built**; the designer itself began 11 Nov 2026
+  (Jim's go-ahead).
+  `.frm` files done (11 Nov 2026): build.cpp `takeFormFile` reads
+  X.frm beside X.bas as that module's form (only a form block; a form in
+  both is an error); `sourcePaths` is now by diagnostics' file index, so
+  #line and errors name the .frm. Run test form_file; errors form_both,
+  form_file_code. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

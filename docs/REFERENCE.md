@@ -1719,7 +1719,8 @@ layout are still to be designed with Jim before any code.
   beside its `.bas`, paired by name (`main.bas` with `main.frm`); the
   `.frm` holds only the `Begin Form ... End` block, and the code stays in
   the `.bas`. A form block written in the `.bas` (as today) stays valid.
-  A form in both places is a compile error (Proposed). The designer puts a new form
+  A form in both places is a compile error (Proposed; built 11 Nov 2026, as is reading the `.frm`, whose
+  errors name it). The designer puts a new form
   in a `.frm`, edits a form already in a `.bas` where it is (replacing
   only the lines from `Begin Form` to its `End`), and offers a command
   to move it into a `.frm`.
