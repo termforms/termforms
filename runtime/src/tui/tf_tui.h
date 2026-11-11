@@ -76,7 +76,7 @@ typedef enum tf_key_kind
     TF_KEY_ALT,   /* Alt+key (ESC then the key); .ch is the character, letters lower-case */
     TF_KEY_F,     /* function key; .ch is its number, 1-12; .mods as pressed */
     TF_KEY_WAIT,  /* key scripts only: {WAIT n}, n ms in .ch, for Timers */
-    TF_KEY_MOUSE, /* the left button or the wheel: .ch a TF_MOUSE_ action, at .x, .y */
+    TF_KEY_MOUSE, /* a button or the wheel: .ch a TF_MOUSE_ action, at .x, .y */
     TF_KEY_RESIZE,
     TF_KEY_EOF /* headless script exhausted */
 } tf_key_kind;
@@ -86,19 +86,25 @@ typedef enum tf_key_kind
 #define TF_MOD_ALT 2
 #define TF_MOD_CTRL 4
 
-/* What a TF_KEY_MOUSE did (the left button only; the others are ignored). */
+/* What a TF_KEY_MOUSE did; a press, drag or release also says which button
+   (.button, VB's values: TF_BUTTON_LEFT and so on). */
 #define TF_MOUSE_PRESS 1
 #define TF_MOUSE_RELEASE 2
 #define TF_MOUSE_DRAG 3 /* moved with the button down */
 #define TF_MOUSE_WHEEL_UP 4
 #define TF_MOUSE_WHEEL_DOWN 5
 
+#define TF_BUTTON_LEFT 1
+#define TF_BUTTON_RIGHT 2
+#define TF_BUTTON_MIDDLE 4
+
 typedef struct tf_key
 {
     tf_key_kind kind;
     uint32_t ch;
     int mods;
-    int x, y; /* TF_KEY_MOUSE: the cell, from 0 at the top left */
+    int x, y;   /* TF_KEY_MOUSE: the cell, from 0 at the top left */
+    int button; /* TF_KEY_MOUSE: TF_BUTTON_ (0 for the wheel) */
 } tf_key;
 
 /* Byte-stream decoder state. */

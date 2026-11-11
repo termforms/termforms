@@ -649,7 +649,10 @@ enum class EventKind
     KeyPress,
     KeyDown,
     DropDown,
-    Validate
+    Validate,
+    MouseDown,
+    MouseMove,
+    MouseUp
 };
 
 struct Procedure

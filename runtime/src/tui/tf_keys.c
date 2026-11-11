@@ -103,9 +103,10 @@ static tf_key_kind tilde_key(int n)
 
 /*
  * An SGR mouse report, "ESC [ < b ; x ; y M" (m on release): b's low bits
- * are the button (0 left), +32 when it moved, 64/65 the wheel; 4, 8 and 16
- * Shift, Alt and Ctrl; x and y count from 1. Returns the bytes used, or 0
- * if incomplete. Buttons other than the left one are consumed and ignored.
+ * are the button (0 left, 1 middle, 2 right; 3 none, which mode 1002
+ * never sends but others do for a move), +32 when it moved, 64/65 the
+ * wheel; 4, 8 and 16 Shift, Alt and Ctrl; x and y count from 1. Returns
+ * the bytes used, or 0 if incomplete.
  */
 static int decode_mouse(const tf_keys *keys, tf_key *key)
 {
@@ -130,6 +131,7 @@ static int decode_mouse(const tf_keys *keys, tf_key *key)
         {
             const int b = values[0];
             key->kind = TF_KEY_MOUSE;
+            key->button = 0;
             key->x = values[1] - 1;
             key->y = values[2] - 1;
             key->mods = ((b & 4) ? TF_MOD_SHIFT : 0) | ((b & 8) ? TF_MOD_ALT : 0) |
@@ -138,12 +140,15 @@ static int decode_mouse(const tf_keys *keys, tf_key *key)
             {
                 key->ch = (b & 1) ? TF_MOUSE_WHEEL_DOWN : TF_MOUSE_WHEEL_UP;
             }
-            else if ((b & 3) != 0)
+            else if ((b & 3) == 3)
             {
-                key->kind = TF_KEY_NONE; /* the middle or right button */
+                key->kind = TF_KEY_NONE; /* a move with no button held */
             }
             else
             {
+                key->button = (b & 3) == 0   ? TF_BUTTON_LEFT
+                              : (b & 3) == 1 ? TF_BUTTON_MIDDLE
+                                             : TF_BUTTON_RIGHT;
                 key->ch = c == 'm'        ? TF_MOUSE_RELEASE
                           : (b & 32) != 0 ? TF_MOUSE_DRAG
                                           : TF_MOUSE_PRESS;
@@ -351,7 +356,7 @@ int tf_keys_next(tf_keys *keys, tf_key *key, int flush_escape)
 
         if (c == 0x1B)
         {
-            tf_key decoded = {TF_KEY_NONE, 0, 0, 0, 0};
+            tf_key decoded = {TF_KEY_NONE, 0, 0, 0, 0, 0};
             const int used = decode_escape(keys, &decoded);
             if (used == 0)
             {

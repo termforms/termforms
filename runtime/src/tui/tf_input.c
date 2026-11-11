@@ -10,7 +10,9 @@
  *   ALT+ / SHIFT+ before F<n> or a name ({CTRL+F4}, {SHIFT+LEFT}), {WAIT n}
  *   (n ms pass, so Timers run), the mouse at cell x,y (from 0, 0 at the
  *   top left): {CLICK x,y} {DBLCLICK x,y} {PRESS x,y} {DRAG x,y}
- *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, {IDLE} (nothing waiting:
+ *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, the button events
+ *   with another button after the cell ({PRESS x,y,RIGHT}; LEFT, RIGHT,
+ *   MIDDLE), {IDLE} (nothing waiting:
  *   where a DoEvents returns), {PASTE text} (as a bracketed paste: \n or
  *   \r\n a line break, \t a tab, \\ a backslash; no `}` in it), and
  *   {{ (a literal brace)
@@ -93,16 +95,35 @@ static int scripted_mouse(const char *name, size_t length, int mods, tf_key *key
         {
             continue;
         }
+        /* The button, after a second comma; the wheel has none. */
+        const int wheel = MOUSE_NAMES[i].actions[0] == TF_MOUSE_WHEEL_UP ||
+                          MOUSE_NAMES[i].actions[0] == TF_MOUSE_WHEEL_DOWN;
+        int button = wheel ? 0 : TF_BUTTON_LEFT;
+        const char *end = name + length;
+        const char *comma = memchr(name + n + 1, ',', (size_t)(end - name - n - 1));
+        comma = comma != NULL ? memchr(comma + 1, ',', (size_t)(end - comma - 1)) : NULL;
+        if (comma != NULL)
+        {
+            const size_t rest = (size_t)(end - comma - 1);
+            button = rest == 4 && strncmp(comma + 1, "LEFT", 4) == 0     ? TF_BUTTON_LEFT
+                     : rest == 5 && strncmp(comma + 1, "RIGHT", 5) == 0  ? TF_BUTTON_RIGHT
+                     : rest == 6 && strncmp(comma + 1, "MIDDLE", 6) == 0 ? TF_BUTTON_MIDDLE
+                                                                         : -1;
+            if (button < 0 || wheel)
+            {
+                tf_fatal_error(TF_ERR_INVALID_ARGUMENT, "Unknown {key} in TERMFORMS_HEADLESS");
+            }
+        }
         queued_count = 0;
         for (int k = 3; k >= 1; --k) /* queued in reverse: taken from the end */
         {
             if (MOUSE_NAMES[i].actions[k] != 0)
             {
                 queued[queued_count++] =
-                    (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[k], mods, x, y};
+                    (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[k], mods, x, y, button};
             }
         }
-        *key = (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[0], mods, x, y};
+        *key = (tf_key){TF_KEY_MOUSE, (uint32_t)MOUSE_NAMES[i].actions[0], mods, x, y, button};
         return 1;
     }
     return 0;
@@ -112,7 +133,7 @@ static int scripted_mouse(const char *name, size_t length, int mods, tf_key *key
    one: a line break as the character LF, a tab as TAB. */
 static tf_key next_pasted(void)
 {
-    tf_key key = {TF_KEY_CHAR, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_CHAR, 0, 0, 0, 0, 0};
     if (paste_at[0] == '\\' && paste_at + 1 < paste_end)
     {
         const char c = paste_at[1];
@@ -130,7 +151,7 @@ static tf_key next_pasted(void)
 
 static tf_key next_scripted(void)
 {
-    tf_key key = {TF_KEY_EOF, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_EOF, 0, 0, 0, 0, 0};
     if (queued_count > 0)
     {
         return queued[--queued_count];
@@ -263,7 +284,7 @@ tf_key tf_input_wait(int timeout_ms)
         return next_scripted();
     }
 
-    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0, 0};
     const int64_t deadline = timeout_ms >= 0 ? tf_platform_monotonic_ms() + timeout_ms : -1;
     for (;;)
     {

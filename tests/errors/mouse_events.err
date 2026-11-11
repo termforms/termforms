@@ -1,0 +1,4 @@
+mouse_events.bas:13:1: error: event handler 'cmdA_MouseDown' must be Sub cmdA_MouseDown(Button As Integer, Shift As Integer, X As Integer, Y As Integer)
+mouse_events.bas:16:1: error: event handler 'cmdA_MouseUp' must be Sub cmdA_MouseUp(Button As Integer, Shift As Integer, X As Integer, Y As Integer)
+mouse_events.bas:19:1: warning: Timer 'tmrA' has no event 'MouseDown'; Sub 'tmrA_MouseDown' will not be called
+mouse_events.bas:22:1: warning: Menu 'mnuFile' has no event 'MouseMove'; Sub 'mnuFile_MouseMove' will not be called

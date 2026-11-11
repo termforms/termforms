@@ -59,6 +59,7 @@ struct tf_control
     tf_handler handlers[TF_EVENT_COUNT];
     tf_ref_handler ref_handlers[TF_EVENT_COUNT]; /* Unload, KeyPress */
     tf_key_handler key_handler;                  /* KeyDown */
+    tf_mouse_handler mouse_handlers[3];          /* MouseDown, MouseMove, MouseUp */
     tf_bool_handler validate_handler;            /* Validate */
 
     /* Form only: children in tab order, and the focused child's index. */
@@ -256,6 +257,14 @@ void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler han
 void tf_control_on_key(tf_control *control, tf_key_handler handler)
 {
     control->key_handler = handler;
+}
+
+void tf_control_on_mouse(tf_control *control, tf_event event, tf_mouse_handler handler)
+{
+    if (event >= TF_EVENT_MOUSEDOWN && event <= TF_EVENT_MOUSEUP)
+    {
+        control->mouse_handlers[event - TF_EVENT_MOUSEDOWN] = handler;
+    }
 }
 
 static void fire(tf_control *control, tf_event event)
@@ -2350,6 +2359,11 @@ static void draw_one(tf_control *form)
         form_area.y++;
         form_area.h--;
     }
+    /* The form's own place, for its mouse events: the client area. */
+    form->at_x = form_area.x;
+    form->at_y = form_area.y;
+    form->at_w = form_area.w;
+    form->at_h = form_area.h;
     const int on_top = depth > 0 && form == stack[depth - 1];
     for (int i = 0; i < form->child_count; ++i)
     {
@@ -3131,6 +3145,88 @@ static int32_t key_ascii(tf_key key)
 #define TF_DOUBLE_CLICK_MS 500
 
 static tf_control *pressed = NULL; /* the control the button went down on */
+
+/*
+ * The mouse events. The control (or form) a button went down on takes
+ * MouseMove and MouseUp until that button comes up, wherever the mouse
+ * is (as VB), so a drag can be followed past its edges.
+ */
+static tf_control *mouse_target = NULL;
+static int mouse_button = 0;
+
+static void fire_mouse(tf_control *c, tf_event event, tf_key key, int button)
+{
+    tf_mouse_handler handler = c->mouse_handlers[event - TF_EVENT_MOUSEDOWN];
+    if (handler != NULL)
+    {
+        /* VB's Shift argument: vbShiftMask 1, vbCtrlMask 2, vbAltMask 4. */
+        const int32_t shift = ((key.mods & TF_MOD_SHIFT) ? 1 : 0) |
+                              ((key.mods & TF_MOD_CTRL) ? 2 : 0) |
+                              ((key.mods & TF_MOD_ALT) ? 4 : 0);
+        handler(button, shift, key.x - c->at_x, key.y - c->at_y);
+        tf_check_uncaught();
+    }
+}
+
+/* What a press would give its mouse events to: a usable control (not a
+   menu), the form for its client area, else nothing. */
+static tf_control *mouse_owner(tf_control *form, int hit, tf_key key)
+{
+    if (hit >= 0)
+    {
+        tf_control *c = form->children[hit];
+        return c->type != TF_CTL_MENU && usable(c) ? c : NULL;
+    }
+    return key.x >= form->at_x && key.x < form->at_x + form->at_w && key.y >= form->at_y &&
+                   key.y < form->at_y + form->at_h
+               ? form
+               : NULL;
+}
+
+/* Whether the form can go on with a press or release after a handler ran
+   (which may have shown a dialog, closed the form, hidden the control or
+   opened the menus). */
+static int still_handling(const tf_control *form, const tf_control *c)
+{
+    return depth > 0 && stack[depth - 1] == form && !form->menu_on && form->open_list == NULL &&
+           (c == NULL || usable(c));
+}
+
+/* The right and middle buttons: their events only, nothing else. */
+static void other_button(tf_control *form, tf_key key, int hit)
+{
+    switch (key.ch)
+    {
+        case TF_MOUSE_PRESS:
+            if (mouse_target == NULL)
+            {
+                tf_control *owner = mouse_owner(form, hit, key);
+                if (owner != NULL)
+                {
+                    mouse_target = owner;
+                    mouse_button = key.button;
+                    fire_mouse(owner, TF_EVENT_MOUSEDOWN, key, key.button);
+                }
+            }
+            break;
+        case TF_MOUSE_DRAG:
+            if (mouse_target != NULL && key.button == mouse_button)
+            {
+                fire_mouse(mouse_target, TF_EVENT_MOUSEMOVE, key, key.button);
+            }
+            break;
+        case TF_MOUSE_RELEASE:
+            if (mouse_target != NULL && key.button == mouse_button)
+            {
+                tf_control *was = mouse_target;
+                mouse_target = NULL;
+                fire_mouse(was, TF_EVENT_MOUSEUP, key, key.button);
+            }
+            break;
+        default:
+            break;
+    }
+}
 static int64_t last_press_ms = -TF_DOUBLE_CLICK_MS - 1;
 static int last_press_x = -1;
 static int last_press_y = -1;
@@ -3375,14 +3471,26 @@ static void combo_list_mouse(tf_control *form, tf_key key)
 static void form_mouse(tf_control *form, tf_key key)
 {
     const int hit = control_at(form, key.x, key.y);
+    if (mouse_target != NULL && mouse_target->form != form)
+    {
+        mouse_target = NULL; /* pressed on a form a dialog has since covered */
+    }
     if (form->menu_on)
     {
+        mouse_target = NULL;
         menu_mouse(form, key, hit);
         return;
     }
     if (form->open_list != NULL)
     {
+        mouse_target = NULL;
         combo_list_mouse(form, key);
+        return;
+    }
+    if (key.button != TF_BUTTON_LEFT && key.ch != TF_MOUSE_WHEEL_UP &&
+        key.ch != TF_MOUSE_WHEEL_DOWN)
+    {
+        other_button(form, key, hit);
         return;
     }
     tf_control *c = hit >= 0 ? form->children[hit] : NULL;
@@ -3401,8 +3509,16 @@ static void form_mouse(tf_control *form, tf_key key)
             last_press_x = key.x;
             last_press_y = key.y;
             pressed = c;
+            mouse_target = NULL;
             if (c == NULL)
             {
+                tf_control *owner = mouse_owner(form, hit, key);
+                if (owner == form)
+                {
+                    mouse_target = form;
+                    mouse_button = TF_BUTTON_LEFT;
+                    fire_mouse(form, TF_EVENT_MOUSEDOWN, key, TF_BUTTON_LEFT);
+                }
                 break;
             }
             if (on_bar(form, c))
@@ -3416,12 +3532,26 @@ static void form_mouse(tf_control *form, tf_key key)
                 pressed = NULL; /* the control left refused the focus (Validate) */
                 break;
             }
+            const int opens_list =
+                c->type == TF_CTL_COMBOBOX && (c->style == 2 || key.x >= c->at_x + c->at_w - 1);
+            if (!opens_list && c->type != TF_CTL_MENU)
+            {
+                /* MouseDown after the focus has moved and before the
+                   control's own handling (a ListBox's Click), as VB. */
+                mouse_target = c;
+                mouse_button = TF_BUTTON_LEFT;
+                fire_mouse(c, TF_EVENT_MOUSEDOWN, key, TF_BUTTON_LEFT);
+                if (!still_handling(form, c))
+                {
+                    pressed = NULL;
+                    break;
+                }
+            }
             if (c->type == TF_CTL_TEXTBOX && c->edit.multi_line)
             {
                 multiline_mouse(c, key, double_click, 0);
             }
-            else if (c->type == TF_CTL_COMBOBOX &&
-                     (c->style == 2 || key.x >= c->at_x + c->at_w - 1))
+            else if (opens_list)
             {
                 pressed = NULL;
                 combo_open(form, c); /* the list only, or the arrow */
@@ -3445,6 +3575,15 @@ static void form_mouse(tf_control *form, tf_key key)
             break;
         }
         case TF_MOUSE_DRAG:
+            if (mouse_target != NULL && mouse_button == TF_BUTTON_LEFT)
+            {
+                fire_mouse(mouse_target, TF_EVENT_MOUSEMOVE, key, TF_BUTTON_LEFT);
+                if (!still_handling(form, NULL))
+                {
+                    pressed = NULL;
+                    break;
+                }
+            }
             if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn &&
                 pressed->edit.multi_line)
             {
@@ -3460,10 +3599,17 @@ static void form_mouse(tf_control *form, tf_key key)
             break;
         case TF_MOUSE_RELEASE:
         {
-            /* A click is the press and the release on the same control. */
+            /* MouseUp first, then the click: the press and the release
+               on the same control. */
+            if (mouse_target != NULL && mouse_button == TF_BUTTON_LEFT)
+            {
+                tf_control *target = mouse_target;
+                mouse_target = NULL;
+                fire_mouse(target, TF_EVENT_MOUSEUP, key, TF_BUTTON_LEFT);
+            }
             tf_control *was = pressed;
             pressed = NULL;
-            if (was == NULL || was != c)
+            if (was == NULL || was != c || !still_handling(form, c))
             {
                 break;
             }

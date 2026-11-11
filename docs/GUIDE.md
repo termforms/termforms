@@ -637,6 +637,31 @@ Menus open and choose by clicking. Shift+drag still selects text on the
 screen for copying. Set `TERMFORMS_MOUSE=0` to leave the mouse to the
 terminal.
 
+A program can follow the mouse itself with VB's MouseDown, MouseMove and
+MouseUp, on the form and on every control except a Timer and a menu.
+X and Y are cells from the control's top left (for the form, from the
+top left of the space inside its border, below any menu bar):
+
+```vb
+Sub lblHandle_MouseMove(Button As Integer, Shift As Integer, X As Integer, Y As Integer)
+    lblHandle.Left = lblHandle.Left + X   ' follow a drag
+End Sub
+```
+
+- MouseMove comes only while a button is held, so it is for dragging,
+  not for following the pointer about.
+- The control a button went down on gets MouseMove and MouseUp until
+  that button comes up, even outside it (X and Y are then negative or
+  past its edge).
+- The order is MouseDown, MouseUp, then Click; a control's own handling
+  still happens (a press focuses it, a ListBox chooses).
+- `Button` is `vbLeftButton`, `vbRightButton` or `vbMiddleButton`. The
+  right and middle buttons only raise these events, and some terminals
+  keep them (a right-click menu, a middle-button paste), so do not
+  depend on them. `Shift` (`vbShiftMask`, `vbCtrlMask`, `vbAltMask`) is
+  whatever the terminal passes on: it keeps Shift+drag for selecting
+  text, and on a Mac often Option- and Ctrl+click too.
+
 ### Colours in older terminals
 
 Forms are drawn in exact colours, which every current terminal shows. In

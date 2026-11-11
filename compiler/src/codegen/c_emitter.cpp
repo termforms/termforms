@@ -809,7 +809,12 @@ private:
                     // Each kind of handler has its own registration, so no
                     // function pointer is cast.
                     const std::string params = event.params;
-                    if (params == "RI")
+                    if (params == "IIII")
+                    {
+                        out << "    tf_control_on_mouse(" << cName(*proc->eventControl) << ", "
+                            << event.cName << ", " << pName(*proc) << ");\n";
+                    }
+                    else if (params == "RI")
                     {
                         out << "    tf_control_on_key(" << cName(*proc->eventControl) << ", "
                             << pName(*proc) << ");\n";

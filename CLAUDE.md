@@ -625,7 +625,15 @@ authoritative for design rationale.
   designer fills the terminal: `Screen.Width/Height` and `Form_Resize`
   ("Screen and Form_Resize") settled too. The design is complete;
   building order to agree with Jim (mouse events, Screen/Form_Resize,
-  FormView and `tfc --catalog`, then the designer). Also open: step 7 of the
+  FormView and `tfc --catalog`, then the designer).
+  Mouse events done (11 Nov 2026): tf_key has `button` (TF_BUTTON_LEFT/
+  RIGHT/MIDDLE, VB's values; decoder and key scripts `{PRESS x,y,RIGHT}`);
+  catalog `mouse()` adds MouseDown/Move/Up (params "IIII", registered by
+  `tf_control_on_mouse`) to the form and every control but Timer/Menu;
+  tf_forms.c `mouse_target`/`mouse_button` (capture), `fire_mouse`,
+  `mouse_owner`, `still_handling`, `other_button` (right/middle: events
+  only); a form's at_x.. are its client area. vbLeftButton etc. named
+  constants. Run test mouse_events; errors/mouse_events. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

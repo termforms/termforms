@@ -38,10 +38,24 @@ const std::vector<ControlType> &types()
     };
     const Property caption{"Caption", Type::String, "TF_PROP_CAPTION"};
     const Event click{"Click", EventKind::Click, "TF_EVENT_CLICK"};
+    // What every control the mouse can press raises besides its own (as
+    // VB): MouseMove only while a button is held.
+    auto mouse = [](std::vector<Event> own) {
+        static const char *const kSignature =
+            "(Button As Integer, Shift As Integer, X As Integer, Y As Integer)";
+        for (const Event &e :
+             {Event{"MouseDown", EventKind::MouseDown, "TF_EVENT_MOUSEDOWN", "IIII", kSignature},
+              Event{"MouseMove", EventKind::MouseMove, "TF_EVENT_MOUSEMOVE", "IIII", kSignature},
+              Event{"MouseUp", EventKind::MouseUp, "TF_EVENT_MOUSEUP", "IIII", kSignature}})
+        {
+            own.push_back(e);
+        }
+        return own;
+    };
     // What every control that can take the focus raises besides its own.
     // Validate (as VB6) comes before the focus leaves for a control whose
     // CausesValidation is True; Cancel keeps it.
-    auto focusEvents = [](std::vector<Event> own) {
+    auto focusEvents = [&mouse](std::vector<Event> own) {
         for (const Event &e : {Event{"GotFocus", EventKind::GotFocus, "TF_EVENT_GOTFOCUS"},
                                Event{"LostFocus", EventKind::LostFocus, "TF_EVENT_LOSTFOCUS"},
                                Event{"Validate", EventKind::Validate, "TF_EVENT_VALIDATE", "Q",
@@ -53,7 +67,7 @@ const std::vector<ControlType> &types()
         {
             own.push_back(e);
         }
-        return own;
+        return mouse(own);
     };
     static const std::vector<ControlType> kTypes = {
         {"Form",
@@ -64,9 +78,9 @@ const std::vector<ControlType> &types()
           // Whether it is shown (Show and Hide change it), e.g. after a
           // DoEvents in which the user may have closed it.
           {"Visible", Type::Boolean, "TF_PROP_VISIBLE", true}},
-         {{"Load", EventKind::Load, "TF_EVENT_LOAD"},
-          {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
-          {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}}},
+         mouse({{"Load", EventKind::Load, "TF_EVENT_LOAD"},
+                {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
+                {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}})},
         {"TextBox", "TF_CTL_TEXTBOX",
          focusable({{"Text", Type::String, "TF_PROP_TEXT"},
                     {"SelStart", Type::Integer, "TF_PROP_SELSTART"},
@@ -84,12 +98,12 @@ const std::vector<ControlType> &types()
                     {"Default", Type::Boolean, "TF_PROP_DEFAULT"},
                     {"Cancel", Type::Boolean, "TF_PROP_CANCEL"}}),
          focusEvents({click})},
-        {"Label", "TF_CTL_LABEL", placed({caption}), {click}},
+        {"Label", "TF_CTL_LABEL", placed({caption}), mouse({click})},
         {"CheckBox", "TF_CTL_CHECKBOX",
          focusable({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}), focusEvents({click})},
         {"OptionButton", "TF_CTL_OPTIONBUTTON",
          focusable({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}), focusEvents({click})},
-        {"Frame", "TF_CTL_FRAME", placed({caption}), {}},
+        {"Frame", "TF_CTL_FRAME", placed({caption}), mouse({})},
         // AddItem, RemoveItem, Clear, List(i) and Selected(i) are library
         // routines (ast.hpp's kStringFunctions), checked in sema.
         {"ListBox", "TF_CTL_LISTBOX",

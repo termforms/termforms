@@ -20,7 +20,7 @@ static void expect_key(const char *bytes, tf_key_kind kind, uint32_t ch, int mod
     tf_keys keys;
     memset(&keys, 0, sizeof keys);
     tf_keys_feed(&keys, (const unsigned char *)bytes, (int)strlen(bytes));
-    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0, 0};
     const int got = tf_keys_next(&keys, &key, 0);
     if (!got || key.kind != kind || key.ch != ch || key.mods != mods ||
         (kind == TF_KEY_MOUSE && (key.x != x || key.y != y)) || keys.count != 0)
@@ -31,13 +31,29 @@ static void expect_key(const char *bytes, tf_key_kind kind, uint32_t ch, int mod
     }
 }
 
+/* Feeds a mouse report and checks its action and button. */
+static void expect_button(const char *bytes, uint32_t ch, int button)
+{
+    tf_keys keys;
+    memset(&keys, 0, sizeof keys);
+    tf_keys_feed(&keys, (const unsigned char *)bytes, (int)strlen(bytes));
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0, 0};
+    if (!tf_keys_next(&keys, &key, 0) || key.kind != TF_KEY_MOUSE || key.ch != ch ||
+        key.button != button)
+    {
+        fprintf(stderr, "FAIL: \"\\e%s\": got kind %d ch %u button %d\n", bytes + 1, (int)key.kind,
+                (unsigned)key.ch, key.button);
+        ++failures;
+    }
+}
+
 /* Feeds bytes that make no key (consumed and ignored). */
 static void expect_nothing(const char *bytes)
 {
     tf_keys keys;
     memset(&keys, 0, sizeof keys);
     tf_keys_feed(&keys, (const unsigned char *)bytes, (int)strlen(bytes));
-    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0, 0};
     if (tf_keys_next(&keys, &key, 0) || keys.count != 0)
     {
         fprintf(stderr, "FAIL: \"\\e%s\" gave a key or left bytes\n", bytes + 1);
@@ -61,13 +77,17 @@ int main(void)
     expect_key("\x1b[<16;1;1M", TF_KEY_MOUSE, TF_MOUSE_PRESS, TF_MOD_CTRL, 0, 0);
     expect_key("\x1b[<64;3;4M", TF_KEY_MOUSE, TF_MOUSE_WHEEL_UP, 0, 2, 3);
     expect_key("\x1b[<65;3;4M", TF_KEY_MOUSE, TF_MOUSE_WHEEL_DOWN, 0, 2, 3);
-    expect_nothing("\x1b[<2;3;4M"); /* the right button */
-    expect_nothing("\x1b[<1;3;4m"); /* the middle one, released */
+    expect_button("\x1b[<0;3;4M", TF_MOUSE_PRESS, TF_BUTTON_LEFT);
+    expect_button("\x1b[<2;3;4M", TF_MOUSE_PRESS, TF_BUTTON_RIGHT);
+    expect_button("\x1b[<1;3;4m", TF_MOUSE_RELEASE, TF_BUTTON_MIDDLE);
+    expect_button("\x1b[<34;3;4M", TF_MOUSE_DRAG, TF_BUTTON_RIGHT);
+    expect_button("\x1b[<64;3;4M", TF_MOUSE_WHEEL_UP, 0);
+    expect_nothing("\x1b[<35;3;4M"); /* a move with no button (mode 1003) */
 
     /* A report split across two reads waits for its end. */
     tf_keys keys;
     memset(&keys, 0, sizeof keys);
-    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0};
+    tf_key key = {TF_KEY_NONE, 0, 0, 0, 0, 0};
     tf_keys_feed(&keys, (const unsigned char *)"\x1b[<0;12", 7);
     if (tf_keys_next(&keys, &key, 0))
     {

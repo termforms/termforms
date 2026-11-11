@@ -1530,8 +1530,9 @@ off. The rest:
   it on. It uses xterm's SGR reports (modes 1002 and 1006); the terminal
   layer turns them off whenever it restores the terminal (exit, error,
   SIGHUP, Shell).
-- **The left button and the wheel only**; the others are ignored. Only
-  the top form takes the mouse (as it alone takes keys).
+- **The left button and the wheel** do the controls' own work; the
+  right and middle buttons only raise the mouse events (after v1,
+  below). Only the top form takes the mouse (as it alone takes keys).
 - **A press focuses** the control under it (if it can take the focus).
   Buttons, CheckBoxes, OptionButtons and Labels **act on the release**,
   if it is over the same control (as VB: pressing and moving away is no
@@ -1554,7 +1555,7 @@ off. The rest:
   `{DRAG x,y}`, `{RELEASE x,y}`, `{WHEELUP x,y}`, `{WHEELDOWN x,y}`,
   with cells counted from 0,0 at the screen's top left.
 - No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list);
-  they are designed for after v1 ("MouseDown, MouseMove and MouseUp").
+  they came after v1 ("MouseDown, MouseMove and MouseUp").
 
 ### Multi-line TextBox and ComboBox (in v1: Settled, Jim, 11 Nov 2026; details settled for v1.0, 11 Nov 2026)
 
@@ -1828,9 +1829,15 @@ Sub cmdOK_MouseDown(Button As Integer, Shift As Integer, X As Integer, Y As Inte
   runtime uses, 1002, reports nothing else). Reporting movement with no
   button held ("hover") needs mode 1003's constant stream: possible
   later.
-- **Order as VB:** MouseDown, MouseUp, Click; a double-click adds
-  DblClick then MouseUp. The control's own handling still happens (a
-  press focuses, a TextBox places its caret, and so on).
+- **Order as VB:** GotFocus (when a press moves the focus), MouseDown,
+  the control's own handling of the press (a TextBox places its caret, a
+  ListBox chooses and fires Click), then MouseUp, then a button's,
+  CheckBox's or Label's Click. Unlike VB, the second press of a
+  double-click fires MouseDown too, before a ListBox's DblClick
+  (Proposed). A MouseDown that disables or hides its control stops the
+  rest of the press and the Click, though MouseUp still comes (the
+  control has the mouse); one that shows a dialog or closes the form
+  ends it all.
 - **The pressed control captures the mouse:** MouseMove and MouseUp go
   to the control the press began on, even outside it, so X and Y may be
   negative or past its edge.

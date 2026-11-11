@@ -691,10 +691,13 @@ typedef enum tf_event
     TF_EVENT_ACTIVATE, /* a form, when it comes to the top */
     TF_EVENT_GOTFOCUS,
     TF_EVENT_LOSTFOCUS,
-    TF_EVENT_KEYPRESS, /* a tf_ref_handler of KeyAscii: 0 discards the key */
-    TF_EVENT_KEYDOWN,  /* a tf_key_handler: KeyCode 0 discards the key */
-    TF_EVENT_DROPDOWN, /* a ComboBox, just before its list opens */
-    TF_EVENT_VALIDATE, /* before the focus leaves; a tf_ref_handler: set *cancel to keep it */
+    TF_EVENT_KEYPRESS,  /* a tf_ref_handler of KeyAscii: 0 discards the key */
+    TF_EVENT_KEYDOWN,   /* a tf_key_handler: KeyCode 0 discards the key */
+    TF_EVENT_DROPDOWN,  /* a ComboBox, just before its list opens */
+    TF_EVENT_VALIDATE,  /* before the focus leaves; a tf_ref_handler: set *cancel to keep it */
+    TF_EVENT_MOUSEDOWN, /* a tf_mouse_handler, as are MouseMove and MouseUp */
+    TF_EVENT_MOUSEMOVE, /* only while a button is held */
+    TF_EVENT_MOUSEUP,
     TF_EVENT_COUNT
 } tf_event;
 
@@ -705,6 +708,9 @@ typedef void (*tf_ref_handler)(int32_t *value);
 /* A handler whose ByRef argument is a Boolean (Validate's Cancel). */
 typedef void (*tf_bool_handler)(int *value);
 typedef void (*tf_key_handler)(int32_t *key_code, int32_t shift);
+/* MouseDown, MouseMove, MouseUp: Button and Shift as VB's (vbLeftButton,
+   vbShiftMask...), X and Y in cells from the control's top left. */
+typedef void (*tf_mouse_handler)(int32_t button, int32_t shift, int32_t x, int32_t y);
 
 /* Creates a form (borrowed name). The form owns its controls. */
 tf_control *tf_form_new(const char *name);
@@ -721,6 +727,7 @@ void tf_control_on(tf_control *control, tf_event event, tf_handler handler);
 void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handler);
 void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler handler);
 void tf_control_on_key(tf_control *control, tf_key_handler handler); /* KeyDown */
+void tf_control_on_mouse(tf_control *control, tf_event event, tf_mouse_handler handler);
 
 /* Property access. Setters borrow the value; tf_get_str returns borrowed. */
 void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value);
