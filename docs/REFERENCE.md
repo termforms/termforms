@@ -1766,7 +1766,7 @@ layout are still to be designed with Jim before any code.
   editor the programmer uses.
 - **One form at a time**; File > Open switches.
 - **The screen** (sketched with Jim, 11 Nov 2026): the designer fills
-  the terminal (see "Screen and Form_Resize", Proposed). The menu bar
+  the terminal (see "Screen and Form_Resize"). The menu bar
   (File, Edit, View, Add, Help); on the left the Toolbox, the form's
   Timers and a box about the form with the tab-order button; in the
   middle a FormView, the form drawn on the backdrop as it will run; on
@@ -1787,7 +1787,7 @@ layout are still to be designed with Jim before any code.
   this, the FormView also draws tab-order numbers (`TabNumbers`) and the
   selection's handle.
 
-### Screen and Form_Resize (after v1: Proposed)
+### Screen and Form_Resize (after v1: Settled, Jim, 11 Nov 2026)
 
 Forms stay a fixed size in the sense that the runtime never resizes
 one; but a program may size its own form to the terminal, and is told

@@ -623,7 +623,9 @@ authoritative for design rationale.
   "Visual designer": dropping onto a Frame puts a control inside, F7
   opens $VISUAL/$EDITOR at the handler, one form at a time). The
   designer fills the terminal: `Screen.Width/Height` and `Form_Resize`
-  ("Screen and Form_Resize") are Proposed, awaiting Jim. Also open: step 7 of the
+  ("Screen and Form_Resize") settled too. The design is complete;
+  building order to agree with Jim (mouse events, Screen/Form_Resize,
+  FormView and `tfc --catalog`, then the designer). Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
