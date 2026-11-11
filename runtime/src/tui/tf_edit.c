@@ -13,9 +13,11 @@
  * undoes the last change (and again redoes it; a run of typing is one
  * change), Ctrl+A selects all, Ctrl+X/C/V cut, copy and paste.
  *
- * The clipboard is the program's own: a terminal program cannot reach the
- * system's clipboard portably (the terminal's own copy and paste still
- * work, by Shift+drag and its paste key).
+ * Ctrl+C and Ctrl+X keep the text as the program's own clipboard, which
+ * Ctrl+V pastes, and offer it to the system's clipboard too (OSC 52 to the
+ * terminal, and the Windows clipboard on Windows: tf_clipboard_export).
+ * Ctrl+V cannot read the system's clipboard portably; the terminal's own
+ * paste key brings it in, as a bracketed paste.
  *
  * A multi-line box keeps its text as one string with LF between lines and
  * lays out its rows from it whenever they are needed (no row table to keep
@@ -240,6 +242,7 @@ static void copy_selection(const tf_edit *e)
     }
     tf_str_assign(&clipboard,
                   tf_str_from_utf8(tf_str_cstr(e->text) + sel_from(e), sel_to(e) - sel_from(e)));
+    tf_clipboard_export(tf_str_cstr(clipboard), tf_str_lenb(clipboard));
 }
 
 static int undo(tf_edit *e)
@@ -648,6 +651,24 @@ tf_string *tf_edit_lines_of(const tf_string *text)
     tf_string *lines = tf_str_from_utf8(buffer, n);
     free(buffer);
     return lines;
+}
+
+size_t tf_base64(const char *bytes, size_t n, char *out)
+{
+    static const char kDigits[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t used = 0;
+    for (size_t i = 0; i < n; i += 3)
+    {
+        const unsigned b0 = (unsigned char)bytes[i];
+        const unsigned b1 = i + 1 < n ? (unsigned char)bytes[i + 1] : 0u;
+        const unsigned b2 = i + 2 < n ? (unsigned char)bytes[i + 2] : 0u;
+        out[used++] = kDigits[b0 >> 2];
+        out[used++] = kDigits[((b0 & 3u) << 4) | (b1 >> 4)];
+        out[used++] = i + 1 < n ? kDigits[((b1 & 15u) << 2) | (b2 >> 6)] : '=';
+        out[used++] = i + 2 < n ? kDigits[b2 & 63u] : '=';
+    }
+    return used;
 }
 
 int32_t tf_edit_cursor_index(const tf_edit *e)

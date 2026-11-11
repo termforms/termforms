@@ -519,8 +519,12 @@ End Sub
 A **Frame** holds the controls written inside its block; OptionButtons in
 one Frame are a group of their own, so a form can have several groups.
 A **TextBox** edits as a Windows edit box does: Shift+arrows select,
-Ctrl+arrows move by words, Ctrl+Z undoes, Ctrl+X/C/V cut, copy and paste
-(through the program's own clipboard). Setting Text or SelText in code
+Ctrl+arrows move by words, Ctrl+Z undoes, Ctrl+X/C/V cut, copy and paste.
+What Ctrl+C or Ctrl+X takes also goes to the system's clipboard, for other
+programs, in the terminals that allow it (Windows Terminal, Ghostty,
+kitty, WezTerm, iTerm2 once allowed in its settings) and in any Windows
+console; to paste text from another program, use the terminal's own paste
+key (Ctrl+Shift+V, Cmd+V or a right-click). Setting Text or SelText in code
 fires Change, as in VB.
 
 A TextBox with `MultiLine = True` (set in the form block, with a Height

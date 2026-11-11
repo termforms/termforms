@@ -1,10 +1,10 @@
 
    ┌──────────────────── Scroll ────────────────────┐
-   │line 25            ░                 ░          │
-   │line 26            ░  scrolls across ░          │
-   │line 27            ░                 ░          │
-   │line 28            █  ░░░░░░░░░░█████           │
-   │line 29            ░                            │
+   │line 25                                         │
+   │line 26               scrolls across            │
+   │line 27                                         │
+   │line 28                                         │
+   │line 29                                         │
    │                                                │
    │36@48 40@0 35@6 38@44 40@5                      │
    │                                                │

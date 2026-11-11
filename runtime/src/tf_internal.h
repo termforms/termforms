@@ -128,6 +128,11 @@ char **tf_platform_args(int argc, char **argv, int32_t *count);
    code page). */
 void tf_platform_console_write(int stream, const char *data, size_t n);
 
+/* Puts n bytes of UTF-8 text on the system's clipboard where the program
+   can reach it directly: Windows (its clipboard API); elsewhere nothing,
+   as the forms layer asks the terminal instead (OSC 52). */
+void tf_platform_clipboard_set(const char *utf8, size_t n);
+
 /* One line of standard input as UTF-8, without its line end, in *line
    (to free) and *size; -1 at the end of the input. */
 int tf_platform_console_read_line(char **line, size_t *size);

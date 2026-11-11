@@ -1173,7 +1173,6 @@ static void draw_bar(int x, int y, int length, int across, int32_t total, int32_
                      int32_t first)
 {
     const uint32_t text = tf_colour(TF_COLOUR_FIELD_TEXT);
-    const uint32_t back = tf_colour(TF_COLOUR_FIELD_BACK);
     int size = 0;
     int at = 0;
     if (total > shown && length > 0)
@@ -1183,11 +1182,16 @@ static void draw_bar(int x, int y, int length, int across, int32_t total, int32_
         const int32_t room = total - shown;
         at = (int)((int64_t)(length - size) * (first > room ? room : first) / room);
     }
+    /* Coloured cells, not shade characters: a background always fills its
+       cell, while a terminal drawing ░ or █ from its font may leave gaps
+       between rows. */
+    const uint32_t track = tf_colour(TF_COLOUR_BACKDROP);
+    const uint32_t thumb_back = tf_colour(TF_COLOUR_BUTTON_BACK);
     for (int j = 0; j < length; ++j)
     {
         const int thumb = j >= at && j < at + size;
-        const uint32_t ch = thumb ? box(0x2588, '#') : box(0x2591, ':');
-        tf_screen_put(across ? x + j : x, across ? y : y + j, ch, text, back);
+        tf_screen_put(across ? x + j : x, across ? y : y + j, ' ', text,
+                      thumb ? thumb_back : track);
     }
 }
 
@@ -3683,6 +3687,30 @@ static void parse_size(const char *text, int *cols, int *rows)
         *cols = c;
         *rows = r;
     }
+}
+
+/*
+ * The text the user copied, to the system's clipboard: OSC 52 asks the
+ * terminal to put it on the clipboard of the machine the user sits at (so
+ * it works over SSH), in the terminals that allow it (Windows Terminal,
+ * Ghostty, kitty, WezTerm; iTerm2 once its settings allow it; tmux with
+ * set-clipboard on); others ignore it. On Windows the program also sets the
+ * clipboard itself, which covers conhost. Not in a headless run.
+ */
+void tf_clipboard_export(const char *bytes, int32_t length)
+{
+    if (headless || length <= 0)
+    {
+        return;
+    }
+    const size_t n = (size_t)length;
+    char *sequence = tf_xmalloc(7 + (n + 2) / 3 * 4 + 1);
+    memcpy(sequence, "\x1b]52;c;", 7);
+    size_t used = 7 + tf_base64(bytes, n, sequence + 7);
+    sequence[used++] = '\a';
+    tf_term_write(sequence, used);
+    free(sequence);
+    tf_platform_clipboard_set(bytes, n);
 }
 
 /* While Shell runs a command: the terminal back to normal for it, then

@@ -47,6 +47,15 @@ int64_t tf_platform_monotonic_ms(void)
     return (int64_t)now.tv_sec * 1000 + now.tv_nsec / 1000000;
 }
 
+/* No clipboard of the system's to reach from here (a server has none, and
+   over SSH it would be the wrong machine's): the forms layer asks the
+   terminal with OSC 52, which puts the text on the user's own clipboard. */
+void tf_platform_clipboard_set(const char *utf8, size_t n)
+{
+    (void)utf8;
+    (void)n;
+}
+
 /* Through stdio, so Print's text and anything else on stdout (a headless
    screen dump) stay in order; standard output is flushed before standard
    error is written, so the two interleave as they were written. */

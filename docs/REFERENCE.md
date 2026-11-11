@@ -1482,9 +1482,19 @@ and properties follow a Windows edit control, as VB's TextBox does.
   redoes it (a run of typing is one change). Left or Right with a
   selection goes to its start or end. There is no overwrite mode (VB's
   TextBox has none).
-- **The clipboard is the program's own**: what Ctrl+C copies, Ctrl+V
-  pastes, within the program. The terminal's own copy and paste work as
-  ever (Shift+drag, and its paste key, which types the text in).
+- **The clipboard** (changed by Jim, 11 Nov 2026, after Ctrl+C reached
+  no other program on Windows): what Ctrl+C or Ctrl+X takes goes to the
+  system's clipboard as well as the program's own. It is sent to the
+  terminal as OSC 52, which puts it on the clipboard of the machine the
+  user sits at, over SSH too, in the terminals that allow it (Windows
+  Terminal, Ghostty, kitty, WezTerm; iTerm2 once "Applications in
+  terminal may access clipboard" is on; tmux with `set-clipboard on`);
+  others ignore it. A program running on Windows also sets the Windows
+  clipboard itself (with CR LF line ends), which covers conhost. Ctrl+V
+  pastes the program's own clipboard: a terminal program cannot read the
+  system's portably, and the terminal's own paste key (Ctrl+Shift+V,
+  Cmd+V, a right-click) brings it in as a paste. A password box's text is
+  never copied. The terminal's own copy (Shift+drag) works as ever.
 - A word is letters, digits and `_`; anything beyond ASCII counts as a
   letter.
 - **SelStart, SelLength** are in code points (as Len); setting them
@@ -1574,7 +1584,10 @@ The rest, settled for v1.0 (Jim, 11 Nov 2026):
   cells, after the last space that fits (else after the last character
   that fits; a space that does not fit stays at the row's end); with one
   they scroll sideways. The box draws its own bars inside its Width and
-  Height: a thumb on a track, no arrows. A press or drag on a bar moves
+  Height: a thumb on a track, no arrows, drawn as coloured cells (the
+  track in the backdrop's colour, the thumb in a button's), which join up
+  in every terminal, where the shade characters ░ █ show gaps in some
+  (Jim, 11 Nov 2026). The ComboBox list's bar is the same. A press or drag on a bar moves
   the view to that point of it; the wheel moves the view three rows. The
   view follows the caret whenever the text or the caret changes, but the
   wheel and the bars move the view alone, so the caret may be out of

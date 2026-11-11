@@ -255,6 +255,14 @@ tf_string *tf_edit_lines_of(const tf_string *text);
 
 void tf_edit_free(tf_edit *e);
 
+/* Text the user copied or cut (Ctrl+C, Ctrl+X), offered to the system's
+   clipboard as well as kept as the program's own (tf_forms.c). */
+void tf_clipboard_export(const char *bytes, int32_t length);
+
+/* n bytes as base64 (for OSC 52) into out, which has room for
+   (n + 2) / 3 * 4; returns the characters written. */
+size_t tf_base64(const char *bytes, size_t n, char *out);
+
 /* ------------------------------------------------------------------------ */
 /* Input                                                                    */
 /* ------------------------------------------------------------------------ */

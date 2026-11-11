@@ -3,8 +3,8 @@
  * test_keys.c -- the key decoder on the bytes a terminal sends: modifiers
  * on arrows and function keys, SGR mouse reports (press, drag, release,
  * the wheel; other buttons ignored), bracketed paste (text only, line
- * breaks and tabs as the characters LF and TAB), and sequences split
- * across reads.
+ * breaks and tabs as the characters LF and TAB), sequences split across
+ * reads, and the base64 of copied text sent to the terminal (OSC 52).
  * Key scripts never reach this code, so the run tests cannot cover it.
  */
 #include "../../runtime/src/tui/tf_tui.h"
@@ -113,5 +113,27 @@ int main(void)
     {
         printf("keys: all passed\n");
     }
+    /* The base64 that carries copied text to the terminal (OSC 52):
+       padding for 1, 2 and 3 bytes, and UTF-8 passing through as bytes. */
+    {
+        static const struct
+        {
+            const char *in, *want;
+        } kCases[] = {{"", ""},        {"M", "TQ=="},    {"Ma", "TWE="},
+                      {"Man", "TWFu"}, {"a\nb", "YQpi"}, {"\xC3\xA9t\xC3\xA9", "w6l0w6k="}};
+        for (size_t i = 0; i < sizeof kCases / sizeof kCases[0]; ++i)
+        {
+            char out[32];
+            const size_t n = tf_base64(kCases[i].in, strlen(kCases[i].in), out);
+            out[n] = '\0';
+            if (strcmp(out, kCases[i].want) != 0)
+            {
+                fprintf(stderr, "FAIL: base64 of case %d: %s, not %s\n", (int)i, out,
+                        kCases[i].want);
+                ++failures;
+            }
+        }
+    }
+
     return failures == 0 ? 0 : 1;
 }

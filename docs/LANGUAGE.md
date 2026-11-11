@@ -536,7 +536,7 @@ With a menu bar, controls' Top counts from the row below it.
 | Left, Right, Home, End, Backspace, Delete | Edit in a TextBox (Shift+: select; Ctrl+Left/Right: by words) |
 | Up, Down, PgUp, PgDn, Ctrl+Home, Ctrl+End | In a multi-line TextBox: by rows, keeping the column; to the text's start or end |
 | F4, Alt+Down | Open or close a ComboBox's list (Enter chooses, Esc closes without choosing); Up and Down choose with it closed |
-| Ctrl+A, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+Z | In a TextBox: select all, cut, copy, paste (the program's own clipboard), undo |
+| Ctrl+A, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+Z | In a TextBox: select all, cut, copy (to the system's clipboard too, by OSC 52 and on Windows directly), paste (the program's own), undo |
 | The terminal's paste | Types the text in; line breaks and tabs become spaces (never Enter or Tab), except in a multi-line TextBox, which keeps them |
 | Ctrl+F4 (or Alt+F4) | Close the form |
 | The mouse | Click to focus, press, toggle, choose, open menus; drag to select in a TextBox; double-click a word or a ListBox item; the wheel scrolls a ListBox or a multi-line TextBox, and a press on a scroll bar moves the view there; a click opens a ComboBox's list and chooses in it. `TERMFORMS_MOUSE=0` turns it off; Shift+drag selects text on the screen as usual |

@@ -585,7 +585,18 @@ authoritative for design rationale.
   `use_utf8`/`box()` has the ASCII fallback); then the version bump and
   tag v1.0.0. Toolchain bundling: recommended to stay "bundles nothing"
   for v1 (Jim to confirm).
-- **Next:** the Windows/Linux demo check; then tag v1.0.0. Also open: step 7 of the
+  Jim's Windows/Linux demo check (11 Nov 2026): Ctrl+C reached no other
+  program on Windows (it never could: the clipboard was the program's
+  own; on the Mac and Linux he had used the terminal's copy), and on
+  Linux (a terminal drawing ░ from its font) the scroll bars had gaps.
+  Jim chose: copy/cut also go to the system clipboard (`tf_clipboard_export`
+  in tf_forms.c: OSC 52 by `tf_base64`, not headless; Windows
+  `tf_platform_clipboard_set` loads user32 at run time, CF_UNICODETEXT,
+  CR LF; POSIX does nothing), and scroll bars as coloured cells
+  (`draw_bar`: backdrop track, button-grey thumb). Headless dumps no
+  longer show the bars (colours only).
+- **Next:** Jim re-checks the rebuilt demos on Windows and Linux; then
+  tag v1.0.0. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
@@ -944,7 +955,8 @@ a variable that is filled in only when a call succeeds.
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
 - No ScrollBar control or ComboBox Style 1 (after v1); no MouseDown/Up/Move
-  events; the clipboard is the program's own.
+  events; Ctrl+V pastes only the program's own clipboard (copying reaches
+  the system's: OSC 52, and Win32 on Windows).
 - Combining marks are not drawn (a cell holds one character); text
   that relies on them shows the base letters.
 - **Post-v1 (Jim, 29 Oct 2026): file and folder dialogs**, built at run

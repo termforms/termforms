@@ -196,6 +196,87 @@ void tf_platform_console_write(int stream, const char *data, size_t n)
     WriteFile(h, data, (DWORD)n, &written, NULL);
 }
 
+/*
+ * The Windows clipboard, so Ctrl+C in a TextBox reaches other programs in
+ * conhost too (which ignores OSC 52). As CF_UNICODETEXT with CR LF line
+ * ends, as Windows programs expect. user32 is loaded when first needed, so
+ * no C compiler has to be told to link it (cl and zig differ in what they
+ * link by default); without it the copy stays the program's own.
+ */
+typedef BOOL(WINAPI *tf_open_clipboard_fn)(HWND);
+typedef BOOL(WINAPI *tf_clipboard_fn)(void);
+typedef HANDLE(WINAPI *tf_set_clipboard_fn)(UINT, HANDLE);
+
+void tf_platform_clipboard_set(const char *utf8, size_t n)
+{
+    static HMODULE user32 = NULL;
+    if (user32 == NULL)
+    {
+        user32 = LoadLibraryA("user32.dll");
+    }
+    if (user32 == NULL)
+    {
+        return;
+    }
+    /* Through void (*)(void), the cast compilers accept between function
+       pointer types without a warning. */
+    tf_open_clipboard_fn open_clipboard =
+        (tf_open_clipboard_fn)(void (*)(void))GetProcAddress(user32, "OpenClipboard");
+    tf_clipboard_fn empty_clipboard =
+        (tf_clipboard_fn)(void (*)(void))GetProcAddress(user32, "EmptyClipboard");
+    tf_clipboard_fn close_clipboard =
+        (tf_clipboard_fn)(void (*)(void))GetProcAddress(user32, "CloseClipboard");
+    tf_set_clipboard_fn set_clipboard =
+        (tf_set_clipboard_fn)(void (*)(void))GetProcAddress(user32, "SetClipboardData");
+    if (open_clipboard == NULL || empty_clipboard == NULL || close_clipboard == NULL ||
+        set_clipboard == NULL)
+    {
+        return;
+    }
+
+    /* LF to CR LF, then UTF-16 with its terminating zero. */
+    char *crlf = tf_xmalloc(n * 2 + 1);
+    size_t m = 0;
+    for (size_t i = 0; i < n; ++i)
+    {
+        if (utf8[i] == '\n' && (i == 0 || utf8[i - 1] != '\r'))
+        {
+            crlf[m++] = '\r';
+        }
+        crlf[m++] = utf8[i];
+    }
+    const int wn = m == 0 ? 0 : MultiByteToWideChar(CP_UTF8, 0, crlf, (int)m, NULL, 0);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, ((size_t)wn + 1) * sizeof(wchar_t));
+    wchar_t *w = memory != NULL ? (wchar_t *)GlobalLock(memory) : NULL;
+    if (w == NULL)
+    {
+        if (memory != NULL)
+        {
+            GlobalFree(memory);
+        }
+        free(crlf);
+        return;
+    }
+    if (wn > 0)
+    {
+        MultiByteToWideChar(CP_UTF8, 0, crlf, (int)m, w, wn);
+    }
+    w[wn] = 0;
+    GlobalUnlock(memory);
+    free(crlf);
+    if (!open_clipboard(NULL))
+    {
+        GlobalFree(memory);
+        return;
+    }
+    empty_clipboard();
+    if (set_clipboard(13 /* CF_UNICODETEXT */, memory) == NULL)
+    {
+        GlobalFree(memory); /* still ours: the clipboard did not take it */
+    }
+    close_clipboard();
+}
+
 /* From a console, ReadConsoleW gives what was typed as UTF-16, a line at a
    time (Ctrl+Z at the start of a line is the end of the input, as cmd.exe
    has it); from a pipe or a file, the bytes are read as they are. */
