@@ -681,7 +681,11 @@ authoritative for design rationale.
   the just-built tfc for each platform (`--release`; zig for Linux musl
   and Windows), package.py `--designer` puts it in bin/ and the sources
   in designer/; smoke_test.py runs it headless from the unpacked
-  archive with no $TFC (so it must find the tfc beside it). Also open: step 7 of the
+  archive with no $TFC (so it must find the tfc beside it).
+  Fixed (11 Nov 2026, found by that smoke test): Shell on Windows lost
+  the outer quotes of a command such as `"C:\x\tfc.exe" --catalog >
+  "out"` (cmd /c strips the first and last of more than two); the
+  runtime now wraps the command in quotes of its own. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

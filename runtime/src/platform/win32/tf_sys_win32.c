@@ -36,8 +36,14 @@ int tf_platform_system(const char *command, int32_t *code)
         errno = EINVAL;
         return -1;
     }
-    wchar_t *w = tf_xmalloc((size_t)n * sizeof(wchar_t));
-    MultiByteToWideChar(CP_UTF8, 0, command, -1, w, n);
+    /* cmd /c removes the first and last quote of a command that has more
+       than two ("C:\a b\tool.exe" --x > "out.txt" would lose them), so
+       the command goes in quotes of its own, which cmd removes instead. */
+    wchar_t *w = tf_xmalloc((size_t)(n + 2) * sizeof(wchar_t));
+    w[0] = L'"';
+    MultiByteToWideChar(CP_UTF8, 0, command, -1, w + 1, n);
+    w[n] = L'"';
+    w[n + 1] = L'\0';
     const int status = _wsystem(w);
     free(w);
     if (status == -1)
