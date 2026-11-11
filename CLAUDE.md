@@ -602,7 +602,18 @@ authoritative for design rationale.
   three places, goldens regenerated, tag v1.0.0 pushed; the release
   workflow publishes it as a full release.
 - **Next (after v1):** the post-v1 roadmap in the project plan, the
-  visual designer first (probably v2). Also open: step 7 of the
+  visual designer first (probably v2). **Designer ground rules settled
+  (Jim, 11 Nov 2026; REFERENCE.md "Visual designer"):** a TermForms
+  program in the terminal (no GUI designer); forms in a `.frm` paired
+  with the `.bas` by name (a block in the `.bas` still valid and
+  editable in place; no include directive; the `.vbp` lists the `.bas`
+  only); the block always written one way (tab order, catalog order,
+  non-defaults), comments kept; tab order = order written, shown as
+  TabIndex in the designer only; double-click writes handler stubs into
+  the `.bas`; safe saving (re-check, temp file + rename); `tfc --catalog`
+  in a plain line format, not JSON; first version without the menu
+  editor. Still to design with Jim before code: MouseDown/Move/Up, a
+  design-surface control drawing a form inactive, the designer's screen. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
@@ -1003,9 +1014,7 @@ a variable that is filled in only when a call succeeds.
   ReadConsoleW for a console, bytes otherwise). Run tests may have a
   `.stdin` (else empty input) and `.exit` (the expected exit code);
   `.keys` is optional. Tests: run/console, run/console_forms,
-  errors/console, errors/console_print. Also later, perhaps: a graphical form designer (Python Tk) writing the form
-  block, with tfc printing its control catalog as JSON and a headless
-  preview; open questions: .frm or rewrite in .bas, keeping comments.
+  errors/console, errors/console_print.
 
 ## Next work (suggested order — confirm with Jim)
 

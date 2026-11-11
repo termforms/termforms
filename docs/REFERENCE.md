@@ -1700,3 +1700,64 @@ tools/, and the Unicode notice ships in runtime/THIRD_PARTY_NOTICES.
 - `Sub <Control>_<Event>` is wired to that event at compile time.
   Form events use `Form_` whatever the form is called. `Form_Load` runs
   before the form is shown.
+
+## Visual designer (after v1: Settled, Jim, 11 Nov 2026)
+
+The designer is the first piece of work after v1 (probably v2). These are
+its ground rules; the new language pieces it needs (below) and its screen
+layout are still to be designed with Jim before any code.
+
+- **A TermForms program.** The designer runs in the terminal, written in
+  TermForms BASIC, so it works over SSH, shows the real colours and
+  characters, and shows what the language can do. A desktop (GUI)
+  designer is not planned.
+- **Forms in `.frm` files.** A form's block may live in a `.frm` file
+  beside its `.bas`, paired by name (`main.bas` with `main.frm`); the
+  `.frm` holds only the `Begin Form ... End` block, and the code stays in
+  the `.bas`. A form block written in the `.bas` (as today) stays valid.
+  A form in both places is a compile error (Proposed). The designer puts a new form
+  in a `.frm`, edits a form already in a `.bas` where it is (replacing
+  only the lines from `Begin Form` to its `End`), and offers a command
+  to move it into a `.frm`.
+- **No general include directive.** The pairing by name does the job; an
+  include (if ever wanted) belongs with `#If`, also after v1.
+- **The `.vbp` lists the `.bas` only** (`Form=main.bas`); tfc finds the
+  `.frm` by its name, as it does with `tfc main.bas` and no project file.
+  The designer opens a form by either file's name.
+- **One way of writing the block.** The designer always writes it the
+  same way: controls in tab order (a Frame's controls inside it),
+  properties in the catalog's order, only values that differ from the
+  defaults. Moving a control then changes only its own lines in a diff.
+- **Comments are kept.** A comment inside the block stays with the line
+  that follows it (a control or a property); one just before `End`
+  stays there.
+- **Tab order is the order written; the designer shows it as
+  TabIndex.** The property sheet shows each control's TabIndex and lets
+  it be changed, and a tab-order mode numbers the controls to be clicked
+  in the order wanted; the designer writes the controls in that order.
+  TabIndex is not a property in the language (so it cannot be changed
+  from code at run time, unlike VB); a Frame's controls stay together in
+  the order. A real property could be added later without changing any
+  files.
+- **Handler stubs.** Double-clicking a control (or choosing an event in
+  the property sheet) writes an empty handler, `Sub cmdOK_Click()` ...
+  `End Sub`, into the form's `.bas`, or goes to it if it is there, with
+  the parameters the event takes.
+- **Safe saving.** The designer notes each file's contents when it reads
+  it and checks them again before saving: if the file changed (the
+  programmer editing it meanwhile), it reads it again and reapplies its
+  change rather than overwriting. Files are written to a temporary file
+  in the same folder and then renamed into place.
+- **The catalog from tfc.** `tfc --catalog` prints the control catalog
+  (controls, properties with their types and defaults, events with their
+  parameters) in a plain line format the designer reads, so the designer
+  never offers what the compiler does not know. Not JSON: reading JSON
+  in BASIC would need a JSON reader for no gain.
+- **First version:** placing, moving and resizing controls with the
+  mouse and the keyboard; a property sheet; tab order; handler stubs.
+  The menu editor comes in the second version.
+- **Still to design (with Jim):** MouseDown, MouseMove and MouseUp
+  events (on the known-gaps list) for dragging and resizing; a
+  design-surface control that draws a form's controls inactive with the
+  runtime's own drawing, so the preview is exactly what the program
+  shows; the designer's own screen.
