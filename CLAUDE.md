@@ -39,7 +39,7 @@ These are Claude Docs; they may not be readable from Claude Code. If this
 file and they disagree, this file is newer for status; the handover is
 authoritative for design rationale.
 
-## Status (28 Oct 2026, Phase 3 steps 1-6 done)
+## Status (11 Nov 2026: v1.0.0 released)
 
 - **Phase 1 (foundations): done.**
 - **Phase 2 (vertical slice): done (26 Oct 2026).** `hello` built on the M4
@@ -595,8 +595,14 @@ authoritative for design rationale.
   CR LF; POSIX does nothing), and scroll bars as coloured cells
   (`draw_bar`: backdrop track, button-grey thumb). Headless dumps no
   longer show the bars (colours only).
-- **Next:** Jim re-checks the rebuilt demos on Windows and Linux; then
-  tag v1.0.0. Also open: step 7 of the
+  Jim re-checked both fixes on Windows and Linux: they work. Toolchain
+  bundling reviewed (Jim, 11 Nov 2026): v1 bundles nothing (zig from
+  winget/brew/the distribution, as documented); revisit after v1.
+  Version 1.0.0 (11 Nov 2026, Jim's go-ahead): the version bumped in the
+  three places, goldens regenerated, tag v1.0.0 pushed; the release
+  workflow publishes it as a full release.
+- **Next (after v1):** the post-v1 roadmap in the project plan, the
+  visual designer first (probably v2). Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
