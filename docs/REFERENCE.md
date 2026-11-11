@@ -369,7 +369,7 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 63 | Bad record number | a negative offset in Get, Put or Seek # | now |
 | 58 | File already exists | `Name` onto a file that is there | now |
 | 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
-| 380 | Invalid property value | a control property set out of range (a CheckBox Value outside 0-2) | now |
+| 380 | Invalid property value | a control property set out of range (a CheckBox Value outside 0-2; a Style 2 ComboBox's Text that is none of its items) | now |
 
 - **Not provided: 28 Out of stack space.** Portable C cannot detect
   running out of stack, so recursion that goes too deep crashes the
@@ -1576,29 +1576,49 @@ The rest is Proposed:
   view follows the caret whenever the text or the caret changes, but the
   wheel and the bars move the view alone, so the caret may be out of
   sight until the next key.
-- **ComboBox.** `Style` 0 or 2, set in the form block only (1 is a
-  compile error). Items as the ListBox: AddItem, RemoveItem, Clear,
-  List(i), ListCount, ListIndex, Sorted, TopIndex. Style 0's text part
-  is a TextBox's edit buffer (SelStart, SelLength, SelText, MaxLength,
-  Locked); Text is what it shows. Style 2's Text is the chosen item
-  (read-only; setting ListIndex chooses).
-- **Keys**: F4 or Alt+Down opens the list, and again closes it; Up and
-  Down choose the previous or next item without opening it; in Style 2
-  a letter chooses the next item starting with it. While the list is
-  open the keys are its own: Up, Down, PgUp, PgDn, Home, End move,
-  Enter chooses and closes, Esc closes with nothing chosen (and never
-  reaches the Cancel button), Tab chooses and moves on.
+- **ComboBox** (built 11 Nov 2026). `Style` 0 or 2, set in the form
+  block only (1 is a compile error, as is setting it in code). Items as
+  the ListBox: AddItem, RemoveItem, Clear, List(i), ListCount,
+  ListIndex, Sorted (not Selected(i), MultiSelect or TopIndex). Its
+  height is one row; the arrow that opens the list is its last cell.
+  Style 0's text part is a TextBox's edit buffer (SelStart, SelLength,
+  SelText, MaxLength, Locked), drawn as a TextBox; Text is what it
+  shows. Setting Text sets ListIndex to the item with exactly that
+  text, or -1 (no Click). Choosing an item puts its text in, all of it
+  selected (as Windows), without Change; typing makes ListIndex -1.
+  Clear empties the text too (as VB). Style 2's Text is the chosen item
+  ("" for none), lit while it has the focus; setting Text chooses the
+  item with exactly that text, or is error 380 (VB6 gives 383 there).
+  Setting ListIndex chooses (-1: none, Style 0's text "").
+- **Keys**: F4, Alt+Down or Alt+Up opens the list, and again closes it,
+  choosing the highlighted item (as Windows). Closed, Up and Down choose
+  the previous or next item (Down with none chosen: the first); Style 2
+  also takes PgUp, PgDn, Home, End and a letter (the next item starting
+  with it, ignoring ASCII case), Style 0 gives other keys to its text
+  (Home and End move in it; Enter and Esc go on to the Default and
+  Cancel buttons). While the list is open: Up, Down, PgUp, PgDn, Home,
+  End move the highlight (Style 2: a letter too), Enter chooses and
+  closes, Esc closes with nothing chosen (never reaching the Cancel
+  button), Tab chooses and moves on, as does any other change of focus;
+  Style 0's typing still edits its text.
 - **Events**: Click when the chosen item changes (by keys, mouse or
   code), Change when Style 0's text is edited (by the user or code, as
   the TextBox), DropDown just before the list opens (the program may
   fill it then), GotFocus, LostFocus, KeyPress, KeyDown.
 - **The list** shows up to 8 rows below the box, or above it when the
-  screen has no room below, with a scroll bar when there are more; it
-  may reach past the form's edge, as a menu does. A click on an item
-  chooses it; a click elsewhere closes it and does nothing more.
-- **One popup at a time**: an open list or menu is drawn over the form,
-  takes the mouse and keys first, and closes when the other opens or
-  the form loses the top of the stack.
+  screen has no room below, as wide as the box, in a border, with a
+  scroll bar in its right border when there are more; it may reach past
+  the form's edge, as a menu does. The mouse: a press on Style 2 or on
+  Style 0's arrow opens it; a press on an item highlights it and the
+  release there chooses it (pressing the box and dragging onto an item
+  does too); the wheel moves the highlight three items; a press on the
+  scroll bar moves the view there; a press anywhere else, the box
+  included, closes it and does nothing more.
+- **One popup at a time**: an open list or menu drop-down is drawn over
+  the form, last, and takes the mouse first. F10, Ctrl+B or a menu's
+  Alt key with a list open closes the list (choosing nothing) and opens
+  the menus. A list closes when its form is no longer on top, or the
+  box is hidden or disabled.
 
 ### Character widths (Settled, Jim, 28 Oct 2026)
 

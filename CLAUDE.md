@@ -550,8 +550,19 @@ authoritative for design rationale.
   multi-line box (a break then becomes Enter). Key scripts: `{PASTE
   text}` (\n, \r\n, \t). Run tests multiline, multiline_scroll;
   errors/multiline.
-- **Next:** the popup layer (menus onto it), then the ComboBox; then tag
-  v1.0.0 and review toolchain bundling. Also open: step 7 of the
+  ComboBox done (11 Nov 2026): TF_CTL_COMBOBOX shares the ListBox's
+  item fields and tf_list_* routines (sema `isListBox(obj, combo)`;
+  library kind C takes either; Selected(i) is the ListBox's alone);
+  `style`, Style 0's text in `edit`; `combo_choose`/`combo_open`/
+  `combo_close`/`combo_key`/`combo_list_mouse`; event DropDown
+  (EventKind::DropDown, TF_EVENT_DROPDOWN); Style 2 Text not an item is
+  380. The popup layer: a form's `open_list` and `pop_*` rect (the menu
+  drop-down records it too); drawn last in draw_one, given the mouse
+  first; menus opening close the list; `set_focus` closes it choosing.
+  The demo has a multi-line TextBox (frmControls) and both Styles
+  (frmLists). Run tests combobox, combobox_popup; errors/combobox.
+- **Next:** Jim tries both controls in real terminals (the demo); then
+  tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
@@ -909,8 +920,7 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- No ScrollBar control or ComboBox Style 1 (after v1); the ComboBox is
-  in v1 but not yet built; no MouseDown/Up/Move
+- No ScrollBar control or ComboBox Style 1 (after v1); no MouseDown/Up/Move
   events; the clipboard is the program's own.
 - Combining marks are not drawn (a cell holds one character); text
   that relies on them shows the base letters.

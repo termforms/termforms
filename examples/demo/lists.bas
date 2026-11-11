@@ -1,6 +1,8 @@
 ' lists.bas -- ListBoxes: a Sorted one with items added and removed, and
 ' the two MultiSelect kinds (1: Space toggles; 2: arrows choose, Space or
-' Ctrl+click adds). The mouse wheel scrolls them.
+' Ctrl+click adds). The mouse wheel scrolls them. ComboBoxes: Style 2
+' (choose from the list only) and Style 0 (type, or choose); F4 or
+' Alt+Down opens the list.
 Begin Form frmLists
     Caption = "Lists"
     Width = 66
@@ -77,6 +79,29 @@ Begin Form frmLists
         Top = 14
         Width = 62
     End
+    Begin Label lblSize
+        Caption = "Si&ze:"
+        Left = 1
+        Top = 15
+        Width = 6
+    End
+    Begin ComboBox cboSize
+        Left = 7
+        Top = 15
+        Width = 14
+        Style = 2
+    End
+    Begin Label lblCity
+        Caption = "&Where:"
+        Left = 23
+        Top = 15
+        Width = 7
+    End
+    Begin ComboBox cboCity
+        Left = 30
+        Top = 15
+        Width = 18
+    End
 End
 
 Sub Form_Load()
@@ -91,8 +116,31 @@ Sub Form_Load()
     For Each d As String In days
         lstDays.AddItem d
     Next
+    For Each z As String In Split("Small Medium Large")
+        cboSize.AddItem z
+    Next
+    cboSize.ListIndex = 1
+    For Each c As String In Split("Athens Melbourne Sydney Thessaloniki")
+        cboCity.AddItem c
+    Next
     Note "frmLists Load: " & lstFruit.ListCount & " fruit"
     ShowCounts
+End Sub
+
+Sub cboSize_Click()
+    Note "cboSize Click: " & cboSize.Text
+End Sub
+
+Sub cboSize_DropDown()
+    Note "cboSize DropDown"
+End Sub
+
+Sub cboCity_Click()
+    Note "cboCity Click: " & cboCity.Text
+End Sub
+
+Sub cboCity_Change()
+    Note "cboCity Change: " & cboCity.Text
 End Sub
 
 Sub ShowCounts()

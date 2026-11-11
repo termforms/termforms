@@ -610,7 +610,8 @@ private:
                 diagnostics_.error(child->location, "unknown control type '" + child->typeName +
                                                         "' (this version has Label, TextBox, "
                                                         "CommandButton, CheckBox, OptionButton, "
-                                                        "Frame, ListBox, Timer and Menu)");
+                                                        "Frame, ListBox, ComboBox, Timer and "
+                                                        "Menu)");
                 continue;
             }
             if (claimModuleName(child->name, child->location, "control"))
@@ -811,6 +812,12 @@ private:
             else if (valueType == Type::Integer && !fitsInteger(s.value->integer))
             {
                 diagnostics_.error(s.location, "value does not fit in an Integer");
+            }
+            else if (std::string_view(prop->cName) == "TF_PROP_STYLE" && s.value->integer != 0 &&
+                     s.value->integer != 2)
+            {
+                diagnostics_.error(s.location, "a ComboBox's Style must be 0 (a text box and a "
+                                               "list) or 2 (the list only)");
             }
             else if (std::string_view(prop->cName) == "TF_PROP_SCROLLBARS" &&
                      (s.value->integer < 0 || s.value->integer > 3))
@@ -1371,7 +1378,7 @@ private:
         if (target.kind == ExprKind::Index && target.left != nullptr &&
             target.left->kind == ExprKind::Member && target.left->left != nullptr &&
             (target.left->text == "List" || target.left->text == "Selected") &&
-            isListBox(*target.left->left))
+            isListBox(*target.left->left, target.left->text == "List"))
         {
             const bool item = target.left->text == "List";
             auto call = std::make_unique<Expr>();
@@ -2629,7 +2636,8 @@ private:
     Type checkMemberIndex(Expr &e)
     {
         if (e.left->kind == ExprKind::Member && e.left->left != nullptr &&
-            (e.left->text == "List" || e.left->text == "Selected") && isListBox(*e.left->left))
+            (e.left->text == "List" || e.left->text == "Selected") &&
+            isListBox(*e.left->left, e.left->text == "List"))
         {
             return listIndexed(e);
         }
@@ -3087,8 +3095,10 @@ private:
 
     // -- ListBox methods ----------------------------------------------------
 
-    // object, if it is a ListBox (lst, or frmMain.lst): checked, else left.
-    bool isListBox(Expr &object)
+    // object, if it is a ListBox (lst, or frmMain.lst), or a ComboBox when
+    // `combo` (they share AddItem, RemoveItem, Clear and List(i); Selected(i)
+    // is a ListBox's alone): checked, else left.
+    bool isListBox(Expr &object, bool combo = true)
     {
         const bool named =
             (object.kind == ExprKind::Name && controls_.count(object.text) != 0) ||
@@ -3100,7 +3110,8 @@ private:
             return false;
         }
         checkExpr(object);
-        return object.control != nullptr && object.control->typeName == "ListBox";
+        return object.control != nullptr && (object.control->typeName == "ListBox" ||
+                                             (combo && object.control->typeName == "ComboBox"));
     }
 
     // lst.List(i) / lst.Selected(i), read: calls of the library's routines.
@@ -3126,8 +3137,9 @@ private:
                                                : Builtin::None;
         if (id == Builtin::None)
         {
-            diagnostics_.error(member.location, "a ListBox's statements are AddItem, RemoveItem "
-                                                "and Clear, not '" +
+            diagnostics_.error(member.location, "a " + member.left->control->typeName +
+                                                    "'s statements are AddItem, RemoveItem "
+                                                    "and Clear, not '" +
                                                     m + "'");
             return true;
         }
@@ -4195,13 +4207,15 @@ private:
             }
             if (want == 'C' || want == 'F')
             {
-                const bool fits =
-                    arg.control != nullptr &&
-                    (want == 'F' ? arg.control->isForm : arg.control->typeName == "ListBox");
+                const bool fits = arg.control != nullptr &&
+                                  (want == 'F' ? arg.control->isForm
+                                               : arg.control->typeName == "ListBox" ||
+                                                     arg.control->typeName == "ComboBox");
                 if (arg.type != Type::Error && !fits)
                 {
-                    diagnostics_.error(arg.location, "'" + name + "' is for " +
-                                                         (want == 'F' ? "a form" : "a ListBox"));
+                    diagnostics_.error(arg.location,
+                                       "'" + name + "' is for " +
+                                           (want == 'F' ? "a form" : "a ListBox or ComboBox"));
                     ok = false;
                 }
                 ok = ok && arg.type != Type::Error;

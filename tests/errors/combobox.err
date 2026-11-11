@@ -1,0 +1,4 @@
+combobox.bas:6:9: error: a ComboBox's Style must be 0 (a text box and a list) or 2 (the list only)
+combobox.bas:11:10: error: 'Style' can be set only in the form block
+combobox.bas:12:10: error: ComboBox has no property 'Selected'
+combobox.bas:13:10: error: a ComboBox's statements are AddItem, RemoveItem and Clear, not 'Sort'

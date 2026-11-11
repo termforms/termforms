@@ -485,6 +485,7 @@ Tab order is the order the controls are written in.
 | OptionButton | Caption, Value (Boolean) | Click |
 | Frame | Caption; holds controls, positioned inside it | (none) |
 | ListBox | Text, ListIndex, ListCount, MultiSelect, Sorted, SelCount, TopIndex; `List(i)`, `Selected(i)`; AddItem, RemoveItem, Clear | Click, DblClick |
+| ComboBox | Text, ListIndex, ListCount, Sorted, Style (form block only), SelStart, SelLength, SelText, MaxLength, Locked; `List(i)`; AddItem, RemoveItem, Clear | Click, Change, DropDown |
 | Timer | Interval (ms), Enabled | Timer |
 | Menu | Caption, Checked, Shortcut, Enabled, Visible | Click |
 
@@ -531,6 +532,20 @@ Begin TextBox txtNotes
     Height = 8
     MultiLine = True
     ScrollBars = 2      ' a vertical bar; lines wrap
+End
+```
+
+A **ComboBox** is a ListBox's items with one shown and a list that drops
+down (F4 or Alt+Down, or a click on its arrow; Up and Down choose without
+opening it). With `Style = 2` the user can only choose from the list;
+with `Style = 0` (the default) they can also type, and `ListIndex` is -1
+when what they typed is not an item. DropDown fires just before the list
+opens, so a program can fill it then.
+
+```vb
+Begin ComboBox cboSize
+    Width = 14
+    Style = 2           ' choose from the list only
 End
 ```
 

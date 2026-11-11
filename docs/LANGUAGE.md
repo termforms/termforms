@@ -67,7 +67,7 @@ End Sub
 | For Each | over arrays (any number of dimensions), `d.Keys`, `d.Items`; `For i As Integer = ...` and `For Each w As String In ...` declare the variable for the loop alone |
 | Files | `Open ... For Input/Output/Append/Binary As #n`, `Print #`, `Line Input #`, `Get #`, `Put #`, `Seek #`, `Close`, `EOF`, `LOF`, `Seek`, `FreeFile` |
 | File system | `Kill`, `MkDir`, `RmDir`, `ChDir`, `CurDir$`, `Name ... As`, `FileCopy`, `FileLen`, `FileDateTime`, `Exists`, `Dir$`, `Files()`, `Folders()`, `IsLink` |
-| Controls | Label, TextBox (SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar; selection, words, undo, cut/copy/paste; MultiLine and ScrollBars in the form block: rows that wrap, Up/Down/PgUp/PgDn, scroll bars), CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
+| Controls | Label, TextBox (SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar; selection, words, undo, cut/copy/paste; MultiLine and ScrollBars in the form block: rows that wrap, Up/Down/PgUp/PgDn, scroll bars), CommandButton, CheckBox, OptionButton, Frame (holding controls), ListBox (AddItem, RemoveItem, Clear, List(i), Selected(i), MultiSelect, Sorted), ComboBox (Style 0 or 2 in the form block; the ListBox's items, ListIndex, Sorted; the DropDown event), Timer (Interval, Enabled, the Timer event); Default/Cancel buttons; Enabled, Visible; access keys (Alt+letter) |
 | Forms | several (one per module): `Show [vbModal]`, `Hide`, `Load`, `Unload`, `Me`, `DoEvents`, `Visible` (read only); events Load, Unload(ByRef Cancel), Activate; GotFocus, LostFocus, KeyPress(ByRef KeyAscii), KeyDown(ByRef KeyCode, Shift) |
 | Menus | `Begin Menu` blocks: a menu bar with drop-downs (two levels); Caption (`-` a separator), Enabled, Visible, Checked, Shortcut; the Click event; F10 or Ctrl+B, Alt+letter |
 | Dialogs | `MsgBox` (function or statement), `InputBox`; VB's named constants (vbYesNo, vbQuestion, vbYes, vbCrLf, ...) |
@@ -535,10 +535,11 @@ With a menu bar, controls' Top counts from the row below it.
 | Alt+letter | The control whose Caption has &letter |
 | Left, Right, Home, End, Backspace, Delete | Edit in a TextBox (Shift+: select; Ctrl+Left/Right: by words) |
 | Up, Down, PgUp, PgDn, Ctrl+Home, Ctrl+End | In a multi-line TextBox: by rows, keeping the column; to the text's start or end |
+| F4, Alt+Down | Open or close a ComboBox's list (Enter chooses, Esc closes without choosing); Up and Down choose with it closed |
 | Ctrl+A, Ctrl+X, Ctrl+C, Ctrl+V, Ctrl+Z | In a TextBox: select all, cut, copy, paste (the program's own clipboard), undo |
 | The terminal's paste | Types the text in; line breaks and tabs become spaces (never Enter or Tab), except in a multi-line TextBox, which keeps them |
 | Ctrl+F4 (or Alt+F4) | Close the form |
-| The mouse | Click to focus, press, toggle, choose, open menus; drag to select in a TextBox; double-click a word or a ListBox item; the wheel scrolls a ListBox or a multi-line TextBox, and a press on a scroll bar moves the view there. `TERMFORMS_MOUSE=0` turns it off; Shift+drag selects text on the screen as usual |
+| The mouse | Click to focus, press, toggle, choose, open menus; drag to select in a TextBox; double-click a word or a ListBox item; the wheel scrolls a ListBox or a multi-line TextBox, and a press on a scroll bar moves the view there; a click opens a ComboBox's list and chooses in it. `TERMFORMS_MOUSE=0` turns it off; Shift+drag selects text on the screen as usual |
 | F10 or Ctrl+B | Go to the menu bar (again, or Esc: leave it) |
 | Alt+letter | Open the menu whose Caption has &letter (before a control's) |
 | In the menus | Left/Right: menu to menu; Down/Enter: open; Up/Down: item to item; Enter or a letter: choose; Esc: back |

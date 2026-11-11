@@ -103,6 +103,13 @@ struct tf_control
     int sorted;
     int32_t anchor;
 
+    /* ComboBox only (its items, ListIndex and Sorted are the ListBox's
+     * fields above; Style 0's text is `edit`): Style (0 or 2), and while
+     * its list is open the item highlighted there and the first shown. */
+    int32_t style;
+    int32_t drop_item;
+    int32_t drop_top;
+
     /* Timer only: milliseconds between events (0: stopped), and when the
      * next is due on the runtime's clock (now_ms). */
     int32_t interval;
@@ -120,6 +127,13 @@ struct tf_control
     int menu_top;
     int menu_down;
     int menu_item;
+
+    /* Form only: the popup over its controls, drawn last and given the
+     * mouse first, at most one at a time: the menu drop-down (above) or a
+     * ComboBox's list (`open_list`, NULL when none); `pop_*` is where the
+     * one open was last drawn. */
+    tf_control *open_list;
+    int pop_x, pop_y, pop_w, pop_h;
 
     /* Where the control was last drawn on the screen (drawn 0: it was
        not), for the mouse. */
@@ -196,7 +210,7 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
     control->form = form;
     control->parent = form;
     const int boxed = type == TF_CTL_FRAME || type == TF_CTL_LISTBOX;
-    control->width = type == TF_CTL_TEXTBOX || boxed ? 20 : 10;
+    control->width = type == TF_CTL_TEXTBOX || type == TF_CTL_COMBOBOX || boxed ? 20 : 10;
     control->height = boxed ? 5 : 1;
     control->list_index = -1;
     control->anchor = -1;
@@ -340,6 +354,37 @@ static void list_extend(tf_control *list, int32_t item)
     }
 }
 
+/* Makes item a ComboBox's chosen one (-1 none): Style 0 shows its text,
+   all selected (as Windows), without Change (as VB). Click fires on a
+   change. */
+static void combo_choose(tf_control *combo, int32_t item)
+{
+    const int changed = combo->list_index != item;
+    combo->list_index = item;
+    if (combo->style == 0)
+    {
+        tf_edit_set_text(&combo->edit, item >= 0 ? combo->items[item] : NULL);
+        tf_edit_select(&combo->edit, 0, tf_str_len(combo->edit.text));
+    }
+    if (changed)
+    {
+        fire(combo, TF_EVENT_CLICK);
+    }
+}
+
+/* The item whose text is exactly text, or -1. */
+static int32_t combo_find(const tf_control *combo, const tf_string *text)
+{
+    for (int32_t i = 0; i < combo->item_count; ++i)
+    {
+        if (tf_str_compare(combo->items[i], text) == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* Only one Default (and one Cancel) button per form, as VB. */
 static void make_only(tf_control *button, tf_prop prop)
 {
@@ -395,6 +440,44 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
         }
         control->shortcut = key;
         tf_str_assign(&control->text, tf_str_from_utf8(shown_as, (int32_t)strlen(shown_as)));
+        return;
+    }
+    if (control->type == TF_CTL_COMBOBOX && prop == TF_PROP_TEXT && control->style == 2)
+    {
+        /* The list only: Text chooses the item with that text (as VB). */
+        const int32_t item = combo_find(control, v);
+        if (item < 0)
+        {
+            tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
+            return;
+        }
+        combo_choose(control, item);
+        return;
+    }
+    if (control->type == TF_CTL_COMBOBOX && (prop == TF_PROP_TEXT || prop == TF_PROP_SELTEXT))
+    {
+        if (control->style == 2)
+        {
+            return; /* SelText: the list only has no text to select in */
+        }
+        const int same = prop == TF_PROP_TEXT
+                             ? tf_str_compare(control->edit.text, v) == 0
+                             : tf_edit_sel_length(&control->edit) == 0 && tf_str_lenb(v) == 0;
+        if (prop == TF_PROP_TEXT)
+        {
+            tf_edit_set_text(&control->edit, v);
+            control->scroll = 0;
+        }
+        else
+        {
+            tf_edit_replace_selection(&control->edit, v);
+        }
+        /* The text names an item only if it is one (as VB). */
+        control->list_index = combo_find(control, control->edit.text);
+        if (!same)
+        {
+            fire(control, TF_EVENT_CHANGE);
+        }
         return;
     }
     if (control->type == TF_CTL_TEXTBOX && (prop == TF_PROP_TEXT || prop == TF_PROP_SELTEXT))
@@ -456,7 +539,8 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
 
 tf_string *tf_get_str(const tf_control *control, tf_prop prop)
 {
-    if (control->type == TF_CTL_TEXTBOX)
+    if (control->type == TF_CTL_TEXTBOX ||
+        (control->type == TF_CTL_COMBOBOX && control->style == 0))
     {
         tf_control *box = (tf_control *)control; /* SelText's copy is kept to be lent */
         switch (prop)
@@ -472,7 +556,8 @@ tf_string *tf_get_str(const tf_control *control, tf_prop prop)
                 break;
         }
     }
-    if (control->type == TF_CTL_LISTBOX && prop == TF_PROP_TEXT)
+    if ((control->type == TF_CTL_LISTBOX || control->type == TF_CTL_COMBOBOX) &&
+        prop == TF_PROP_TEXT)
     {
         /* The current item's text (VB's Text of a ListBox). */
         const int32_t i = control->list_index;
@@ -557,7 +642,14 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
                 tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
                 break;
             }
-            list_choose(control, value, control->multi == 0);
+            if (control->type == TF_CTL_COMBOBOX)
+            {
+                combo_choose(control, value);
+            }
+            else
+            {
+                list_choose(control, value, control->multi == 0);
+            }
             break;
         case TF_PROP_MULTISELECT:
             control->multi = value < 0 ? 0 : value > 2 ? 2 : value;
@@ -603,6 +695,9 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
             break;
         case TF_PROP_SCROLLBARS:
             control->scroll_bars = value < 0 || value > 3 ? 0 : value;
+            break;
+        case TF_PROP_STYLE:
+            control->style = value == 2 ? 2 : 0; /* set only by the form block (sema) */
             break;
         default:
             break;
@@ -666,6 +761,8 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->edit.multi_line;
         case TF_PROP_SCROLLBARS:
             return control->scroll_bars;
+        case TF_PROP_STYLE:
+            return control->style;
         default:
             return 0;
     }
@@ -762,6 +859,10 @@ void tf_list_clear(tf_control *list)
     list->item_count = 0;
     list->list_index = -1;
     list->top_index = 0;
+    if (list->type == TF_CTL_COMBOBOX && list->style == 0)
+    {
+        tf_edit_set_text(&list->edit, NULL); /* Clear empties its text too, as VB */
+    }
 }
 
 tf_string *tf_list_item(const tf_control *list, int32_t index)
@@ -1474,6 +1575,120 @@ static void draw_list(tf_control *list, int x, int y, int w, int h, int focused)
     }
 }
 
+/* A ComboBox, closed: its text in the field's colours (Style 2's lit
+   while it has the focus, as Windows; Style 0's edited as a TextBox),
+   then the arrow that opens its list. */
+static void draw_combo(tf_control *combo, int x, int y, int max_width, int focused)
+{
+    const int w = combo->width < max_width ? (int)combo->width : max_width;
+    if (w <= 0)
+    {
+        return;
+    }
+    const shade b = shade_of(TF_COLOUR_BUTTON_BACK);
+    tf_screen_put(x + w - 1, y, box(0x25BC, 'v'), b.text, b.back);
+    if (w == 1)
+    {
+        return;
+    }
+    if (combo->style == 0)
+    {
+        draw_textbox(combo, x, y, w - 1, focused);
+        return;
+    }
+    const int lit = focused;
+    const uint32_t fg = tf_colour(lit ? TF_COLOUR_HIGHLIGHT_TEXT : TF_COLOUR_FIELD_TEXT);
+    const uint32_t bg = tf_colour(lit ? TF_COLOUR_HIGHLIGHT_BACK : TF_COLOUR_FIELD_BACK);
+    tf_screen_fill(x, y, w - 1, 1, ' ', fg, bg);
+    const int32_t i = combo->list_index;
+    if (i >= 0 && i < combo->item_count)
+    {
+        tf_screen_text(x, y, tf_str_cstr(combo->items[i]), w - 1, fg, bg);
+    }
+    if (focused)
+    {
+        tf_screen_cursor(x, y, 1);
+    }
+}
+
+/* The most rows a ComboBox's list shows at once (as VB's). */
+#define TF_COMBO_ROWS 8
+
+/* An open ComboBox's list: under the box, or over it when the screen has
+   no room below, as wide as the box, over whatever is there (it may reach
+   past the form, as a menu does); a scroll bar in its right border when
+   the items do not all fit. Records where it is, for the mouse. */
+static void draw_combo_list(tf_control *form, tf_control *combo)
+{
+    int cols = 0;
+    int screen_rows = 0;
+    tf_screen_size(&cols, &screen_rows);
+    const int32_t count = combo->item_count;
+    const int rows = count < 1 ? 1 : count < TF_COMBO_ROWS ? (int)count : TF_COMBO_ROWS;
+    const int w = (int)combo->width < 3 ? 3 : (int)combo->width;
+    const int h = rows + 2;
+    int x = combo->at_x;
+    x = x + w > cols ? (cols - w < 0 ? 0 : cols - w) : x;
+    int y = combo->at_y + 1;
+    if (y + h > screen_rows)
+    {
+        y = combo->at_y - h >= 0 ? combo->at_y - h : 0;
+    }
+
+    /* Keep the highlighted item in view. */
+    const int32_t max_top = count > rows ? count - rows : 0;
+    if (combo->drop_item >= 0 && combo->drop_item < combo->drop_top)
+    {
+        combo->drop_top = combo->drop_item;
+    }
+    else if (combo->drop_item >= combo->drop_top + rows)
+    {
+        combo->drop_top = combo->drop_item - rows + 1;
+    }
+    combo->drop_top = combo->drop_top > max_top ? max_top
+                      : combo->drop_top < 0     ? 0
+                                                : combo->drop_top;
+
+    const uint32_t text = tf_colour(TF_COLOUR_FIELD_TEXT);
+    const uint32_t back = tf_colour(TF_COLOUR_FIELD_BACK);
+    tf_screen_fill(x, y, w, h, ' ', text, back);
+    for (int i = 1; i < w - 1; ++i)
+    {
+        tf_screen_put(x + i, y, box(0x2500, '-'), text, back);
+        tf_screen_put(x + i, y + h - 1, box(0x2500, '-'), text, back);
+    }
+    for (int j = 1; j < h - 1; ++j)
+    {
+        tf_screen_put(x, y + j, box(0x2502, '|'), text, back);
+        tf_screen_put(x + w - 1, y + j, box(0x2502, '|'), text, back);
+    }
+    tf_screen_put(x, y, box(0x250C, '+'), text, back);
+    tf_screen_put(x + w - 1, y, box(0x2510, '+'), text, back);
+    tf_screen_put(x, y + h - 1, box(0x2514, '+'), text, back);
+    tf_screen_put(x + w - 1, y + h - 1, box(0x2518, '+'), text, back);
+    for (int r = 0; r < rows; ++r)
+    {
+        const int32_t item = combo->drop_top + r;
+        if (item >= count)
+        {
+            break;
+        }
+        const int lit = item == combo->drop_item;
+        const uint32_t fg = lit ? tf_colour(TF_COLOUR_HIGHLIGHT_TEXT) : text;
+        const uint32_t bg = lit ? tf_colour(TF_COLOUR_HIGHLIGHT_BACK) : back;
+        tf_screen_fill(x + 1, y + 1 + r, w - 2, 1, ' ', fg, bg);
+        tf_screen_text(x + 1, y + 1 + r, tf_str_cstr(combo->items[item]), w - 2, fg, bg);
+    }
+    if (count > rows)
+    {
+        draw_bar(x + w - 1, y + 1, rows, 0, count, rows, combo->drop_top);
+    }
+    form->pop_x = x;
+    form->pop_y = y;
+    form->pop_w = w;
+    form->pop_h = h;
+}
+
 static void draw_frame(const tf_control *frame, int x, int y, int w, int h)
 {
     const int on = usable(frame);
@@ -1990,6 +2205,11 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
     int x = bar_x(form, form->menu_top, bar_left);
     x = x + w > cols ? (cols - w < 0 ? 0 : cols - w) : x;
     const int y = bar_y + 1;
+    tf_control *owner = (tf_control *)form;
+    owner->pop_x = x;
+    owner->pop_y = y;
+    owner->pop_w = w;
+    owner->pop_h = h;
 
     const shade m = shade_of(TF_COLOUR_MENU_BACK);
     const uint32_t lit_text = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
@@ -2163,13 +2383,25 @@ static void draw_one(tf_control *form)
             case TF_CTL_LISTBOX:
                 draw_list(c, x, y, room, rows_left, focused);
                 break;
+            case TF_CTL_COMBOBOX:
+                draw_combo(c, x, y, room, focused || form->open_list == c);
+                break;
             default:
                 break;
         }
     }
+    /* The popup last, over the controls; only on the top form. */
+    if (form->open_list != NULL && (!on_top || !form->open_list->drawn || !usable(form->open_list)))
+    {
+        form->open_list = NULL; /* hidden, disabled or moved off: closed */
+    }
     if (bar && on_top && form->menu_on && form->menu_down)
     {
-        draw_drop_down(form, ox + 1, oy + 1); /* last: over the controls */
+        draw_drop_down(form, ox + 1, oy + 1);
+    }
+    else if (form->open_list != NULL)
+    {
+        draw_combo_list(form, form->open_list);
     }
 }
 
@@ -2181,7 +2413,7 @@ static int focusable(const tf_control *c)
 {
     return (c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMMANDBUTTON ||
             c->type == TF_CTL_CHECKBOX || c->type == TF_CTL_OPTIONBUTTON ||
-            c->type == TF_CTL_LISTBOX) &&
+            c->type == TF_CTL_LISTBOX || c->type == TF_CTL_COMBOBOX) &&
            usable(c);
 }
 
@@ -2210,12 +2442,20 @@ static int tab_stop(const tf_control *form, int index)
     return 1;
 }
 
-/* Moves the focus to child index, firing LostFocus and GotFocus. */
+static void combo_close(tf_control *form, int choose);
+
+/* Moves the focus to child index, firing LostFocus and GotFocus. An open
+   ComboBox list closes, choosing its highlighted item (as Tab does in
+   Windows). */
 static void set_focus(tf_control *form, int index)
 {
     if (index == form->focus)
     {
         return;
+    }
+    if (form->open_list != NULL)
+    {
+        combo_close(form, 1);
     }
     const int was = form->focus;
     form->focus = index;
@@ -2422,12 +2662,187 @@ static int list_key(tf_control *list, tf_key key)
     return 1;
 }
 
+/* ---- The ComboBox ---- */
+
+/* Opens a ComboBox's list: DropDown first (the program may fill it then),
+   then the list, on the chosen item. */
+static void combo_open(tf_control *form, tf_control *combo)
+{
+    if (form->menu_on)
+    {
+        menu_close(form); /* one popup at a time */
+    }
+    fire(combo, TF_EVENT_DROPDOWN);
+    form->open_list = combo;
+    combo->drop_item = combo->list_index >= 0 ? combo->list_index : combo->item_count > 0 ? 0 : -1;
+    combo->drop_top = 0;
+}
+
+/* Closes the open list; with choose, its highlighted item is chosen. */
+static void combo_close(tf_control *form, int choose)
+{
+    tf_control *combo = form->open_list;
+    if (combo == NULL)
+    {
+        return;
+    }
+    form->open_list = NULL;
+    if (choose && combo->drop_item >= 0 && combo->drop_item < combo->item_count)
+    {
+        combo_choose(combo, combo->drop_item);
+    }
+}
+
+/* The item a letter goes to: the next after `from` (round the end) whose
+   text starts with it, ignoring ASCII case; -1 if none. */
+static int32_t combo_letter(const tf_control *combo, int32_t from, uint32_t letter)
+{
+    const uint32_t want = letter < 0x80 ? (uint32_t)lower_ascii((int)letter) : letter;
+    for (int32_t k = 1; k <= combo->item_count; ++k)
+    {
+        const int32_t i = ((from < 0 ? -1 : from) + k) % combo->item_count;
+        uint32_t cp = 0;
+        const tf_string *item = combo->items[i];
+        if (tf_str_lenb(item) > 0)
+        {
+            tf_utf8_decode(tf_str_cstr(item), tf_str_lenb(item), &cp);
+        }
+        if ((cp < 0x80 ? (uint32_t)lower_ascii((int)cp) : cp) == want && cp != 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Where Up, Down, PgUp, PgDn, Home or End go from item `from`; -2 if the
+   key is none of them. */
+static int32_t combo_step(const tf_control *combo, int32_t from, tf_key key)
+{
+    const int32_t last = combo->item_count - 1;
+    int32_t to = 0;
+    switch (key.kind)
+    {
+        case TF_KEY_UP:
+            to = from - 1;
+            break;
+        case TF_KEY_DOWN:
+            to = from + 1;
+            break;
+        case TF_KEY_PGUP:
+            to = from - (TF_COMBO_ROWS - 1);
+            break;
+        case TF_KEY_PGDN:
+            to = from + (TF_COMBO_ROWS - 1);
+            break;
+        case TF_KEY_HOME:
+            to = 0;
+            break;
+        case TF_KEY_END:
+            to = last;
+            break;
+        default:
+            return -2;
+    }
+    if (last < 0)
+    {
+        return -1;
+    }
+    return to < 0 ? 0 : to > last ? last : to;
+}
+
+/* A key for a ComboBox. F4 or Alt+Down (or Alt+Up) opens or closes its
+   list. While the list is open the moving keys, Enter and Esc are its
+   own (Esc never reaching the Cancel button). Closed, Up and Down choose
+   the item before or after; Style 2 takes Home, End, PgUp, PgDn and
+   letters too, Style 0 gives the rest to its text. */
+static int combo_key(tf_control *form, tf_control *combo, tf_key key)
+{
+    const int open = form->open_list == combo;
+    const int alt_arrow =
+        (key.kind == TF_KEY_DOWN || key.kind == TF_KEY_UP) && (key.mods & TF_MOD_ALT) != 0;
+    if ((key.kind == TF_KEY_F && key.ch == 4 && key.mods == 0) || alt_arrow)
+    {
+        if (open)
+        {
+            combo_close(form, 1);
+        }
+        else
+        {
+            combo_open(form, combo);
+        }
+        return 1;
+    }
+    const int arrow = key.kind == TF_KEY_UP || key.kind == TF_KEY_DOWN;
+    const int moving = arrow || ((open || combo->style == 2) &&
+                                 (key.kind == TF_KEY_PGUP || key.kind == TF_KEY_PGDN ||
+                                  key.kind == TF_KEY_HOME || key.kind == TF_KEY_END));
+    if (open)
+    {
+        if (moving)
+        {
+            const int32_t to = combo_step(combo, combo->drop_item, key);
+            combo->drop_item = to >= 0 ? to : combo->drop_item;
+            return 1;
+        }
+        if (key.kind == TF_KEY_ENTER || key.kind == TF_KEY_ESC)
+        {
+            combo_close(form, key.kind == TF_KEY_ENTER);
+            return 1;
+        }
+        if (combo->style == 2)
+        {
+            if (key.kind == TF_KEY_CHAR)
+            {
+                const int32_t to = combo_letter(combo, combo->drop_item, key.ch);
+                combo->drop_item = to >= 0 ? to : combo->drop_item;
+            }
+            return 1; /* the list only: nothing else to do with a key */
+        }
+    }
+    else if (moving)
+    {
+        const int32_t from = combo->list_index;
+        const int32_t to = from < 0 && key.kind == TF_KEY_DOWN && combo->item_count > 0
+                               ? 0
+                               : combo_step(combo, from < 0 ? 0 : from, key);
+        if (to >= 0)
+        {
+            combo_choose(combo, to);
+        }
+        return 1;
+    }
+    else if (combo->style == 2)
+    {
+        if (key.kind == TF_KEY_CHAR)
+        {
+            const int32_t to = combo_letter(combo, combo->list_index, key.ch);
+            if (to >= 0)
+            {
+                combo_choose(combo, to);
+            }
+            return 1;
+        }
+        return 0;
+    }
+    /* Style 0's text, as a TextBox (Enter and Esc go on to the buttons). */
+    const int used = tf_edit_key(&combo->edit, key);
+    if (used == TF_EDIT_CHANGED)
+    {
+        combo->list_index = -1; /* typed text is not an item, as VB */
+        fire(combo, TF_EVENT_CHANGE);
+    }
+    return used != TF_EDIT_UNUSED;
+}
+
 /* A key for the focused control; 0 if it does not use it (so Enter can
    press the Default button). */
 static int control_key(tf_control *form, tf_control *c, tf_key key)
 {
     switch (c->type)
     {
+        case TF_CTL_COMBOBOX:
+            return combo_key(form, c, key);
         case TF_CTL_TEXTBOX:
         {
             /* Only what editing uses: Enter (in a single-line box) and Esc
@@ -2820,12 +3235,89 @@ static void multiline_mouse(tf_control *c, tf_key key, int double_click, int dra
     }
 }
 
+/* While a ComboBox's list is open, the mouse works it: a press on an item
+   highlights it and the release there chooses it (so does pressing the box
+   and dragging onto one); a press on its scroll bar or the wheel scrolls
+   it; a press anywhere else, the box included, closes it and does nothing
+   more (as the menus). */
+static void combo_list_mouse(tf_control *form, tf_key key)
+{
+    tf_control *combo = form->open_list;
+    const int inside = key.x >= form->pop_x && key.x < form->pop_x + form->pop_w &&
+                       key.y >= form->pop_y && key.y < form->pop_y + form->pop_h;
+    const int rows = form->pop_h - 2;
+    const int row = key.y - form->pop_y - 1;
+    const int in_rows = inside && row >= 0 && row < rows;
+    const int on_bar =
+        in_rows && combo->item_count > rows && key.x == form->pop_x + form->pop_w - 1;
+    int32_t item = -1;
+    if (in_rows && !on_bar && key.x > form->pop_x && key.x < form->pop_x + form->pop_w - 1 &&
+        combo->drop_top + row < combo->item_count)
+    {
+        item = combo->drop_top + row;
+    }
+    switch (key.ch)
+    {
+        case TF_MOUSE_PRESS:
+            pressed = NULL;
+            if (on_bar)
+            {
+                const int32_t room = combo->item_count - rows;
+                combo->drop_top = rows > 1 ? (int32_t)((int64_t)room * row / (rows - 1)) : 0;
+                combo->drop_item = combo->drop_item < combo->drop_top ? combo->drop_top
+                                   : combo->drop_item >= combo->drop_top + rows
+                                       ? combo->drop_top + rows - 1
+                                       : combo->drop_item;
+            }
+            else if (item >= 0)
+            {
+                combo->drop_item = item;
+            }
+            else if (!inside)
+            {
+                combo_close(form, 0);
+            }
+            break;
+        case TF_MOUSE_DRAG:
+            if (item >= 0)
+            {
+                combo->drop_item = item;
+            }
+            break;
+        case TF_MOUSE_RELEASE:
+            if (item >= 0 && item == combo->drop_item)
+            {
+                combo_close(form, 1);
+            }
+            break;
+        case TF_MOUSE_WHEEL_UP:
+        case TF_MOUSE_WHEEL_DOWN:
+            if (inside)
+            {
+                /* Drawing keeps the highlighted item in view, so it moves
+                   with the rows, as the keys would. */
+                const int32_t step = key.ch == TF_MOUSE_WHEEL_UP ? -3 : 3;
+                int32_t to = combo->drop_item + step;
+                to = to < 0 ? 0 : to >= combo->item_count ? combo->item_count - 1 : to;
+                combo->drop_item = combo->item_count > 0 ? to : -1;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
 static void form_mouse(tf_control *form, tf_key key)
 {
     const int hit = control_at(form, key.x, key.y);
     if (form->menu_on)
     {
         menu_mouse(form, key, hit);
+        return;
+    }
+    if (form->open_list != NULL)
+    {
+        combo_list_mouse(form, key);
         return;
     }
     tf_control *c = hit >= 0 ? form->children[hit] : NULL;
@@ -2862,7 +3354,13 @@ static void form_mouse(tf_control *form, tf_key key)
             {
                 multiline_mouse(c, key, double_click, 0);
             }
-            else if (c->type == TF_CTL_TEXTBOX)
+            else if (c->type == TF_CTL_COMBOBOX &&
+                     (c->style == 2 || key.x >= c->at_x + c->at_w - 1))
+            {
+                pressed = NULL;
+                combo_open(form, c); /* the list only, or the arrow */
+            }
+            else if (c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMBOBOX)
             {
                 const int32_t cp = box_code_point_at(c, key.x - c->at_x);
                 if (double_click)
@@ -2886,7 +3384,9 @@ static void form_mouse(tf_control *form, tf_key key)
             {
                 multiline_mouse(pressed, key, 0, 1);
             }
-            else if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn)
+            else if (pressed != NULL &&
+                     (pressed->type == TF_CTL_TEXTBOX || pressed->type == TF_CTL_COMBOBOX) &&
+                     pressed->drawn)
             {
                 const int dx = key.x - pressed->at_x;
                 tf_edit_place(&pressed->edit, box_code_point_at(pressed, dx < 0 ? 0 : dx), 1);
@@ -3034,6 +3534,11 @@ static int form_key(tf_control *form, tf_key key)
     if (option_hint(form, key))
     {
         return 0;
+    }
+    if (form->open_list != NULL &&
+        (is_menu_bar_key(key) || (key.kind == TF_KEY_ALT && menu_access(form, form, key.ch) >= 0)))
+    {
+        combo_close(form, 0); /* the menus open instead: one popup at a time */
     }
     if (menu_first(form, key))
     {
@@ -3425,7 +3930,8 @@ static void keep_design(tf_control *c)
 {
     tf_design *d = tf_xcalloc(1, sizeof *d);
     d->caption = tf_str_ref(c->caption);
-    d->text = tf_str_ref(c->type == TF_CTL_TEXTBOX ? c->edit.text : c->text);
+    d->text = tf_str_ref(c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMBOBOX ? c->edit.text
+                                                                                 : c->text);
     d->password = tf_str_ref(c->password);
     d->left = c->left;
     d->top = c->top;
@@ -3453,7 +3959,7 @@ static void restore_design(tf_control *c)
 {
     const tf_design *d = c->design;
     tf_str_assign(&c->caption, tf_str_ref(d->caption));
-    if (c->type == TF_CTL_TEXTBOX)
+    if (c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMBOBOX)
     {
         tf_edit_set_text(&c->edit, d->text);
         c->scroll = 0;
@@ -3481,9 +3987,13 @@ static void restore_design(tf_control *c)
     c->sorted = d->sorted;
     c->edit.locked = d->locked;
     c->password_char = d->password_char;
-    c->edit.concealed = d->password_char != 0;
+    c->edit.concealed = d->password_char != 0 && !c->edit.multi_line;
     c->shortcut = d->shortcut;
     tf_list_clear(c);
+    if (c->type == TF_CTL_COMBOBOX)
+    {
+        tf_edit_set_text(&c->edit, d->text); /* Clear emptied it, as VB's Clear does */
+    }
 }
 
 static void free_design(tf_control *c)
@@ -3546,6 +4056,7 @@ void tf_form_hide(tf_control *form)
         last_closed = form; /* the screen the user last saw, for a headless dump */
     }
     remove_from_stack(form);
+    form->open_list = NULL; /* its popup goes with it */
     if (active == form)
     {
         active = NULL;

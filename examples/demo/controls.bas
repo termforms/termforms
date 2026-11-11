@@ -1,4 +1,5 @@
-' controls.bas -- Labels, TextBoxes (MaxLength, PasswordChar, Locked),
+' controls.bas -- Labels, TextBoxes (MaxLength, PasswordChar, Locked; a
+' multi-line one with a vertical scroll bar, where Enter starts a line),
 ' CheckBoxes (Italic starts grey, VB's third state, drawn [-]),
 ' OptionButtons in two Frames (two groups), Default and Cancel.
 Begin Form frmControls
@@ -66,6 +67,21 @@ Begin Form frmControls
         Top = 2
         Width = 18
         Value = 2
+    End
+    Begin Label lblNotes
+        Caption = "N&otes:"
+        Left = 42
+        Top = 3
+        Width = 10
+    End
+    Begin TextBox txtNotes
+        Left = 42
+        Top = 4
+        Width = 15
+        Height = 7
+        MultiLine = True
+        ScrollBars = 2
+        Text = "Enter starts a new line here."
     End
     Begin Frame fraSize
         Caption = "Size"
@@ -172,6 +188,10 @@ End Sub
 
 Sub txtLocked_KeyDown(ByRef KeyCode As Integer, Shift As Integer)
     Note "txtLocked KeyDown " & KeyCode & " shift " & Shift
+End Sub
+
+Sub txtNotes_Change()
+    Note "txtNotes Change: " & Len(txtNotes.Text) & " characters"
 End Sub
 
 Sub chkBold_Click()

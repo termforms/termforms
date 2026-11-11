@@ -646,7 +646,8 @@ enum class EventKind
     GotFocus,
     LostFocus,
     KeyPress,
-    KeyDown
+    KeyDown,
+    DropDown
 };
 
 struct Procedure

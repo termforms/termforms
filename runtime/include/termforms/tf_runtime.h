@@ -640,6 +640,7 @@ typedef enum tf_control_type
     TF_CTL_OPTIONBUTTON,
     TF_CTL_FRAME,
     TF_CTL_LISTBOX,
+    TF_CTL_COMBOBOX, /* a ListBox's items with one shown, and a list that drops down */
     TF_CTL_TIMER,
     TF_CTL_MENU /* in the menu bar (its container the form) or in a menu */
 } tf_control_type;
@@ -674,7 +675,8 @@ typedef enum tf_prop
     TF_PROP_LOCKED,       /* TextBox: the user may select and copy, not change */
     TF_PROP_PASSWORDCHAR, /* TextBox: shown for every character; "" shows the text */
     TF_PROP_MULTILINE,    /* TextBox (form block only): Enter starts a new line */
-    TF_PROP_SCROLLBARS    /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
+    TF_PROP_SCROLLBARS,   /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
+    TF_PROP_STYLE         /* ComboBox (form block only): 0 text and list, 2 list only */
 } tf_prop;
 
 typedef enum tf_event
@@ -690,6 +692,7 @@ typedef enum tf_event
     TF_EVENT_LOSTFOCUS,
     TF_EVENT_KEYPRESS, /* a tf_ref_handler of KeyAscii: 0 discards the key */
     TF_EVENT_KEYDOWN,  /* a tf_key_handler: KeyCode 0 discards the key */
+    TF_EVENT_DROPDOWN, /* a ComboBox, just before its list opens */
     TF_EVENT_COUNT
 } tf_event;
 

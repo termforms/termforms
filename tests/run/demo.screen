@@ -3,11 +3,11 @@
  │ File  Forms  View  Help                                                    │
  │ Every v1 control, the menus, ┌ Event log ─────────────────────────────────┐│
  │ dialogs, Timers and the      │ ┌────────────────────────────────────────┐ ││
- │ mouse. 中文 and 日本語 take  │ │OK: Ann 安abc, code 123, bold 1         ↑ ││
- │ two cells each.              │ │frmControls Unload                      │ ││
- │                              │ │back from Controls                      │ ││
+ │ mouse. 中文 and 日本語 take  │ │frmControls Unload                      ↑ ││
+ │ two cells each.              │ │back from Controls                      │ ││
  │                              │ │frmDemo Activate                        │ ││
- │      < Controls... >         │ │cmdLists Click                          │ ││
+ │                              │ │cmdLists Click                          │ ││
+ │      < Controls... >         │ │cboSize Click: Medium                   │ ││
  │                              │ │frmLists Load: 12 fruit                 │ ││
  │        < Lists... >          │ │lstFruit Click: apple                   │ ││
  │                              │ │lstFruit Click: banana                  │ ││

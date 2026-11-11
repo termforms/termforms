@@ -1,0 +1,18 @@
+
+
+   ┌──────────────────── Combo ─────────────────────┐
+   │grey           ▼  Cairo          ▼  < Cancel >  │
+   │┌──────────────┐                                │
+   ││black         █ E380 C:7:red C:-1: n=10        │
+   ││blue          █ style=2/0 | C:0:black C:1:blue │
+   ││brown         █ C:2:brown D D C:1:blue ch:A:-1 │
+   ││green         █ ch:At:-1 ch:Ath:-1 c:0:Athens d│
+   ││grey          █ c:2:Cairo D C:4:grey D         │
+   ││orange        █                                │
+   ││purple        ░                                │
+   ││red           ░                                │
+   │└──────────────┘                                │
+   │                                                │
+   │                                                │
+   │                                                │
+   └────────────────────────────────────────────────┘
