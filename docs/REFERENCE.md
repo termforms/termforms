@@ -1757,8 +1757,55 @@ layout are still to be designed with Jim before any code.
 - **First version:** placing, moving and resizing controls with the
   mouse and the keyboard; a property sheet; tab order; handler stubs.
   The menu editor comes in the second version.
-- **Still to design (with Jim):** the designer's own screen. The two
-  language pieces it needs are below.
+- **Dropping a control on a Frame puts it inside**; dragging it out of
+  the Frame takes it out (VB needed cut and paste).
+- **View Code (F7)** opens the `.bas` at the handler's line in
+  `$VISUAL`, else `$EDITOR`, as git does, handing the terminal over
+  (Shell) while it runs; with neither set, the status line gives the
+  file and line. The designer is not an IDE: it works within whatever
+  editor the programmer uses.
+- **One form at a time**; File > Open switches.
+- **The screen** (sketched with Jim, 11 Nov 2026): the designer fills
+  the terminal (see "Screen and Form_Resize", Proposed). The menu bar
+  (File, Edit, View, Add, Help); on the left the Toolbox, the form's
+  Timers and a box about the form with the tab-order button; in the
+  middle a FormView, the form drawn on the backdrop as it will run; on
+  the right a ComboBox choosing the control, its properties with their
+  values (Enter edits one in a box below: a TextBox, or a ComboBox for
+  True/False and fixed choices) and its events (a mark on those with a
+  handler; Enter writes the stub); at the bottom the selected control's
+  place and size, and the keys that work now. A control is added by
+  choosing it in the Toolbox and clicking on the form (Enter in the
+  Toolbox, or the Add menu, puts it at the next free place). The
+  selection is drawn in the focus colours with a handle (◢) past its
+  bottom-right corner: drag the control to move it, the handle to size
+  it, live; arrows move it a cell, Shift+arrows size it, `[` and `]`
+  select the previous or next control in tab order. Double-clicking a
+  control writes its usual event's handler (Click; Change for a
+  TextBox). Tab-order mode numbers the controls and they are clicked in
+  the order wanted. Undo and Redo go back through every change. For
+  this, the FormView also draws tab-order numbers (`TabNumbers`) and the
+  selection's handle.
+
+### Screen and Form_Resize (after v1: Proposed)
+
+Forms stay a fixed size in the sense that the runtime never resizes
+one; but a program may size its own form to the terminal, and is told
+when the terminal changes. The designer uses it to fill the terminal.
+VB had both: `Screen.Width` and `Screen.Height`, and `Form_Resize`.
+
+- **`Screen.Width` and `Screen.Height`**: the terminal's size in cells,
+  read-only (a headless run: its size, `TERMFORMS_HEADLESS_SIZE`).
+- **A form's Width and Height may be set in code** (as now); the form is
+  centred again at its new size.
+- **`Sub Form_Resize()`** runs when the form is first shown (after
+  Load, before Activate, as VB) and whenever the terminal's size
+  changes, for each shown form, the bottom of the stack first. A
+  handler typically sets Me.Width and Me.Height from Screen and moves
+  or sizes its controls. A form still larger than the terminal shows
+  "Please resize", as now.
+- **No restart** is needed: a terminal made larger simply gives a
+  bigger form at the next Resize.
 
 ### MouseDown, MouseMove and MouseUp (after v1: Settled, Jim, 11 Nov 2026)
 

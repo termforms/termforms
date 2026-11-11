@@ -619,7 +619,11 @@ authoritative for design rationale.
   described in code (Clear/AddControl/SetProperty with String values,
   Selected, ControlAt, ScrollX/Y, focusable), the runtime's property
   names from a table tfc writes out of its catalog, `tfc --catalog`.
-  Still to design with Jim before code: the designer's screen. Also open: step 7 of the
+  The screen was sketched and settled (11 Nov 2026; REFERENCE.md
+  "Visual designer": dropping onto a Frame puts a control inside, F7
+  opens $VISUAL/$EDITOR at the handler, one form at a time). The
+  designer fills the terminal: `Screen.Width/Height` and `Form_Resize`
+  ("Screen and Form_Resize") are Proposed, awaiting Jim. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
