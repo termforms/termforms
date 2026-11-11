@@ -518,8 +518,27 @@ authoritative for design rationale.
   grey on black with its selection black on cyan, a ListBox selection
   black on cyan (focused) or grey on black. REFERENCE.md "Colours that
   every scheme keeps apart" lists the safe pairs; keep to them.
-- **Next:** Jim deploys syncfix to the NAS servers and uses it in
-  earnest; then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
+- **syncfix in use (Jim, 11 Nov 2026):** it resolved a real conflict
+  on greece (the original kept; Syncthing then settled it). On the
+  Hermes VPS, Syncthing runs natively as the system user `hermes`
+  (`syncthing@hermes`, home /var/lib/hermes, config.xml mode 600;
+  Hermes Agent alone is in Docker), so syncfix is installed in
+  /usr/local/bin and run as `sudo -u hermes -H syncfix` (an alias in
+  Jim's .bashrc); no change to syncfix was needed. Jim rebuilt it with
+  0.9.3 and prefers the fixed colours; trying them across terminal
+  themes is still to do.
+- **v1 widened (Jim, 11 Nov 2026; REFERENCE.md "Multi-line TextBox
+  and ComboBox"):** v1 now includes the multi-line TextBox and the
+  ComboBox (Styles 0 and 2; not 1) and is tagged only once they are
+  built; the visual designer is the line after v1 (probably v2). Settled:
+  Enter in a multi-line box always starts a new line; lines separated by
+  vbLf (CR LF set by code or pasted becomes LF); no auto-complete or
+  ListRows. The rest of that section is Proposed. Planned order: (1)
+  multi-line TextBox (tf_edit gains line moves; layout at draw time),
+  (2) a general popup layer per form with the menu drop-down moved onto
+  it (behaviour unchanged), (3) ComboBox Style 2, then Style 0, sharing
+  the ListBox's items. The project plan records the change.
+- **Next:** build those, then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
@@ -622,9 +641,10 @@ authoritative for design rationale.
   directive; a visual designer rewrites only that block.
 - **v1 controls:** Label, TextBox (single-line), CommandButton, CheckBox,
   OptionButton, ListBox, Frame, Timer; menus (F10 + Alt accelerators, Ctrl
-  alternatives for every function key); MsgBox, InputBox. ComboBox and
-  multi-line TextBox soon after v1 — so the TextBox sits on a general
-  edit-buffer model and the renderer needs an overlay (z-order) layer.
+  alternatives for every function key); MsgBox, InputBox; ComboBox
+  (Styles 0, 2) and multi-line TextBox (added to v1 11 Nov 2026) — so the
+  TextBox sits on a general edit-buffer model and the renderer needs an
+  overlay (z-order) layer.
 - **Library v1:** Dictionary (string-keyed); Dir$, Kill, MkDir, RmDir,
   ChDir, CurDir$; Open/Line Input/Print #/Close; Command$, Environ$, Shell;
   Now, Timer, Date$, Time$. Proper Date type deferred.
@@ -875,9 +895,9 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- No ComboBox, multi-line TextBox, ScrollBar (after v1, on tf_edit and
-  the overlay); no MouseDown/Up/Move events; the clipboard is the
-  program's own.
+- No ScrollBar control or ComboBox Style 1 (after v1); the ComboBox and
+  multi-line TextBox are in v1 but not yet built; no MouseDown/Up/Move
+  events; the clipboard is the program's own.
 - Combining marks are not drawn (a cell holds one character); text
   that relies on them shows the base letters.
 - **Post-v1 (Jim, 29 Oct 2026): file and folder dialogs**, built at run

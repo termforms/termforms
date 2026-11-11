@@ -1540,6 +1540,54 @@ off. The rest:
   with cells counted from 0,0 at the screen's top left.
 - No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
 
+### Multi-line TextBox and ComboBox (in v1: Settled, Jim, 11 Nov 2026; details Proposed)
+
+Settled: both are in v1, which waits for them (the visual designer is
+the line after v1). In a multi-line TextBox **Enter always starts a new
+line**, never pressing the Default button (unlike VB6, where Ctrl+Enter
+does that, but a terminal sends Ctrl+Enter as Enter). **Lines are
+separated by `vbLf`**: CR LF in text the program sets, or in a paste,
+becomes LF. The ComboBox has **Style 0** (a text box with a drop-down
+list) **and Style 2** (a drop-down list only); Style 1 (the list always
+showing) is left out. No auto-complete and no ListRows in v1.
+
+The rest is Proposed:
+
+- **Multi-line TextBox.** `MultiLine = True` is set in the form block
+  only (as VB). Everything in "TextBox editing" holds, plus Up and Down
+  (keeping the column they started from), PgUp and PgDn, Ctrl+Home and
+  Ctrl+End, and Shift with each to select. Tab moves the focus (as VB);
+  a tab in the text shows as spaces to the next 8-column stop. A paste
+  keeps its line breaks (and tabs).
+- **ScrollBars** 0 none, 1 horizontal, 2 vertical, 3 both, set in the
+  form block only. As VB: without a horizontal bar the lines wrap at the
+  box's width (at a space where there is one, measured in cells), with
+  one they scroll sideways. The box draws its own bars inside its area,
+  a thumb that a click or a drag moves; the wheel scrolls three rows.
+- **ComboBox.** `Style` 0 or 2, set in the form block only (1 is a
+  compile error). Items as the ListBox: AddItem, RemoveItem, Clear,
+  List(i), ListCount, ListIndex, Sorted, TopIndex. Style 0's text part
+  is a TextBox's edit buffer (SelStart, SelLength, SelText, MaxLength,
+  Locked); Text is what it shows. Style 2's Text is the chosen item
+  (read-only; setting ListIndex chooses).
+- **Keys**: F4 or Alt+Down opens the list, and again closes it; Up and
+  Down choose the previous or next item without opening it; in Style 2
+  a letter chooses the next item starting with it. While the list is
+  open the keys are its own: Up, Down, PgUp, PgDn, Home, End move,
+  Enter chooses and closes, Esc closes with nothing chosen (and never
+  reaches the Cancel button), Tab chooses and moves on.
+- **Events**: Click when the chosen item changes (by keys, mouse or
+  code), Change when Style 0's text is edited (by the user or code, as
+  the TextBox), DropDown just before the list opens (the program may
+  fill it then), GotFocus, LostFocus, KeyPress, KeyDown.
+- **The list** shows up to 8 rows below the box, or above it when the
+  screen has no room below, with a scroll bar when there are more; it
+  may reach past the form's edge, as a menu does. A click on an item
+  chooses it; a click elsewhere closes it and does nothing more.
+- **One popup at a time**: an open list or menu is drawn over the form,
+  takes the mouse and keys first, and closes when the other opens or
+  the form loses the top of the stack.
+
 ### Character widths (Settled, Jim, 28 Oct 2026)
 
 Settled: the tables come from Python's unicodedata by a script in
