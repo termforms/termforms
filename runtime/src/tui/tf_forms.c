@@ -3972,6 +3972,44 @@ static void ui_open(void)
     tf_set_shutdown_hook(ui_shutdown);
 }
 
+/* The terminal's size: the screen's once forms are up; before that (Sub
+   Main, Form_Load, a console program) asked of the terminal, or the
+   headless size a test gives. */
+static void terminal_cells(int *cols, int *rows)
+{
+    if (ui_is_open)
+    {
+        tf_screen_size(cols, rows);
+        return;
+    }
+    *cols = 80;
+    *rows = 25;
+    if (tf_platform_getenv("TERMFORMS_HEADLESS") != NULL)
+    {
+        parse_size(tf_platform_getenv("TERMFORMS_HEADLESS_SIZE"), cols, rows);
+    }
+    else
+    {
+        tf_term_size(cols, rows);
+    }
+}
+
+int32_t tf_terminal_width(void)
+{
+    int cols = 0;
+    int rows = 0;
+    terminal_cells(&cols, &rows);
+    return cols;
+}
+
+int32_t tf_terminal_height(void)
+{
+    int cols = 0;
+    int rows = 0;
+    terminal_cells(&cols, &rows);
+    return rows;
+}
+
 static int in_stack(const tf_control *form)
 {
     for (int i = 0; i < depth; ++i)
@@ -4064,6 +4102,23 @@ static void handle(tf_key key)
             int rows = 24;
             tf_term_size(&cols, &rows);
             tf_screen_init(cols, rows, 1);
+        }
+        else if (key.x > 0 && key.y > 0)
+        {
+            tf_screen_init(key.x, key.y, 0); /* a key script's {RESIZE} */
+        }
+        /* Resize to each shown form, the bottom first, so each can fit
+           itself to the terminal; a handler may change the stack, so it
+           goes to those still shown. */
+        tf_control *shown_now[TF_STACK_MAX];
+        const int count = depth;
+        memcpy(shown_now, stack, sizeof(tf_control *) * (size_t)count);
+        for (int i = 0; i < count; ++i)
+        {
+            if (in_stack(shown_now[i]))
+            {
+                fire(shown_now[i], TF_EVENT_RESIZE);
+            }
         }
         return;
     }
@@ -4278,7 +4333,12 @@ void tf_form_show(tf_control *form, int32_t modal)
 {
     tf_form_load(form);
     ui_open();
+    const int was_shown = in_stack(form);
     push(form);
+    if (!was_shown)
+    {
+        fire(form, TF_EVENT_RESIZE); /* after Load, before Activate, as VB */
+    }
     if (modal)
     {
         run_loop(form);

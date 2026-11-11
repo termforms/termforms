@@ -80,7 +80,9 @@ const std::vector<ControlType> &types()
           {"Visible", Type::Boolean, "TF_PROP_VISIBLE", true}},
          mouse({{"Load", EventKind::Load, "TF_EVENT_LOAD"},
                 {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
-                {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}})},
+                {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"},
+                // When shown, and whenever the terminal's size changes.
+                {"Resize", EventKind::Resize, "TF_EVENT_RESIZE"}})},
         {"TextBox", "TF_CTL_TEXTBOX",
          focusable({{"Text", Type::String, "TF_PROP_TEXT"},
                     {"SelStart", Type::Integer, "TF_PROP_SELSTART"},

@@ -1799,14 +1799,18 @@ VB had both: `Screen.Width` and `Screen.Height`, and `Form_Resize`.
   read-only (a headless run: its size, `TERMFORMS_HEADLESS_SIZE`).
 - **A form's Width and Height may be set in code** (as now); the form is
   centred again at its new size.
-- **`Sub Form_Resize()`** runs when the form is first shown (after
-  Load, before Activate, as VB) and whenever the terminal's size
-  changes, for each shown form, the bottom of the stack first. A
+- **`Sub Form_Resize()`** runs when the form is shown (after Load,
+  before Activate, as VB; again each time it is shown after a Hide, as
+  the terminal may have changed meanwhile) and whenever the terminal's
+  size changes, for each shown form, the bottom of the stack first. A
   handler typically sets Me.Width and Me.Height from Screen and moves
   or sizes its controls. A form still larger than the terminal shows
   "Please resize", as now.
 - **No restart** is needed: a terminal made larger simply gives a
   bigger form at the next Resize.
+- Before any form is shown (Sub Main, Form_Load, a console program),
+  Screen asks the terminal itself (80 x 25 if there is none).
+- Key scripts: `{RESIZE 100x30}`, the terminal now that size.
 
 ### MouseDown, MouseMove and MouseUp (after v1: Settled, Jim, 11 Nov 2026)
 

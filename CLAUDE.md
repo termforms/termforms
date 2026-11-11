@@ -633,7 +633,14 @@ authoritative for design rationale.
   tf_forms.c `mouse_target`/`mouse_button` (capture), `fire_mouse`,
   `mouse_owner`, `still_handling`, `other_button` (right/middle: events
   only); a form's at_x.. are its client area. vbLeftButton etc. named
-  constants. Run test mouse_events; errors/mouse_events. Also open: step 7 of the
+  constants. Run test mouse_events; errors/mouse_events.
+  Screen and Form_Resize done (11 Nov 2026): `Screen.Width/Height`
+  become Builtin::ScreenWidth/Height (`resolveScreenMember`, `Screen`
+  claimed like App; runtime tf_terminal_width/height, asking the
+  terminal before ui_open); TF_EVENT_RESIZE fired by tf_form_show on
+  showing a hidden form and by `handle` on TF_KEY_RESIZE to every shown
+  form, bottom first; key scripts `{RESIZE 100x30}`. Run test resize;
+  errors/screen. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

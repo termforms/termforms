@@ -1,0 +1,4 @@
+screen.bas:4:9: error: 'Screen' is the built-in object for the terminal
+screen.bas:6:12: error: Screen's properties are read-only
+screen.bas:7:16: error: Screen has no property 'Depth' (it has Width and Height)
+screen.bas:8:9: error: Screen is used through its properties, as in Screen.Width

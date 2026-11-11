@@ -698,6 +698,7 @@ typedef enum tf_event
     TF_EVENT_MOUSEDOWN, /* a tf_mouse_handler, as are MouseMove and MouseUp */
     TF_EVENT_MOUSEMOVE, /* only while a button is held */
     TF_EVENT_MOUSEUP,
+    TF_EVENT_RESIZE, /* a form: shown, or the terminal's size changed */
     TF_EVENT_COUNT
 } tf_event;
 
@@ -728,6 +729,11 @@ void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handl
 void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler handler);
 void tf_control_on_key(tf_control *control, tf_key_handler handler); /* KeyDown */
 void tf_control_on_mouse(tf_control *control, tf_event event, tf_mouse_handler handler);
+
+/* Screen.Width and Screen.Height: the terminal's size in cells (a
+   headless run's, TERMFORMS_HEADLESS_SIZE). */
+int32_t tf_terminal_width(void);
+int32_t tf_terminal_height(void);
 
 /* Property access. Setters borrow the value; tf_get_str returns borrowed. */
 void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value);

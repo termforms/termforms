@@ -8,7 +8,8 @@
  *   {ENTER} {TAB} {BACKTAB} {BKSP} {DEL} {LEFT} {RIGHT} {UP} {DOWN}
  *   {HOME} {END} {ESC} {F1}..{F12} {CTRL+<letter>} {ALT+<letter>}, CTRL+ /
  *   ALT+ / SHIFT+ before F<n> or a name ({CTRL+F4}, {SHIFT+LEFT}), {WAIT n}
- *   (n ms pass, so Timers run), the mouse at cell x,y (from 0, 0 at the
+ *   (n ms pass, so Timers run), {RESIZE 100x30} (the terminal is now that
+ *   size, as when the user resizes the window), the mouse at cell x,y (from 0, 0 at the
  *   top left): {CLICK x,y} {DBLCLICK x,y} {PRESS x,y} {DRAG x,y}
  *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, the button events
  *   with another button after the cell ({PRESS x,y,RIGHT}; LEFT, RIGHT,
@@ -224,6 +225,16 @@ static tf_key next_scripted(void)
             paste_at = name + 6;
             paste_end = name + length;
             return next_pasted();
+        }
+        if (length > 7 && strncmp(name, "RESIZE ", 7) == 0)
+        {
+            /* {RESIZE 100x30}: the terminal is now that size. */
+            key.kind = TF_KEY_RESIZE;
+            if (sscanf(name + 7, "%dx%d", &key.x, &key.y) != 2 || key.x <= 0 || key.y <= 0)
+            {
+                tf_fatal_error(TF_ERR_INVALID_ARGUMENT, "Unknown {key} in TERMFORMS_HEADLESS");
+            }
+            return key;
         }
         if (length > 5 && strncmp(name, "WAIT ", 5) == 0)
         {

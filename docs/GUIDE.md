@@ -472,6 +472,20 @@ and a control's `Left` and `Top` count from inside it (with a menu bar,
 from the row below it). The form is centred in the terminal; if the
 terminal is too small, it says so until it is resized.
 
+A form can instead fill the terminal, whatever its size. `Screen.Width`
+and `Screen.Height` are the terminal's size in cells, and the form's
+Resize event comes when it is shown (after Load, before Activate) and
+again whenever the terminal changes size:
+
+```vb
+Sub Form_Resize()
+    Me.Width = Screen.Width
+    Me.Height = Screen.Height
+    lstFiles.Height = Me.Height - 4          ' and lay out the rest to suit
+    cmdClose.Top = Me.Height - 3
+End Sub
+```
+
 Values in the form block are literals: numbers, `"text"`, `True`/`False`.
 Tab order is the order the controls are written in.
 
@@ -492,10 +506,11 @@ Tab order is the order the controls are written in.
 
 Every control that can take the focus also has CausesValidation, the
 SetFocus method, and the events GotFocus, LostFocus, Validate, KeyPress
-and KeyDown.
+and KeyDown. Every control but a Timer and a Menu also has MouseDown,
+MouseMove and MouseUp ("The mouse", below).
 
 The form itself has Caption, Width, Height, Visible (read-only) and the
-events Load, Activate and Unload. `Me` is the form whose module the code
+events Load, Activate, Resize and Unload, and the mouse events. `Me` is the form whose module the code
 is in.
 
 An access key (the letter after `&` in a Caption) is shown in its own

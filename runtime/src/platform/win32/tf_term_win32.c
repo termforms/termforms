@@ -231,7 +231,9 @@ int tf_term_read(unsigned char *buffer, int capacity, int timeout_ms)
 void tf_term_size(int *cols, int *rows)
 {
     CONSOLE_SCREEN_BUFFER_INFO info;
-    if (GetConsoleScreenBufferInfo(output_handle, &info))
+    /* Before tf_term_open (Screen.Width in Sub Main), the console itself. */
+    HANDLE handle = output_handle != NULL ? output_handle : GetStdHandle(STD_OUTPUT_HANDLE);
+    if (GetConsoleScreenBufferInfo(handle, &info))
     {
         *cols = info.srWindow.Right - info.srWindow.Left + 1;
         *rows = info.srWindow.Bottom - info.srWindow.Top + 1;

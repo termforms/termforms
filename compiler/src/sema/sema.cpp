@@ -567,6 +567,7 @@ private:
             }
             claimed["Err"] = "built-in object";
             claimed["App"] = "built-in object";
+            claimed["Screen"] = "built-in object";
         }
         auto [it, inserted] = claimed.emplace(name, what);
         if (!inserted)
@@ -1333,6 +1334,11 @@ private:
             diagnostics_.error(v.location, "'App' is the built-in object for the program itself");
             return;
         }
+        if (v.name == "Screen")
+        {
+            diagnostics_.error(v.location, "'Screen' is the built-in object for the terminal");
+            return;
+        }
         if (findBuiltin(v.name, 0) != nullptr)
         {
             diagnostics_.error(v.location, "'" + v.name + "' is the name of a built-in function");
@@ -1504,6 +1510,12 @@ private:
              target.builtin == Builtin::AppFullPath))
         {
             diagnostics_.error(target.location, "App's properties are read-only");
+            return;
+        }
+        if (target.kind == ExprKind::Call &&
+            (target.builtin == Builtin::ScreenWidth || target.builtin == Builtin::ScreenHeight))
+        {
+            diagnostics_.error(target.location, "Screen's properties are read-only");
             return;
         }
         diagnostics_.error(target.location, "this cannot be assigned to");
@@ -4566,6 +4578,28 @@ private:
         return Type::Error;
     }
 
+    // Screen.Width and Screen.Height: calls of the runtime functions that
+    // ask the terminal (read only; VB's Screen gave twips, this cells).
+    Type resolveScreenMember(Expr &e)
+    {
+        static const std::pair<const char *, Builtin> kMembers[] = {
+            {"Width", Builtin::ScreenWidth}, {"Height", Builtin::ScreenHeight}};
+        for (const auto &[name, id] : kMembers)
+        {
+            if (e.text == name)
+            {
+                e.kind = ExprKind::Call;
+                e.left.reset();
+                e.args.clear();
+                return checkStringFunction(e, std::string("Screen.") + name,
+                                           *findStringFunction(id));
+            }
+        }
+        diagnostics_.error(e.location,
+                           "Screen has no property '" + e.text + "' (it has Width and Height)");
+        return Type::Error;
+    }
+
     // -- Loops and leaving them --------------------------------------------
 
     void checkFor(Stmt &s)
@@ -4872,6 +4906,12 @@ private:
             diagnostics_.error(e.location, "App is used through its properties, as in App.Path");
             return Type::Error;
         }
+        if (e.text == "Screen")
+        {
+            diagnostics_.error(e.location,
+                               "Screen is used through its properties, as in Screen.Width");
+            return Type::Error;
+        }
         if (types_.count(e.text) != 0)
         {
             diagnostics_.error(e.location, "'" + e.text +
@@ -4984,6 +5024,10 @@ private:
         if (object.kind == ExprKind::Name && object.text == "App")
         {
             return resolveAppMember(e);
+        }
+        if (object.kind == ExprKind::Name && object.text == "Screen")
+        {
+            return resolveScreenMember(e);
         }
         if (object.kind == ExprKind::Name)
         {

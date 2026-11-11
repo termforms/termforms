@@ -152,6 +152,8 @@ enum class Builtin
     AppPath,
     AppExeName,
     AppFullPath,
+    ScreenWidth,
+    ScreenHeight,
     ConsolePrint,
     ConsoleLineInput,
     EndWith,
@@ -276,6 +278,9 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::AppPath, "", 0, {}, Type::String, "tf_app_path", false},
     {Builtin::AppExeName, "", 0, {}, Type::String, "tf_app_exename", false},
     {Builtin::AppFullPath, "", 0, {}, Type::String, "tf_app_fullpath", false},
+    // Screen.Width and Screen.Height: the terminal's size in cells.
+    {Builtin::ScreenWidth, "", 0, {}, Type::Integer, "tf_terminal_width", false},
+    {Builtin::ScreenHeight, "", 0, {}, Type::Integer, "tf_terminal_height", false},
     // Print (to standard output: the text, then 1 for a newline), Line
     // Input from standard input (the prompt), End n (the exit code).
     {Builtin::ConsolePrint, "SI", 2, {}, Type::Void, "tf_console_print", false},
@@ -652,7 +657,8 @@ enum class EventKind
     Validate,
     MouseDown,
     MouseMove,
-    MouseUp
+    MouseUp,
+    Resize
 };
 
 struct Procedure
