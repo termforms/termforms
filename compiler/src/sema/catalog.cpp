@@ -64,7 +64,10 @@ const std::vector<ControlType> &types()
                  {"SelText", Type::String, "TF_PROP_SELTEXT"},
                  {"MaxLength", Type::Integer, "TF_PROP_MAXLENGTH"},
                  {"Locked", Type::Boolean, "TF_PROP_LOCKED"},
-                 {"PasswordChar", Type::String, "TF_PROP_PASSWORDCHAR"}}),
+                 {"PasswordChar", Type::String, "TF_PROP_PASSWORDCHAR"},
+                 // Fixed at design time, as VB: they shape how the box lays out.
+                 {"MultiLine", Type::Boolean, "TF_PROP_MULTILINE", false, true},
+                 {"ScrollBars", Type::Integer, "TF_PROP_SCROLLBARS", false, true}}),
          focusEvents({{"Change", EventKind::Change, "TF_EVENT_CHANGE"}})},
         {"CommandButton", "TF_CTL_COMMANDBUTTON",
          placed({caption,

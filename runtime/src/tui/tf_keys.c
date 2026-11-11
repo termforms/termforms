@@ -9,9 +9,11 @@
  *
  * A bracketed paste (the terminal sends ESC [ 200 ~ before pasted text and
  * ESC [ 201 ~ after it, once the forms layer asks with mode 2004) comes
- * out as the characters alone: its line breaks and tabs become spaces and
- * other control bytes go, so a paste can never press Enter (a Default
- * button) or Tab away from the box it is going into.
+ * out as the characters alone: each line break (CR LF, CR or LF) as the
+ * character LF and a tab as the character TAB, never as the Enter or Tab
+ * keys, and other control bytes go. So a paste can never press a Default
+ * button or Tab away from the box it is going into; the forms layer keeps
+ * the breaks for a multi-line box and makes them spaces elsewhere.
  */
 #include "tf_tui.h"
 
@@ -300,7 +302,7 @@ static int paste_byte(tf_keys *keys, tf_key *key, int flush_escape)
     {
         consume(keys, 1);
         key->kind = TF_KEY_CHAR;
-        key->ch = ' ';
+        key->ch = c == '\t' ? '\t' : '\n';
         return 1;
     }
     if (c < 0x20 || c == 0x7F)

@@ -189,6 +189,20 @@ typedef struct tf_edit
     int32_t undo_cursor;
     int has_undo;
     int typing; /* the last change was typing (more typing joins it) */
+
+    /* A multi-line TextBox: Enter starts a new line and the caret moves
+     * by rows. Rows are laid out from the text whenever they are needed
+     * (`wrap` cells wide, 0 for no wrapping; a tab to the next multiple
+     * of 8); `page` is the rows shown, for PgUp and PgDn; `goal` the
+     * column (in cells) Up and Down keep to, while `has_goal`. */
+    int multi_line;
+    int wrap;
+    int page;
+    int goal;
+    int has_goal;
+    /* Bumped by every change of the text, caret or selection, so drawing
+       knows when to bring the caret into view. */
+    uint32_t version;
 } tf_edit;
 
 /* What tf_edit_key did with a key. */
@@ -216,6 +230,28 @@ tf_string *tf_edit_sel_text(const tf_edit *e); /* owned */
    selected. */
 int32_t tf_edit_cursor_index(const tf_edit *e);
 int tf_edit_selected(const tf_edit *e, int32_t cp);
+
+/* Rows (multi-line): the row starting at byte `start` ends at the byte
+   returned; *next is where the following row starts, -1 after the last.
+   A row ends before its line break, or where it wraps (after the last
+   space that fits, else after the last character that fits). */
+int32_t tf_edit_row_end(const tf_edit *e, int32_t start, int32_t *next);
+/* The cells from a row's start to byte `to` in it, tabs expanded. */
+int tf_edit_cells(const tf_edit *e, int32_t start, int32_t to);
+/* The row byte `at` is on, from 0, and its start. */
+int32_t tf_edit_row_of(const tf_edit *e, int32_t at, int32_t *start);
+/* The byte nearest column `cells` on row `row` (clamped to the rows). */
+int32_t tf_edit_offset_at(const tf_edit *e, int32_t row, int cells);
+/* The mouse on a multi-line box: the caret to a byte offset (extend:
+   selecting from the anchor), or the word there selected. */
+void tf_edit_place_at(tf_edit *e, int32_t at, int extend);
+void tf_edit_select_word_at(tf_edit *e, int32_t at);
+/* The caret and the selection as byte offsets, for drawing. */
+int32_t tf_edit_caret(const tf_edit *e);
+void tf_edit_sel_bytes(const tf_edit *e, int32_t *from, int32_t *to);
+/* Text the program gives a multi-line box: CR LF and lone CRs become LF.
+   Owned. */
+tf_string *tf_edit_lines_of(const tf_string *text);
 
 void tf_edit_free(tf_edit *e);
 

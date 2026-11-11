@@ -1500,8 +1500,8 @@ and properties follow a Windows edit control, as VB's TextBox does.
   focus (as Windows). The focus arriving does not select the text (as
   VB; set SelStart and SelLength in GotFocus for that).
 - **A paste arrives as text** (the terminal's bracketed-paste mode,
-  2004): its line breaks and tabs become spaces and other control
-  characters are dropped, so a paste never presses Enter (a Default
+  2004): its line breaks and tabs become spaces (a multi-line box keeps
+  them) and other control characters are dropped, so a paste never presses Enter (a Default
   button) or Tab. Each character goes to the focused control as if typed
   (KeyPress sees it). A terminal without the mode sends a paste as keys.
 - A long paste is no longer cut at 64 bytes: the input reads only what
@@ -1524,7 +1524,9 @@ off. The rest:
   if it is over the same control (as VB: pressing and moving away is no
   click).
 - **TextBox**: a click places the caret, a drag selects, a double-click
-  selects the word.
+  selects the word. A multi-line one by row and column; a drag past its
+  edge selects on and scrolls; the wheel and its scroll bars move its
+  view.
 - **ListBox**: a click chooses the item as the keys do (MultiSelect 1
   toggles it; MultiSelect 2 chooses just it, Ctrl+click toggles it,
   Shift+click selects from the anchor to it); a
@@ -1553,17 +1555,27 @@ showing) is left out. No auto-complete and no ListRows in v1.
 
 The rest is Proposed:
 
-- **Multi-line TextBox.** `MultiLine = True` is set in the form block
-  only (as VB). Everything in "TextBox editing" holds, plus Up and Down
-  (keeping the column they started from), PgUp and PgDn, Ctrl+Home and
-  Ctrl+End, and Shift with each to select. Tab moves the focus (as VB);
-  a tab in the text shows as spaces to the next 8-column stop. A paste
-  keeps its line breaks (and tabs).
+- **Multi-line TextBox** (built 11 Nov 2026). `MultiLine = True` is set
+  in the form block only (as VB; setting it in code is a compile error,
+  reading it is fine). Everything in "TextBox editing" holds, plus Up and
+  Down (keeping the column, in cells, they started from, across shorter
+  rows), PgUp and PgDn (the rows shown), Home and End to the row's ends,
+  Ctrl+Home and Ctrl+End to the text's, and Shift with each to select.
+  Up on the first row and Down on the last stay on it. Tab moves the
+  focus (as VB); a tab in the text shows as spaces to the next 8-column
+  stop. A paste keeps its line breaks (each arrives as Enter would: KeyPress
+  13) and tabs (KeyPress 9). PasswordChar is ignored, as VB.
 - **ScrollBars** 0 none, 1 horizontal, 2 vertical, 3 both, set in the
-  form block only. As VB: without a horizontal bar the lines wrap at the
-  box's width (at a space where there is one, measured in cells), with
-  one they scroll sideways. The box draws its own bars inside its area,
-  a thumb that a click or a drag moves; the wheel scrolls three rows.
+  form block only (a value outside 0-3 is a compile error). As VB:
+  without a horizontal bar the rows wrap at the box's width, measured in
+  cells, after the last space that fits (else after the last character
+  that fits; a space that does not fit stays at the row's end); with one
+  they scroll sideways. The box draws its own bars inside its Width and
+  Height: a thumb on a track, no arrows. A press or drag on a bar moves
+  the view to that point of it; the wheel moves the view three rows. The
+  view follows the caret whenever the text or the caret changes, but the
+  wheel and the bars move the view alone, so the caret may be out of
+  sight until the next key.
 - **ComboBox.** `Style` 0 or 2, set in the form block only (1 is a
   compile error). Items as the ListBox: AddItem, RemoveItem, Clear,
   List(i), ListCount, ListIndex, Sorted, TopIndex. Style 0's text part

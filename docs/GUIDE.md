@@ -479,7 +479,7 @@ Tab order is the order the controls are written in.
 | Control | Properties (besides Left, Top, Width, Height, Enabled, Visible) | Events |
 | --- | --- | --- |
 | Label | Caption (words wrap if Height > 1) | Click |
-| TextBox | Text, SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar | Change, GotFocus, LostFocus, KeyPress, KeyDown |
+| TextBox | Text, SelStart, SelLength, SelText, MaxLength, Locked, PasswordChar; MultiLine, ScrollBars (form block only) | Change, GotFocus, LostFocus, KeyPress, KeyDown |
 | CommandButton | Caption, Default, Cancel | Click (and the focus and key events) |
 | CheckBox | Caption, Value (0, 1, 2 = grey) | Click |
 | OptionButton | Caption, Value (Boolean) | Click |
@@ -515,7 +515,26 @@ one Frame are a group of their own, so a form can have several groups.
 A **TextBox** edits as a Windows edit box does: Shift+arrows select,
 Ctrl+arrows move by words, Ctrl+Z undoes, Ctrl+X/C/V cut, copy and paste
 (through the program's own clipboard). Setting Text or SelText in code
-fires Change, as in VB. A **ListBox** with `MultiSelect = 1` toggles items
+fires Change, as in VB.
+
+A TextBox with `MultiLine = True` (set in the form block, with a Height
+of more than one row) holds several lines. **Enter starts a new line** in
+it, never pressing the Default button; Tab still moves on. Its lines are
+separated by `vbLf` in Text: text you set with `vbCrLf` (or a paste) has
+its line breaks made `vbLf`, so split it with `Split(txt.Text, vbLf)`.
+`ScrollBars` is 0 (none), 1 (horizontal), 2 (vertical) or 3 (both); without
+a horizontal bar long lines wrap at the box's width, as in VB.
+
+```vb
+Begin TextBox txtNotes
+    Width = 40
+    Height = 8
+    MultiLine = True
+    ScrollBars = 2      ' a vertical bar; lines wrap
+End
+```
+
+A **ListBox** with `MultiSelect = 1` toggles items
 with Space; with 2, arrows choose, Shift+arrows choose a run of items,
 and Ctrl+arrows move without choosing, so Space can add others. A **Timer** raises its
 event every Interval milliseconds while the form waits for input.
@@ -566,7 +585,8 @@ A program notices when it does not, and says so once.
 
 The mouse works in every terminal that reports it (most do, over SSH
 too): a click focuses and presses, a drag selects text in a TextBox, a
-double-click chooses a word or a list item, and the wheel scrolls a list.
+double-click chooses a word or a list item, and the wheel scrolls a list
+or a multi-line TextBox (a press on its scroll bar jumps there).
 Menus open and choose by clicking. Shift+drag still selects text on the
 screen for copying. Set `TERMFORMS_MOUSE=0` to leave the mouse to the
 terminal.

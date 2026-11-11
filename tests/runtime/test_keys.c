@@ -3,7 +3,8 @@
  * test_keys.c -- the key decoder on the bytes a terminal sends: modifiers
  * on arrows and function keys, SGR mouse reports (press, drag, release,
  * the wheel; other buttons ignored), bracketed paste (text only, line
- * breaks as spaces), and sequences split across reads.
+ * breaks and tabs as the characters LF and TAB), and sequences split
+ * across reads.
  * Key scripts never reach this code, so the run tests cannot cover it.
  */
 #include "../../runtime/src/tui/tf_tui.h"
@@ -80,13 +81,13 @@ int main(void)
         ++failures;
     }
 
-    /* A paste: its line breaks (CR LF once) and tab become spaces, its
-       other control bytes go; split in the middle of the end marker; then
-       Enter after it is a key again. */
-    const char *pasted = "\x1b[200~a\r\nb\tc\x01\xC3\xA9\x1b[20";
+    /* A paste: its line breaks (CR LF once, a lone CR too) become LF and
+       its tab TAB, as characters; its other control bytes go; split in
+       the middle of the end marker; then Enter after it is a key again. */
+    const char *pasted = "\x1b[200~a\r\nb\tc\x01\xC3\xA9\rd\x1b[20";
     memset(&keys, 0, sizeof keys);
     tf_keys_feed(&keys, (const unsigned char *)pasted, (int)strlen(pasted));
-    const uint32_t want[] = {'a', ' ', 'b', ' ', 'c', 0xE9};
+    const uint32_t want[] = {'a', '\n', 'b', '\t', 'c', 0xE9, '\n', 'd'};
     for (size_t i = 0; i < sizeof want / sizeof want[0]; ++i)
     {
         if (!tf_keys_next(&keys, &key, 0) || key.kind != TF_KEY_CHAR || key.ch != want[i])

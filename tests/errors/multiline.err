@@ -1,0 +1,3 @@
+multiline.bas:6:9: error: ScrollBars must be 0 (none), 1 (horizontal), 2 (vertical) or 3 (both)
+multiline.bas:11:14: error: 'MultiLine' can be set only in the form block
+multiline.bas:12:14: error: 'ScrollBars' can be set only in the form block

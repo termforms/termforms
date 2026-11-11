@@ -538,7 +538,20 @@ authoritative for design rationale.
   (2) a general popup layer per form with the menu drop-down moved onto
   it (behaviour unchanged), (3) ComboBox Style 2, then Style 0, sharing
   the ListBox's items. The project plan records the change.
-- **Next:** build those, then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
+  Multi-line TextBox done (11 Nov 2026): `MultiLine`/`ScrollBars`
+  (catalog `formOnly`: a store in code is a compile error; ScrollBars
+  0-3 checked in the form block). tf_edit lays out rows on demand
+  (`tf_edit_row_end`, `_row_of`, `_offset_at`; `wrap`/`page` set by the
+  forms layer's `text_area` before keys and drawing; `version` tells
+  drawing when to bring the caret into view, so the wheel can scroll
+  away from it). tf_forms.c `draw_multiline`/`draw_row`/`draw_bar`,
+  `multiline_mouse`. The decoder now gives a pasted break/tab as the
+  characters LF/TAB; form_key makes them spaces unless the focus is a
+  multi-line box (a break then becomes Enter). Key scripts: `{PASTE
+  text}` (\n, \r\n, \t). Run tests multiline, multiline_scroll;
+  errors/multiline.
+- **Next:** the popup layer (menus onto it), then the ComboBox; then tag
+  v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
@@ -698,7 +711,8 @@ tests/
               + .size = the headless screen, e.g. 80x24;
               + .files/ = files copied to where it runs;
               key scripts: {WAIT n} for Timers, {ALT+x}, {F4}, {CTRL+F4},
-              {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents)
+              {SHIFT+LEFT}, {CLICK x,y} and the mouse, {IDLE} for DoEvents,
+              {PASTE text} for a bracketed paste)
   runtime/    C tests linked against tfrt
 debug/{lldb,gdb}/termforms.py              debugger printers (Strings, arrays)
 editors/vscode/                            VS Code extension and templates
@@ -895,8 +909,8 @@ a variable that is filled in only when a call succeeds.
 
 ## Known gaps (28 Oct 2026; ask Jim before filling them)
 
-- No ScrollBar control or ComboBox Style 1 (after v1); the ComboBox and
-  multi-line TextBox are in v1 but not yet built; no MouseDown/Up/Move
+- No ScrollBar control or ComboBox Style 1 (after v1); the ComboBox is
+  in v1 but not yet built; no MouseDown/Up/Move
   events; the clipboard is the program's own.
 - Combining marks are not drawn (a cell holds one character); text
   that relies on them shows the base letters.

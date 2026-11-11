@@ -70,9 +70,21 @@ struct tf_control
 
     /* TextBox only: its text, caret and selection; the first code point
      * shown; PasswordChar (shown for every character; 0 none, its text in
-     * `password`); and SelText as last read (tf_get_str lends it). */
+     * `password`); and SelText as last read (tf_get_str lends it). A
+     * multi-line box: ScrollBars, the first row and cell shown, the
+     * rows and the widest row as last laid out, the edit version last
+     * drawn (the caret is brought into view only when that changes, so
+     * the wheel can scroll away from it), and which bar a press began on
+     * (1 across, 2 down; 0 none). */
     tf_edit edit;
     int32_t scroll;
+    int32_t scroll_bars;
+    int32_t top_row;
+    int32_t left_cell;
+    int32_t row_count;
+    int32_t widest;
+    uint32_t seen;
+    int bar_held;
     uint32_t password_char;
     tf_string *password;
     tf_string *sel_text;
@@ -387,6 +399,13 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
     }
     if (control->type == TF_CTL_TEXTBOX && (prop == TF_PROP_TEXT || prop == TF_PROP_SELTEXT))
     {
+        /* A multi-line box's lines are separated by LF alone. */
+        tf_string *lines = NULL;
+        if (control->edit.multi_line)
+        {
+            lines = tf_edit_lines_of(v);
+            v = lines;
+        }
         /* As VB, Change fires when the program changes the text too. */
         const int same = prop == TF_PROP_TEXT
                              ? tf_str_compare(control->edit.text, v) == 0
@@ -395,11 +414,14 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
         {
             tf_edit_set_text(&control->edit, v);
             control->scroll = 0;
+            control->top_row = 0;
+            control->left_cell = 0;
         }
         else
         {
             tf_edit_replace_selection(&control->edit, v);
         }
+        tf_str_release(lines);
         if (!same)
         {
             fire(control, TF_EVENT_CHANGE);
@@ -415,7 +437,7 @@ void tf_set_str(tf_control *control, tf_prop prop, const tf_string *value)
             tf_utf8_decode(tf_str_cstr(v), tf_str_lenb(v), &cp);
         }
         control->password_char = cp;
-        control->edit.concealed = cp != 0;
+        control->edit.concealed = cp != 0 && !control->edit.multi_line;
         char encoded[4];
         const int n = cp == 0 ? 0 : tf_utf8_encode(cp, encoded);
         tf_str_assign(&control->password, tf_str_from_utf8(encoded, n));
@@ -573,6 +595,15 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_LOCKED:
             control->edit.locked = value != 0;
             break;
+        case TF_PROP_MULTILINE:
+            /* Set only by the form block (sema), before anything is typed.
+               PasswordChar is ignored in a multi-line box, as VB. */
+            control->edit.multi_line = value != 0;
+            control->edit.concealed = control->password_char != 0 && value == 0;
+            break;
+        case TF_PROP_SCROLLBARS:
+            control->scroll_bars = value < 0 || value > 3 ? 0 : value;
+            break;
         default:
             break;
     }
@@ -631,6 +662,10 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->edit.max_length;
         case TF_PROP_LOCKED:
             return control->edit.locked;
+        case TF_PROP_MULTILINE:
+            return control->edit.multi_line;
+        case TF_PROP_SCROLLBARS:
+            return control->scroll_bars;
         default:
             return 0;
     }
@@ -941,6 +976,209 @@ static void draw_textbox(tf_control *tb, int x, int y, int max_width, int focuse
     if (focused)
     {
         tf_screen_cursor(x + box_cells(tb, tb->scroll, caret), y, 1);
+    }
+}
+
+/* A multi-line box's text area: its size less its scroll bars, from the
+   control's own size rather than what its container shows of it (so the
+   rows stay put wherever it is). The edit buffer wraps and pages by it. */
+static void text_area(tf_control *tb, int *tw, int *th)
+{
+    *tw = (int)tb->width - ((tb->scroll_bars & 2) != 0);
+    *th = (int)tb->height - ((tb->scroll_bars & 1) != 0);
+    *tw = *tw < 1 ? 1 : *tw;
+    *th = *th < 1 ? 1 : *th;
+    tb->edit.wrap = (tb->scroll_bars & 1) != 0 ? 0 : *tw;
+    tb->edit.page = *th;
+}
+
+/* The cells a code point takes at column `cells` of a row (as tf_edit). */
+static int row_advance(uint32_t cp, int cells)
+{
+    return cp == '\t' ? 8 - cells % 8 : tf_char_width(cp);
+}
+
+/* One row of a multi-line box, bytes [from, end), its cells from `left`
+   shown in `width` cells at (x, y). A tab shows as spaces; a wide
+   character cut by an edge as spaces; a selected line break as one lit
+   cell after the row (so selecting across lines shows). */
+static void draw_row(const tf_control *tb, int32_t from, int32_t end, int x, int y, int width,
+                     int focused)
+{
+    const char *bytes = tf_str_cstr(tb->edit.text);
+    const int32_t length = tf_str_lenb(tb->edit.text);
+    int32_t sel_from = 0;
+    int32_t sel_to = 0;
+    tf_edit_sel_bytes(&tb->edit, &sel_from, &sel_to);
+    const uint32_t text = tf_colour(TF_COLOUR_FIELD_TEXT);
+    const uint32_t back = tf_colour(TF_COLOUR_FIELD_BACK);
+    const uint32_t lit_text = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
+    const uint32_t lit_back = tf_colour(TF_COLOUR_HIGHLIGHT_BACK);
+    const int left = (int)tb->left_cell;
+    int cells = 0;
+    int32_t i = from;
+    while (i < end)
+    {
+        uint32_t cp = 0;
+        const int n = tf_utf8_decode(bytes + i, (int)(end - i), &cp);
+        const int w = row_advance(cp, cells);
+        const int lit = focused && i >= sel_from && i < sel_to;
+        const int col = cells - left;
+        if (cp != '\t' && w > 0 && col >= 0 && col + w <= width)
+        {
+            tf_screen_put(x + col, y, cp, lit ? lit_text : text, lit ? lit_back : back);
+        }
+        else
+        {
+            for (int k = 0; k < w; ++k)
+            {
+                if (col + k >= 0 && col + k < width)
+                {
+                    tf_screen_put(x + col + k, y, ' ', lit ? lit_text : text,
+                                  lit ? lit_back : back);
+                }
+            }
+        }
+        cells += w;
+        i += n;
+    }
+    const int col = cells - left;
+    if (focused && end < length && bytes[end] == '\n' && end >= sel_from && end < sel_to &&
+        col >= 0 && col < width)
+    {
+        tf_screen_put(x + col, y, ' ', lit_text, lit_back);
+    }
+}
+
+/* A scroll bar `length` cells long showing `shown` of `total` from
+   `first`: a thumb on a track (no thumb when everything shows). */
+static void draw_bar(int x, int y, int length, int across, int32_t total, int32_t shown,
+                     int32_t first)
+{
+    const uint32_t text = tf_colour(TF_COLOUR_FIELD_TEXT);
+    const uint32_t back = tf_colour(TF_COLOUR_FIELD_BACK);
+    int size = 0;
+    int at = 0;
+    if (total > shown && length > 0)
+    {
+        size = (int)((int64_t)length * shown / total);
+        size = size < 1 ? 1 : size;
+        const int32_t room = total - shown;
+        at = (int)((int64_t)(length - size) * (first > room ? room : first) / room);
+    }
+    for (int j = 0; j < length; ++j)
+    {
+        const int thumb = j >= at && j < at + size;
+        const uint32_t ch = thumb ? box(0x2588, '#') : box(0x2591, ':');
+        tf_screen_put(across ? x + j : x, across ? y : y + j, ch, text, back);
+    }
+}
+
+/* A multi-line box: the rows from top_row (and, scrolling across, the
+   cells from left_cell), the caret kept in view whenever the text or the
+   caret has changed since the last drawing, and its scroll bars. */
+static void draw_multiline(tf_control *tb, int x, int y, int max_width, int max_height, int focused)
+{
+    const int w = tb->width < max_width ? (int)tb->width : max_width;
+    const int h = tb->height < max_height ? (int)tb->height : max_height;
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+    int tw = 0;
+    int th = 0;
+    text_area(tb, &tw, &th);
+    tf_screen_fill(x, y, w, h, ' ', tf_colour(TF_COLOUR_FIELD_TEXT),
+                   tf_colour(TF_COLOUR_FIELD_BACK));
+
+    /* Lay out: how many rows, the widest, and where the caret is. */
+    const tf_edit *e = &tb->edit;
+    const int32_t caret = tf_edit_caret(e);
+    int32_t rows = 0;
+    int32_t caret_row = 0;
+    int caret_col = 0;
+    int found = 0;
+    int widest = 0;
+    for (int32_t from = 0;;)
+    {
+        int32_t next = 0;
+        const int32_t end = tf_edit_row_end(e, from, &next);
+        const int cells = tf_edit_cells(e, from, end);
+        widest = cells > widest ? cells : widest;
+        if (!found && (next < 0 || caret < next))
+        {
+            found = 1;
+            caret_row = rows;
+            caret_col = tf_edit_cells(e, from, caret);
+        }
+        ++rows;
+        if (next < 0)
+        {
+            break;
+        }
+        from = next;
+    }
+    tb->row_count = rows;
+    tb->widest = widest;
+
+    if (tb->seen != e->version)
+    {
+        tb->seen = e->version;
+        if (caret_row < tb->top_row)
+        {
+            tb->top_row = caret_row;
+        }
+        else if (caret_row >= tb->top_row + th)
+        {
+            tb->top_row = caret_row - th + 1;
+        }
+        if (caret_col < tb->left_cell)
+        {
+            tb->left_cell = caret_col;
+        }
+        else if (caret_col >= tb->left_cell + tw)
+        {
+            tb->left_cell = caret_col - tw + 1;
+        }
+    }
+    const int32_t max_top = rows > th ? rows - th : 0;
+    tb->top_row = tb->top_row > max_top ? max_top : tb->top_row < 0 ? 0 : tb->top_row;
+    const int32_t max_left = e->wrap > 0 ? 0 : widest + 1 > tw ? widest + 1 - tw : 0;
+    tb->left_cell = tb->left_cell > max_left ? max_left : tb->left_cell < 0 ? 0 : tb->left_cell;
+
+    /* Draw the rows in view. */
+    const int shown_w = tw < w ? tw : w;
+    const int shown_h = th < h ? th : h;
+    int32_t row = 0;
+    for (int32_t from = 0; row < tb->top_row + shown_h;)
+    {
+        int32_t next = 0;
+        const int32_t end = tf_edit_row_end(e, from, &next);
+        if (row >= tb->top_row)
+        {
+            draw_row(tb, from, end, x, y + (int)(row - tb->top_row), shown_w, focused);
+        }
+        ++row;
+        if (next < 0)
+        {
+            break;
+        }
+        from = next;
+    }
+
+    if ((tb->scroll_bars & 2) != 0 && tw < w)
+    {
+        draw_bar(x + tw, y, shown_h, 0, rows, th, tb->top_row);
+    }
+    if ((tb->scroll_bars & 1) != 0 && th < h)
+    {
+        draw_bar(x, y + th, shown_w, 1, widest + 1, tw, tb->left_cell);
+    }
+    const int col = caret_col - (int)tb->left_cell;
+    if (focused && caret_row >= tb->top_row && caret_row < tb->top_row + shown_h && col >= 0 &&
+        col < shown_w)
+    {
+        tf_screen_cursor(x + col, y + (int)(caret_row - tb->top_row), 1);
     }
 }
 
@@ -1900,7 +2138,14 @@ static void draw_one(tf_control *form)
         switch (c->type)
         {
             case TF_CTL_TEXTBOX:
-                draw_textbox(c, x, y, room, focused);
+                if (c->edit.multi_line)
+                {
+                    draw_multiline(c, x, y, room, rows_left, focused);
+                }
+                else
+                {
+                    draw_textbox(c, x, y, room, focused);
+                }
                 break;
             case TF_CTL_COMMANDBUTTON:
                 draw_button(c, x, y, room, focused);
@@ -2185,8 +2430,14 @@ static int control_key(tf_control *form, tf_control *c, tf_key key)
     {
         case TF_CTL_TEXTBOX:
         {
-            /* Only what editing uses: Enter and Esc go on to the Default and
-               Cancel buttons. */
+            /* Only what editing uses: Enter (in a single-line box) and Esc
+               go on to the Default and Cancel buttons. */
+            if (c->edit.multi_line)
+            {
+                int tw = 0;
+                int th = 0;
+                text_area(c, &tw, &th); /* the rows Up, Down and PgDn move by */
+            }
             const int used = tf_edit_key(&c->edit, key);
             if (used == TF_EDIT_CHANGED)
             {
@@ -2525,6 +2776,50 @@ static void list_press(tf_control *list, tf_key key, int double_click)
     }
 }
 
+/* A press or a drag on a multi-line box: on a scroll bar it moves the
+   view to that point of the bar; in the text it places the caret (a drag
+   selecting, a double-click selecting a word). A drag past the edge
+   selects on into rows out of view, which drawing then scrolls to. */
+static void multiline_mouse(tf_control *c, tf_key key, int double_click, int drag)
+{
+    int tw = 0;
+    int th = 0;
+    text_area(c, &tw, &th);
+    const int dx = key.x - c->at_x;
+    const int dy = key.y - c->at_y;
+    if (!drag)
+    {
+        c->bar_held = (c->scroll_bars & 2) != 0 && dx == tw && dy < th   ? 2
+                      : (c->scroll_bars & 1) != 0 && dy == th && dx < tw ? 1
+                                                                         : 0;
+    }
+    if (c->bar_held == 2)
+    {
+        const int at = dy < 0 ? 0 : dy >= th ? th - 1 : dy;
+        const int32_t room = c->row_count > th ? c->row_count - th : 0;
+        c->top_row = th > 1 ? (int32_t)((int64_t)room * at / (th - 1)) : 0;
+        return;
+    }
+    if (c->bar_held == 1)
+    {
+        const int at = dx < 0 ? 0 : dx >= tw ? tw - 1 : dx;
+        const int32_t room = c->widest + 1 > tw ? c->widest + 1 - tw : 0;
+        c->left_cell = tw > 1 ? (int32_t)((int64_t)room * at / (tw - 1)) : 0;
+        return;
+    }
+    const int32_t row = c->top_row + dy < 0 ? 0 : c->top_row + dy;
+    const int cells = (int)c->left_cell + (dx < 0 ? 0 : dx);
+    const int32_t at = tf_edit_offset_at(&c->edit, row, cells);
+    if (double_click)
+    {
+        tf_edit_select_word_at(&c->edit, at);
+    }
+    else
+    {
+        tf_edit_place_at(&c->edit, at, drag);
+    }
+}
+
 static void form_mouse(tf_control *form, tf_key key)
 {
     const int hit = control_at(form, key.x, key.y);
@@ -2563,7 +2858,11 @@ static void form_mouse(tf_control *form, tf_key key)
             {
                 set_focus(form, hit);
             }
-            if (c->type == TF_CTL_TEXTBOX)
+            if (c->type == TF_CTL_TEXTBOX && c->edit.multi_line)
+            {
+                multiline_mouse(c, key, double_click, 0);
+            }
+            else if (c->type == TF_CTL_TEXTBOX)
             {
                 const int32_t cp = box_code_point_at(c, key.x - c->at_x);
                 if (double_click)
@@ -2582,7 +2881,12 @@ static void form_mouse(tf_control *form, tf_key key)
             break;
         }
         case TF_MOUSE_DRAG:
-            if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn)
+            if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn &&
+                pressed->edit.multi_line)
+            {
+                multiline_mouse(pressed, key, 0, 1);
+            }
+            else if (pressed != NULL && pressed->type == TF_CTL_TEXTBOX && pressed->drawn)
             {
                 const int dx = key.x - pressed->at_x;
                 tf_edit_place(&pressed->edit, box_code_point_at(pressed, dx < 0 ? 0 : dx), 1);
@@ -2621,6 +2925,12 @@ static void form_mouse(tf_control *form, tf_key key)
                 /* Three rows a notch, as most systems; drawing keeps it in range. */
                 const int32_t step = key.ch == TF_MOUSE_WHEEL_UP ? -3 : 3;
                 c->top_index = c->top_index + step < 0 ? 0 : c->top_index + step;
+            }
+            else if (c != NULL && c->type == TF_CTL_TEXTBOX && c->edit.multi_line)
+            {
+                /* The rows move, not the caret (so it may scroll out of view). */
+                const int32_t step = key.ch == TF_MOUSE_WHEEL_UP ? -3 : 3;
+                c->top_row = c->top_row + step < 0 ? 0 : c->top_row + step;
             }
             break;
         default:
@@ -2698,6 +3008,28 @@ static int form_key(tf_control *form, tf_key key)
     {
         form_mouse(form, key);
         return 0;
+    }
+    if (key.kind == TF_KEY_CHAR && (key.ch == '\n' || key.ch == '\t'))
+    {
+        /* A line break or tab from a paste (tf_keys.c): kept by a
+           multi-line box (a break as Enter would type it), else a space,
+           so a paste never presses the Default button or moves the focus. */
+        const tf_control *focused = form->focus >= 0 && form->focus < form->child_count
+                                        ? form->children[form->focus]
+                                        : NULL;
+        if (!form->menu_on && focused != NULL && focused->type == TF_CTL_TEXTBOX &&
+            focused->edit.multi_line)
+        {
+            if (key.ch == '\n')
+            {
+                key.kind = TF_KEY_ENTER;
+                key.ch = 0;
+            }
+        }
+        else
+        {
+            key.ch = ' ';
+        }
     }
     if (option_hint(form, key))
     {
@@ -3125,6 +3457,8 @@ static void restore_design(tf_control *c)
     {
         tf_edit_set_text(&c->edit, d->text);
         c->scroll = 0;
+        c->top_row = 0;
+        c->left_cell = 0;
     }
     else
     {

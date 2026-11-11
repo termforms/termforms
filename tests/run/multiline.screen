@@ -1,0 +1,20 @@
+
+
+   ┌───────────────────────── Notes ──────────────────────────┐
+   │one                   set                                 │
+   │two!                  by code                             │
+   │the quick brown fox   end                                 │
+   │Xjumps                                                    │
+   │p                                                         │
+   │q       r                                                 │
+   │                                                          │
+   │a b c                  « Show »                           │
+   │                                                          │
+   │show 1 [one|two!|the quick brown fox Xjumps] [] sel=8,27  │
+   │ml=True code=15 [set|by code|end] show 2 [one|two!|the    │
+   │quick brown fox Xjumps|p|q^r] [a b c] sel=41,0 ml=True    │
+   │code=15 [set|by code|end]                                 │
+   │                                                          │
+   │                                                          │
+   │                                                          │
+   └──────────────────────────────────────────────────────────┘

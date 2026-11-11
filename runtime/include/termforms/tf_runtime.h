@@ -660,19 +660,21 @@ typedef enum tf_prop
     TF_PROP_VISIBLE,
     TF_PROP_LISTCOUNT, /* ListBox, read only */
     TF_PROP_LISTINDEX, /* ListBox: the selected (or, with MultiSelect, the current) item; -1 none */
-    TF_PROP_MULTISELECT, /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
-    TF_PROP_SORTED,      /* ListBox: AddItem keeps the items in order, ignoring case */
-    TF_PROP_SELCOUNT,    /* ListBox, read only: how many items are selected */
-    TF_PROP_TOPINDEX,    /* ListBox: the first item shown */
-    TF_PROP_INTERVAL,    /* Timer: milliseconds between Timer events; 0 stops it */
-    TF_PROP_CHECKED,     /* Menu: a check mark before the item */
-    TF_PROP_SHORTCUT,    /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
-    TF_PROP_SELSTART,    /* TextBox: where the selection starts, in code points */
-    TF_PROP_SELLENGTH,   /* TextBox: how many code points are selected */
-    TF_PROP_SELTEXT,     /* TextBox: the selected text; setting it replaces the selection */
-    TF_PROP_MAXLENGTH,   /* TextBox: code points the user may type; 0 no limit */
-    TF_PROP_LOCKED,      /* TextBox: the user may select and copy, not change */
-    TF_PROP_PASSWORDCHAR /* TextBox: shown for every character; "" shows the text */
+    TF_PROP_MULTISELECT,  /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
+    TF_PROP_SORTED,       /* ListBox: AddItem keeps the items in order, ignoring case */
+    TF_PROP_SELCOUNT,     /* ListBox, read only: how many items are selected */
+    TF_PROP_TOPINDEX,     /* ListBox: the first item shown */
+    TF_PROP_INTERVAL,     /* Timer: milliseconds between Timer events; 0 stops it */
+    TF_PROP_CHECKED,      /* Menu: a check mark before the item */
+    TF_PROP_SHORTCUT,     /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
+    TF_PROP_SELSTART,     /* TextBox: where the selection starts, in code points */
+    TF_PROP_SELLENGTH,    /* TextBox: how many code points are selected */
+    TF_PROP_SELTEXT,      /* TextBox: the selected text; setting it replaces the selection */
+    TF_PROP_MAXLENGTH,    /* TextBox: code points the user may type; 0 no limit */
+    TF_PROP_LOCKED,       /* TextBox: the user may select and copy, not change */
+    TF_PROP_PASSWORDCHAR, /* TextBox: shown for every character; "" shows the text */
+    TF_PROP_MULTILINE,    /* TextBox (form block only): Enter starts a new line */
+    TF_PROP_SCROLLBARS    /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
 } tf_prop;
 
 typedef enum tf_event

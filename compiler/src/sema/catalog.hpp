@@ -21,6 +21,7 @@ struct Property
     ast::Type type;
     const char *cName;     // runtime enum, e.g. "TF_PROP_CAPTION"
     bool readOnly = false; // ListCount: read, never set (in the form block or in code)
+    bool formOnly = false; // MultiLine: set in the form block only, read anywhere
 };
 
 struct Event

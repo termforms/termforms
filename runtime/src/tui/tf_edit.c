@@ -16,9 +16,17 @@
  * The clipboard is the program's own: a terminal program cannot reach the
  * system's clipboard portably (the terminal's own copy and paste still
  * work, by Shift+drag and its paste key).
+ *
+ * A multi-line box keeps its text as one string with LF between lines and
+ * lays out its rows from it whenever they are needed (no row table to keep
+ * in step with every change): a box holds what a person types, so walking
+ * the text is cheap enough, and the layout cannot go stale. Rows wrap at
+ * `wrap` cells, as VB's TextBox wraps when it has no horizontal scroll
+ * bar; Up and Down keep to the column they started from, as Windows.
  */
 #include "tf_tui.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -164,6 +172,7 @@ static void splice(tf_edit *e, int32_t from, int32_t to, const char *insert, int
     free(buffer);
     e->cursor = from + length;
     e->anchor = e->cursor;
+    e->version++;
 }
 
 /* How many bytes of insert fit under MaxLength once the selection is gone,
@@ -248,6 +257,7 @@ static int undo(tf_edit *e)
     tf_str_assign(&e->undo, was);
     e->undo_cursor = was_cursor;
     e->typing = 0;
+    e->version++;
     return 1;
 }
 
@@ -261,6 +271,141 @@ static int move(tf_edit *e, int32_t to, int extend)
         e->anchor = to;
     }
     e->typing = 0;
+    e->has_goal = 0;
+    e->version++;
+    return TF_EDIT_MOVED;
+}
+
+/* ---- Rows (a multi-line box) ---- */
+
+/* The cells a code point takes at column `cells` of its row. */
+static int advance(uint32_t cp, int cells)
+{
+    return cp == '\t' ? 8 - cells % 8 : tf_char_width(cp);
+}
+
+int32_t tf_edit_row_end(const tf_edit *e, int32_t start, int32_t *next)
+{
+    const char *bytes = tf_str_cstr(e->text);
+    const int32_t length = length_of(e);
+    if (!e->multi_line)
+    {
+        *next = -1;
+        return length;
+    }
+    int cells = 0;
+    int32_t after_space = -1; /* where the row may wrap: just after a space */
+    int32_t i = start;
+    while (i < length)
+    {
+        if (bytes[i] == '\n')
+        {
+            *next = i + 1;
+            return i;
+        }
+        uint32_t cp = 0;
+        const int n = tf_utf8_decode(bytes + i, (int)(length - i), &cp);
+        const int w = advance(cp, cells);
+        if (e->wrap > 0 && cells + w > e->wrap && i > start)
+        {
+            if (cp == ' ')
+            {
+                /* A space that does not fit hangs past the edge rather
+                   than starting the next row (as word processors). */
+                *next = i + n;
+                return i + n;
+            }
+            const int32_t at = after_space > start ? after_space : i;
+            *next = at;
+            return at;
+        }
+        cells += w;
+        i += n;
+        if (cp == ' ' || cp == '\t')
+        {
+            after_space = i;
+        }
+    }
+    *next = -1;
+    return length;
+}
+
+int tf_edit_cells(const tf_edit *e, int32_t start, int32_t to)
+{
+    const char *bytes = tf_str_cstr(e->text);
+    int cells = 0;
+    for (int32_t i = start; i < to;)
+    {
+        uint32_t cp = 0;
+        i += tf_utf8_decode(bytes + i, (int)(to - i), &cp);
+        cells += advance(cp, cells);
+    }
+    return cells;
+}
+
+int32_t tf_edit_row_of(const tf_edit *e, int32_t at, int32_t *start)
+{
+    int32_t row = 0;
+    int32_t from = 0;
+    for (;;)
+    {
+        int32_t next = 0;
+        tf_edit_row_end(e, from, &next);
+        /* A wrapped row's end is the next row's start, where the caret
+           belongs (a line break's place belongs to its own row). */
+        if (next < 0 || at < next)
+        {
+            *start = from;
+            return row;
+        }
+        from = next;
+        ++row;
+    }
+}
+
+int32_t tf_edit_offset_at(const tf_edit *e, int32_t row, int cells)
+{
+    int32_t from = 0;
+    int32_t next = 0;
+    int32_t end = tf_edit_row_end(e, from, &next);
+    for (int32_t r = 0; r < row && next >= 0; ++r)
+    {
+        from = next;
+        end = tf_edit_row_end(e, from, &next);
+    }
+    const char *bytes = tf_str_cstr(e->text);
+    int used = 0;
+    int32_t i = from;
+    while (i < end)
+    {
+        uint32_t cp = 0;
+        const int n = tf_utf8_decode(bytes + i, (int)(end - i), &cp);
+        const int w = advance(cp, used);
+        if (used + w > cells)
+        {
+            break; /* in this character: the caret goes before it */
+        }
+        used += w;
+        i += n;
+    }
+    if (i == end && next == end && i > from)
+    {
+        i = step_back(e, i); /* the end of a wrapped row is the next row's start */
+    }
+    return i;
+}
+
+/* Up, Down, PgUp, PgDn: `rows` rows on, at the column Up and Down began
+   from. */
+static int vertical(tf_edit *e, int32_t rows, int extend)
+{
+    int32_t start = 0;
+    const int32_t row = tf_edit_row_of(e, e->cursor, &start);
+    const int goal = e->has_goal ? e->goal : tf_edit_cells(e, start, e->cursor);
+    const int32_t target = row + rows < 0 ? 0 : row + rows;
+    move(e, tf_edit_offset_at(e, target, goal), extend);
+    e->goal = goal;
+    e->has_goal = 1;
     return TF_EDIT_MOVED;
 }
 
@@ -269,8 +414,33 @@ int tf_edit_key(tf_edit *e, tf_key key)
     const int shift = (key.mods & TF_MOD_SHIFT) != 0;
     const int ctrl = (key.mods & TF_MOD_CTRL) != 0;
     const int selected = sel_from(e) != sel_to(e);
+    const int32_t page = e->page > 1 ? e->page : 1;
     switch (key.kind)
     {
+        case TF_KEY_ENTER:
+            if (!e->multi_line)
+            {
+                return TF_EDIT_UNUSED; /* on to the Default button */
+            }
+            if (e->locked)
+            {
+                return TF_EDIT_MOVED;
+            }
+            return type_in(e, "\n", 1, 1) ? TF_EDIT_CHANGED : TF_EDIT_MOVED;
+        case TF_KEY_UP:
+        case TF_KEY_DOWN:
+            if (!e->multi_line)
+            {
+                return TF_EDIT_UNUSED;
+            }
+            return vertical(e, key.kind == TF_KEY_UP ? -1 : 1, shift);
+        case TF_KEY_PGUP:
+        case TF_KEY_PGDN:
+            if (!e->multi_line)
+            {
+                return TF_EDIT_UNUSED;
+            }
+            return vertical(e, key.kind == TF_KEY_PGUP ? -page : page, shift);
         case TF_KEY_CHAR:
         {
             if (e->locked)
@@ -311,9 +481,17 @@ int tf_edit_key(tf_edit *e, tf_key key)
             }
             return move(e, ctrl ? next_word(e, e->cursor) : step_on(e, e->cursor), shift);
         case TF_KEY_HOME:
-            return move(e, 0, shift);
         case TF_KEY_END:
-            return move(e, length_of(e), shift);
+        {
+            const int home = key.kind == TF_KEY_HOME;
+            if (!e->multi_line || ctrl)
+            {
+                return move(e, home ? 0 : length_of(e), shift);
+            }
+            int32_t start = 0;
+            const int32_t row = tf_edit_row_of(e, e->cursor, &start);
+            return move(e, home ? start : tf_edit_offset_at(e, row, INT_MAX), shift);
+        }
         case TF_KEY_CTRL:
             switch (key.ch)
             {
@@ -357,6 +535,8 @@ void tf_edit_set_text(tf_edit *e, const tf_string *text)
     e->anchor = e->cursor;
     e->has_undo = 0; /* the program's change is not the user's to undo */
     e->typing = 0;
+    e->has_goal = 0;
+    e->version++;
 }
 
 int32_t tf_edit_sel_start(const tf_edit *e)
@@ -379,6 +559,8 @@ void tf_edit_select(tf_edit *e, int32_t start, int32_t length)
     e->anchor = offset_of(e, start);
     e->cursor = offset_of(e, start + length); /* the caret at the end, as VB */
     e->typing = 0;
+    e->has_goal = 0;
+    e->version++;
 }
 
 void tf_edit_place(tf_edit *e, int32_t cp, int extend)
@@ -388,9 +570,19 @@ void tf_edit_place(tf_edit *e, int32_t cp, int extend)
 
 void tf_edit_select_word(tf_edit *e, int32_t cp)
 {
+    tf_edit_select_word_at(e, offset_of(e, cp));
+}
+
+void tf_edit_place_at(tf_edit *e, int32_t at, int extend)
+{
+    move(e, at < 0 ? 0 : at > length_of(e) ? length_of(e) : at, extend);
+}
+
+void tf_edit_select_word_at(tf_edit *e, int32_t at)
+{
     const char *bytes = tf_str_cstr(e->text);
     const int32_t length = length_of(e);
-    int32_t from = offset_of(e, cp);
+    int32_t from = at;
     int32_t to = from;
     if (from < length && word_byte((unsigned char)bytes[from]))
     {
@@ -406,6 +598,8 @@ void tf_edit_select_word(tf_edit *e, int32_t cp)
     e->anchor = from;
     e->cursor = to;
     e->typing = 0;
+    e->has_goal = 0;
+    e->version++;
 }
 
 void tf_edit_replace_selection(tf_edit *e, const tf_string *text)
@@ -413,6 +607,47 @@ void tf_edit_replace_selection(tf_edit *e, const tf_string *text)
     remember(e);
     splice(e, sel_from(e), sel_to(e), tf_str_cstr(text), tf_str_lenb(text));
     e->typing = 0;
+}
+
+int32_t tf_edit_caret(const tf_edit *e)
+{
+    return e->cursor;
+}
+
+void tf_edit_sel_bytes(const tf_edit *e, int32_t *from, int32_t *to)
+{
+    *from = sel_from(e);
+    *to = sel_to(e);
+}
+
+tf_string *tf_edit_lines_of(const tf_string *text)
+{
+    const char *bytes = tf_str_cstr(text);
+    const int32_t length = tf_str_lenb(text);
+    if (memchr(bytes, '\r', (size_t)length) == NULL)
+    {
+        return tf_str_ref((tf_string *)text);
+    }
+    char *buffer = tf_xmalloc((size_t)length + 1);
+    int32_t n = 0;
+    for (int32_t i = 0; i < length; ++i)
+    {
+        if (bytes[i] == '\r')
+        {
+            buffer[n++] = '\n';
+            if (i + 1 < length && bytes[i + 1] == '\n')
+            {
+                ++i; /* CR LF is one line break */
+            }
+        }
+        else
+        {
+            buffer[n++] = bytes[i];
+        }
+    }
+    tf_string *lines = tf_str_from_utf8(buffer, n);
+    free(buffer);
+    return lines;
 }
 
 int32_t tf_edit_cursor_index(const tf_edit *e)

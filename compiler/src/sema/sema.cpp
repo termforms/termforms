@@ -812,6 +812,12 @@ private:
             {
                 diagnostics_.error(s.location, "value does not fit in an Integer");
             }
+            else if (std::string_view(prop->cName) == "TF_PROP_SCROLLBARS" &&
+                     (s.value->integer < 0 || s.value->integer > 3))
+            {
+                diagnostics_.error(s.location, "ScrollBars must be 0 (none), 1 (horizontal), "
+                                               "2 (vertical) or 3 (both)");
+            }
         }
     }
 
@@ -1461,6 +1467,12 @@ private:
             {
                 diagnostics_.error(target.location,
                                    "'" + target.text + "' is read-only: it can be read, not set");
+                return;
+            }
+            if (prop != nullptr && prop->formOnly)
+            {
+                diagnostics_.error(target.location,
+                                   "'" + target.text + "' can be set only in the form block");
                 return;
             }
         }

@@ -11,7 +11,9 @@
  *   (n ms pass, so Timers run), the mouse at cell x,y (from 0, 0 at the
  *   top left): {CLICK x,y} {DBLCLICK x,y} {PRESS x,y} {DRAG x,y}
  *   {RELEASE x,y} {WHEELUP x,y} {WHEELDOWN x,y}, {IDLE} (nothing waiting:
- *   where a DoEvents returns), and {{ (a literal brace)
+ *   where a DoEvents returns), {PASTE text} (as a bracketed paste: \n or
+ *   \r\n a line break, \t a tab, \\ a backslash; no `}` in it), and
+ *   {{ (a literal brace)
  *
  * When the script runs out, the input reports TF_KEY_EOF and the form
  * closes, so a test can never hang waiting for a key.
@@ -34,10 +36,16 @@ static tf_keys decoder;
 static tf_key queued[4];
 static int queued_count = 0;
 
+/* The rest of a {PASTE text} still to hand out. */
+static const char *paste_at = NULL;
+static const char *paste_end = NULL;
+
 void tf_input_start(const char *headless_script)
 {
     script = headless_script;
     queued_count = 0;
+    paste_at = NULL;
+    paste_end = NULL;
     memset(&decoder, 0, sizeof decoder);
 }
 
@@ -100,12 +108,36 @@ static int scripted_mouse(const char *name, size_t length, int mods, tf_key *key
     return 0;
 }
 
+/* The next character of a scripted paste, as the decoder gives a real
+   one: a line break as the character LF, a tab as TAB. */
+static tf_key next_pasted(void)
+{
+    tf_key key = {TF_KEY_CHAR, 0, 0, 0, 0};
+    if (paste_at[0] == '\\' && paste_at + 1 < paste_end)
+    {
+        const char c = paste_at[1];
+        paste_at += 2;
+        if (c == 'r' && paste_at + 1 < paste_end && paste_at[0] == '\\' && paste_at[1] == 'n')
+        {
+            paste_at += 2; /* \r\n is one line break */
+        }
+        key.ch = c == 'n' || c == 'r' ? '\n' : c == 't' ? '\t' : (uint32_t)(unsigned char)c;
+        return key;
+    }
+    paste_at += tf_utf8_decode(paste_at, (int)(paste_end - paste_at), &key.ch);
+    return key;
+}
+
 static tf_key next_scripted(void)
 {
     tf_key key = {TF_KEY_EOF, 0, 0, 0, 0};
     if (queued_count > 0)
     {
         return queued[--queued_count];
+    }
+    if (paste_at != NULL && paste_at < paste_end)
+    {
+        return next_pasted();
     }
 
     if (*script == '\0')
@@ -165,6 +197,12 @@ static tf_key next_scripted(void)
             key.kind = mods == TF_MOD_CTRL ? TF_KEY_CTRL : TF_KEY_ALT;
             key.ch = (uint32_t)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
             return key;
+        }
+        if (length > 6 && strncmp(name, "PASTE ", 6) == 0)
+        {
+            paste_at = name + 6;
+            paste_end = name + length;
+            return next_pasted();
         }
         if (length > 5 && strncmp(name, "WAIT ", 5) == 0)
         {
