@@ -612,8 +612,14 @@ authoritative for design rationale.
   TabIndex in the designer only; double-click writes handler stubs into
   the `.bas`; safe saving (re-check, temp file + rename); `tfc --catalog`
   in a plain line format, not JSON; first version without the menu
-  editor. Still to design with Jim before code: MouseDown/Move/Up, a
-  design-surface control drawing a form inactive, the designer's screen. Also open: step 7 of the
+  editor. Also settled (11 Nov 2026; REFERENCE.md "MouseDown,
+  MouseMove and MouseUp", "FormView"): VB's mouse events in cells, all
+  three buttons, MouseMove only while a button is held (mode 1002), the
+  pressed control capturing; FormView, a public control drawing a form
+  described in code (Clear/AddControl/SetProperty with String values,
+  Selected, ControlAt, ScrollX/Y, focusable), the runtime's property
+  names from a table tfc writes out of its catalog, `tfc --catalog`.
+  Still to design with Jim before code: the designer's screen. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

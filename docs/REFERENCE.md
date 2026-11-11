@@ -1553,7 +1553,8 @@ off. The rest:
 - Key scripts: `{CLICK x,y}`, `{DBLCLICK x,y}`, `{PRESS x,y}`,
   `{DRAG x,y}`, `{RELEASE x,y}`, `{WHEELUP x,y}`, `{WHEELDOWN x,y}`,
   with cells counted from 0,0 at the screen's top left.
-- No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
+- No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list);
+  they are designed for after v1 ("MouseDown, MouseMove and MouseUp").
 
 ### Multi-line TextBox and ComboBox (in v1: Settled, Jim, 11 Nov 2026; details settled for v1.0, 11 Nov 2026)
 
@@ -1756,8 +1757,91 @@ layout are still to be designed with Jim before any code.
 - **First version:** placing, moving and resizing controls with the
   mouse and the keyboard; a property sheet; tab order; handler stubs.
   The menu editor comes in the second version.
-- **Still to design (with Jim):** MouseDown, MouseMove and MouseUp
-  events (on the known-gaps list) for dragging and resizing; a
-  design-surface control that draws a form's controls inactive with the
-  runtime's own drawing, so the preview is exactly what the program
-  shows; the designer's own screen.
+- **Still to design (with Jim):** the designer's own screen. The two
+  language pieces it needs are below.
+
+### MouseDown, MouseMove and MouseUp (after v1: Settled, Jim, 11 Nov 2026)
+
+```vb
+Sub cmdOK_MouseDown(Button As Integer, Shift As Integer, X As Integer, Y As Integer)
+```
+
+- **As VB, in cells.** X and Y are whole cells from the control's top
+  left (0,0); for the form, from its client area's top left (below the
+  menu bar). VB's Single coordinates do not apply.
+- **Button**: `vbLeftButton` 1, `vbRightButton` 2, `vbMiddleButton` 4.
+  **Shift**: `vbShiftMask` 1, `vbCtrlMask` 2, `vbAltMask` 4. All
+  three buttons are reported; a program should not depend on the right
+  or middle button (some terminals keep right-click for their own menu,
+  and the middle button often pastes). Modifier keys are passed on as
+  the terminal sends them, which is unreliable: Shift+drag is the
+  terminal's own selection, and on the Mac Option+click and Ctrl+click
+  are often taken by the terminal.
+- **MouseMove only while a button is held** (the terminal mode the
+  runtime uses, 1002, reports nothing else). Reporting movement with no
+  button held ("hover") needs mode 1003's constant stream: possible
+  later.
+- **Order as VB:** MouseDown, MouseUp, Click; a double-click adds
+  DblClick then MouseUp. The control's own handling still happens (a
+  press focuses, a TextBox places its caret, and so on).
+- **The pressed control captures the mouse:** MouseMove and MouseUp go
+  to the control the press began on, even outside it, so X and Y may be
+  negative or past its edge.
+- **On** the form, Label, Frame, CommandButton, CheckBox, OptionButton,
+  ListBox, TextBox, ComboBox and FormView. A press taken by a menu or an
+  open ComboBox list fires none; a disabled control gets none.
+- Key scripts: `{PRESS x,y}`, `{DRAG x,y}` and `{RELEASE x,y}` take an
+  optional button, `{PRESS x,y,RIGHT}` (LEFT, RIGHT, MIDDLE).
+
+### FormView (after v1: Settled, Jim, 11 Nov 2026)
+
+A control that shows a form the program describes in code, drawn
+exactly as it would run but not live: nothing takes the focus or acts on
+a click, and Timers do not run. It was added for the visual designer,
+but it is an ordinary control, documented in the guide, open to any
+program (another designer, say).
+
+```vb
+fvForm.Clear
+fvForm.AddControl "Form", "frmMain", ""
+fvForm.SetProperty "frmMain", "Width", "40"
+fvForm.AddControl "CommandButton", "cmdOK", ""      ' "" = on the form; else a Frame's name
+fvForm.SetProperty "cmdOK", "Caption", "&OK"
+fvForm.Selected("cmdOK") = True
+name = fvForm.ControlAt(x, y)                       ' innermost control there; "" = the form
+```
+
+- **A view, not a model.** The program keeps its own description of
+  the form and rebuilds the view after each change (Clear, AddControl,
+  SetProperty), which is instant for a form's few dozen controls.
+  Controls are added in tab order.
+- **Values as Strings** (there are no Variants), converted to the
+  property's type: a value that does not convert or fit is error 380
+  (Invalid property value); a property the control does not have, or
+  an unknown control type, is 438 (Object doesn't support this property
+  or method); a name already used, or a container that is not a Frame
+  in the view, is 5.
+- **What a running form hides is shown:** controls with Visible False
+  are drawn, so they can be selected. Timers are not drawn (they have
+  no place on a form); a designer lists them itself.
+- **Selection is drawn by the runtime** (`Selected(name)`, any number
+  of controls); its look is settled with the designer's screen.
+- **ScrollX and ScrollY** move a form larger than the view; the form's
+  top-left border cell is at cell (-ScrollX, -ScrollY) of the view.
+- **It takes the focus**, so it has KeyDown and KeyPress (arrows to move
+  or resize), the mouse events (X and Y in the view's cells), Click and
+  DblClick.
+- **Colours:** the standard colours; a `SetColour` method (for a
+  program whose `.vbp` changes them) comes later.
+- **One catalog.** The runtime learns control and property names from a
+  table tfc writes, from its own catalog, into a program that uses a
+  FormView, so the names cannot drift from the compiler. The same
+  catalog gives `tfc --catalog`, one item a line:
+
+  ```
+  control CommandButton
+  property Caption String ""
+  property Default Boolean False
+  event Click
+  event MouseDown Button As Integer, Shift As Integer, X As Integer, Y As Integer
+  ```
