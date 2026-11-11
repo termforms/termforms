@@ -28,16 +28,11 @@ Public Function Quoted(path As String) As String
     Return Chr$(34) & path & Chr$(34)
 End Function
 
-Public Function TempFolder() As String
-    Dim t As String = Environ$("TMPDIR")
-    If t = "" Then t = Environ$("TEMP")
-    If t = "" Then t = "/tmp"
-    Return t
-End Function
-
 ' Reads the catalog; returns "" or why it could not.
 Public Function LoadCatalog() As String
-    Dim listing As String = TempFolder() & "/tfdesign-catalog-" & CStr(CLng(Timer * 1000)) & ".txt"
+    ' Beside the form (whose folder must be writable to save it anyway), so
+    ' two designers started at the same moment never share the file.
+    Dim listing As String = basPath & ".tfdesign-catalog-" & CStr(CLng(Timer * 1000))
     Dim code As Integer = Shell(TfcCommand() & " --catalog > " & Quoted(listing))
     If code <> 0 Or Not Exists(listing) Then
         If Exists(listing) Then Kill listing
