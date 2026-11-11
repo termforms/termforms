@@ -50,3 +50,6 @@ Thumbs.db
 !/examples/**/*.bas
 !/examples/**/*.vbp
 !/examples/**/README.md
+# The designer as built in its folder (tfc designer.vbp).
+/designer/tfdesign
+/designer/*.tf-log

@@ -664,7 +664,19 @@ authoritative for design rationale.
   X.frm beside X.bas as that module's form (only a form block; a form in
   both is an error); `sourcePaths` is now by diagnostics' file index, so
   #line and errors name the .frm. Run test form_file; errors form_both,
-  form_file_code. Also open: step 7 of the
+  form_file_code.
+  Designer first version done (11 Nov 2026): `designer/` (designer.vbp
+  -> tfdesign; window.bas + window.frm the form, filling the terminal by
+  Form_Resize; model.bas the form as Ctl records in tab order + `props`
+  "name.prop" -> literal, ParseBlock/BlockText, MoveRange, FrameAt;
+  catalog.bas runs `$TFC --catalog`; files.bas loading, WriteSafely
+  (new file, old aside, rename, delete), MoveToFrm, HandlerLine/
+  AddHandler). Defaults come from a hidden FormView (fvScratch). Undo
+  keeps BlockText snapshots. Run tests designer and designer_frm (built
+  from designer/ sources); tf_test.py now gives run tests `$TFC` (the
+  tfc under test) and checks a NAME.after folder of files left behind.
+  Language notes learnt: `And` is Boolean only; `Main` cannot be both a
+  module and Sub Main; no line continuation used. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

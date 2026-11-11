@@ -1,0 +1,30 @@
+┌───────────────────────────────── TermForms Designer: panel.frm ──────────────────────────────────┐
+│ File  Edit  View  Add  Help                                                                      │
+│Toolbox           ┌────────── Panel ───────────┐                    Control                       │
+│┌───────────────┐ │                            │                    cbo1                        ▼ │
+││TextBox        │ │                    ▼       │                    Properties                    │
+││CommandButton  │ │                     ◢      │                    ┌───────────────────────────┐ │
+││Label          │ │                            │                    │Name              cbo1     │ │
+││CheckBox       │ │   < Go >                   │                    │Text                       │ │
+││OptionButton   │ │                            │                    │Sorted            False    │ │
+││Frame          │ └────────────────────────────┘                    │Style             0        │ │
+││ListBox        │                                                   │MaxLength         0        │ │
+││ComboBox       │                                                   │Locked            False    │ │
+││FormView       ↓                                                   │CausesValidation  True     │ │
+│└───────────────┘                                                   │Left              1        │ │
+│Timers                                                              │Top               1        │ │
+│┌───────────────┐                                                   │Width             20       ↓ │
+││tmr1           │                                                   └───────────────────────────┘ │
+││               │                                                   Name:                         │
+││               │                                                   cbo1                          │
+││               │                                                   Events (* written)            │
+│└───────────────┘                                                   ┌───────────────────────────┐ │
+│                                                                    │  Click                    │ │
+│frmPanel 30x8                                                       │  Change                   │ │
+│                                                                    │  DropDown                 │ │
+│< Tab order >                                                       │  GotFocus                 │ │
+│                                                                    │  LostFocus                ↓ │
+│                                                                    └───────────────────────────┘ │
+│Saved panel.frm.                                                                                  │
+│Arrows move  Shift+arrows size  Del deletes  [ ] previous/next  Double-click: handler  F1 keys    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

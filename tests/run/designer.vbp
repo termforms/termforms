@@ -1,0 +1,13 @@
+' Run test: tfdesign, the visual designer, on designer.files/sample.bas.
+' It moves cmdOK by dragging and sizes it with Shift+Right; places a
+' Frame and a CheckBox inside it from the Toolbox; drags lblName into the
+' Frame, undoes that and redoes it; sets txtName's Text in the property
+' sheet; double-clicks the CheckBox (writing chk1_Click into sample.bas);
+' sets the tab order with F6 (cmdOK, then txtName); and saves.
+Name=tfdesign
+Startup=Sub Main
+Form=../../designer/window.bas
+Module=../../designer/designer.bas
+Module=../../designer/model.bas
+Module=../../designer/catalog.bas
+Module=../../designer/files.bas

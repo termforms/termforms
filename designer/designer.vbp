@@ -1,0 +1,10 @@
+' tfdesign, the TermForms visual form designer (written in TermForms).
+'
+' Build and run:   tfc designer.vbp && ./tfdesign ../examples/hello.bas
+Name=tfdesign
+Startup=Sub Main
+Form=window.bas
+Module=designer.bas
+Module=model.bas
+Module=catalog.bas
+Module=files.bas

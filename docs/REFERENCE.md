@@ -1754,8 +1754,8 @@ layout are still to be designed with Jim before any code.
   change rather than overwriting. Files are written to a temporary file
   in the same folder and then renamed into place.
 - **The catalog from tfc.** `tfc --catalog` prints the control catalog
-  (controls, properties with their types and defaults, events with their
-  parameters) in a plain line format the designer reads, so the designer
+  (controls, properties with their types, events with their parameters;
+  the defaults come from a FormView's GetProperty instead) in a plain line format the designer reads, so the designer
   never offers what the compiler does not know. Not JSON: reading JSON
   in BASIC would need a JSON reader for no gain.
 - **First version:** placing, moving and resizing controls with the
@@ -1790,6 +1790,16 @@ layout are still to be designed with Jim before any code.
   the order wanted. Undo and Redo go back through every change. For
   this, the FormView also draws tab-order numbers (`TabNumbers`) and the
   selection's handle.
+- **Built (11 Nov 2026):** `designer/` (tfdesign; its README has the
+  keys). The implementer's details, awaiting Jim (Proposed): the
+  program is called `tfdesign` and needs a terminal of at least 90 x
+  24; a new form is named `frm` + the module's name, with that name as
+  its Caption; a new control's caption is its name (VB's habit); a
+  double-click writes the control's first event in the catalog (Click,
+  or Change for a TextBox, Load for the form); a renamed control's
+  handlers are not renamed (the status line says so); a `.frm` changed
+  on disk since it was read is replaced only after asking; tfc is
+  `$TFC`, else the one beside the designer, else the PATH's.
 
 ### Screen and Form_Resize (after v1: Settled, Jim, 11 Nov 2026)
 

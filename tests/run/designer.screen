@@ -1,0 +1,30 @@
+┌───────────────────────────────── TermForms Designer: sample.bas ─────────────────────────────────┐
+│ File  Edit  View  Add  Help                                                                      │
+│Toolbox           ┌─────────────── Sample ───────────────┐          Control                       │
+│┌───────────────┐ │                                      │          txtName                     ▼ │
+││TextBox        │ │        Ann                           │          Properties                    │
+││CommandButton  │ │                            ◢         │          ┌───────────────────────────┐ │
+││Label          │ │  ┌ fra1 ────────────┐                │          │Name              txtName  │ │
+││CheckBox       │ │  │ [ ] chk1         │                │          │Text              Ann      │ │
+││OptionButton   │ │  │ Name:            │                │          │MaxLength         0        │ │
+││Frame          │ │  │                  │                │          │Locked            False    │ │
+││ListBox        │ │  └──────────────────┘     < OK >     │          │PasswordChar               │ │
+││ComboBox       │ │                                      │          │MultiLine         False    │ │
+││FormView       ↓ │                                      │          │ScrollBars        0        │ │
+│└───────────────┘ └──────────────────────────────────────┘          │CausesValidation  True     │ │
+│Timers                                                              │Left              8        │ │
+│┌───────────────┐                                                   │Top               1        ↓ │
+││               │                                                   └───────────────────────────┘ │
+││               │                                                   Name:                         │
+││               │                                                   txtName                       │
+││               │                                                   Events (* written)            │
+│└───────────────┘                                                   ┌───────────────────────────┐ │
+│                                                                    │  Change                   │ │
+│frmSample 40x12                                                     │  GotFocus                 │ │
+│                                                                    │  LostFocus                │ │
+│< Tab order >                                                       │  Validate                 │ │
+│                                                                    │  KeyPress                 ↓ │
+│                                                                    └───────────────────────────┘ │
+│Saved sample.bas.                                                                                 │
+│Arrows move  Shift+arrows size  Del deletes  [ ] previous/next  Double-click: handler  F1 keys    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

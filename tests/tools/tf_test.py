@@ -11,6 +11,8 @@ Modes:
           (dated 2 Jan 2026 03:04:05, local time).
           If NAME.stderr exists the program must fail (exit 1) with that
           message on stderr; otherwise it must exit 0 with nothing on stderr.
+          Each file in a NAME.after folder must be left, with that content,
+          where it ran (a program that writes files, such as the designer).
 
 Every mode runs tfc in the test's own directory with a bare file name, so
 file names in #line directives and messages are the same on every machine.
@@ -101,7 +103,10 @@ def run(tfc: str, source: Path, work: Path) -> bool:
     # the usual one, such as the examples.
     size_file = source.with_suffix(".size")
     size = size_file.read_text(encoding="utf-8").strip() if size_file.exists() else HEADLESS_SIZE
-    env = dict(os.environ, TERMFORMS_HEADLESS=keys, TERMFORMS_HEADLESS_SIZE=size)
+    # $TFC: the tfc under test, for a program that runs tfc itself (the
+    # designer asks it for its catalog).
+    env = dict(os.environ, TERMFORMS_HEADLESS=keys, TERMFORMS_HEADLESS_SIZE=size,
+               TFC=str(Path(tfc).resolve()))
     # Each program runs in a folder of its own, emptied first: files it
     # writes stay out of the source tree, and tests run in parallel safely.
     folder = work / (source.stem + ".dir")
@@ -145,6 +150,15 @@ def run(tfc: str, source: Path, work: Path) -> bool:
         if result.returncode != expected or stderr:
             print(f"FAIL: program exited {result.returncode}, expected {expected}\n{stderr}")
             ok = False
+    # An optional NAME.after folder: files the program must leave where it
+    # ran, with this content (the update mode rewrites them from the run).
+    after = source.parent / (source.stem + ".after")
+    if after.is_dir():
+        for expected_file in sorted(after.rglob("*")):
+            if expected_file.is_file():
+                produced = folder / expected_file.relative_to(after)
+                text = produced.read_text(encoding="utf-8") if produced.exists() else "(missing)\n"
+                ok = compare(f"file {expected_file.name}", expected_file, text) and ok
     return compare("screen", source.with_suffix(".screen"), stdout) and ok
 
 

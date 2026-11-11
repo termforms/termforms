@@ -1,0 +1,11 @@
+' Run test: tfdesign on designer_frm.files/panel.bas, whose form block is
+' in the .bas: File > Move form to .frm (answering Yes) takes it out into
+' panel.frm, then the Add menu adds a Timer and a ComboBox, and Ctrl+S
+' saves them to the .frm.
+Name=tfdesign
+Startup=Sub Main
+Form=../../designer/window.bas
+Module=../../designer/designer.bas
+Module=../../designer/model.bas
+Module=../../designer/catalog.bas
+Module=../../designer/files.bas

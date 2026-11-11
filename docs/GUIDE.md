@@ -798,6 +798,15 @@ A handler may run again inside DoEvents (a button pressed twice), as in
 VB; guard with a flag if that would be wrong. If the user closes the form
 meanwhile, its Visible is False when DoEvents returns.
 
+### The form designer
+
+`designer/` holds tfdesign, a visual form designer written in TermForms
+itself. Build it with `tfc designer.vbp`, then run `tfdesign main.bas`.
+You lay the form out with the mouse and keys and edit its properties.
+Double-click a control to write its event handler into the `.bas`. The
+designer saves the form block to `main.frm` (a block already in the
+`.bas` is edited there). `designer/README.md` has its keys.
+
 ### A form in a form: FormView
 
 A FormView shows a form that the program describes in code, drawn
