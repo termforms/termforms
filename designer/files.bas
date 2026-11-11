@@ -216,3 +216,98 @@ Public Function AddHandler(subName As String, params As String) As Integer
     If Not inFrm Then loadedText = text
     Return n + 1
 End Function
+
+' -- Renaming a control's handlers -------------------------------------------
+
+' Whether the Sub starting at lines(at) has nothing in it but blank lines
+' and comments before its End Sub.
+Public Function HandlerEmpty(lines() As String, at As Integer) As Boolean
+    For i As Integer = at + 1 To UBound(lines)
+        Dim t As String = LCase$(Trim$(lines(i)))
+        If t = "end sub" Or Left$(t, 8) = "end sub " Or Left$(t, 8) = "end sub'" Then Return True
+        If t <> "" And Left$(t, 1) <> "'" And Left$(t, 4) <> "rem " And t <> "rem" Then Return False
+    Next
+    Return True
+End Function
+
+' Renames the Subs old_<event> to new_<event> for each event named in
+' events (comma-separated), changing only their Sub lines.
+Public Sub RenameHandlers(oldName As String, newName As String, events As String)
+    Dim lines() As String
+    ReadLines basPath, lines
+    For Each e As String In Split(events, ",")
+        If e <> "" Then
+            Dim at As Integer = HandlerIn(lines, oldName & "_" & e) - 1
+            If at >= 0 Then
+                Dim was As String = oldName & "_" & e
+                Dim p As Integer = InStr(lines(at), was)
+                lines(at) = Left$(lines(at), p - 1) & newName & "_" & e & Mid$(lines(at), p + Len(was))
+            End If
+        End If
+    Next
+    WriteSafely basPath, Join(lines, vbLf) & vbLf
+    If Not inFrm Then loadedText = ReadText(basPath)
+End Sub
+
+' How often name is used in the .bas as a whole word, outside strings,
+' comments, Sub lines and the form block.
+Public Function UsesOf(name As String) As Integer
+    Dim lines() As String
+    ReadLines basPath, lines
+    Dim count As Integer = 0
+    ' The form block (if it is in the .bas) is the designer's, not code.
+    Dim first As Integer = -1
+    Dim last As Integer = -1
+    If UBound(lines) >= 0 Then first = BlockStart(lines)
+    If first >= 0 Then last = BlockEndLine(lines, first)
+    For i As Integer = 0 To UBound(lines)
+        Dim t As String = LCase$(Trim$(lines(i)))
+        Dim isSub As Boolean = Left$(t, 4) = "sub " Or Left$(t, 12) = "private sub " Or Left$(t, 11) = "public sub "
+        If Not isSub And (i < first Or i > last) Then count = count + WordsIn(lines(i), name)
+    Next
+    Return count
+End Function
+
+' Whole-word uses of name in one line of code, skipping strings and the
+' comment at its end.
+Private Function WordsIn(line As String, name As String) As Integer
+    Dim count As Integer = 0
+    Dim i As Integer = 1
+    Dim n As Integer = Len(line)
+    Do While i <= n
+        Dim ch As String = Mid$(line, i, 1)
+        If ch = Chr$(34) Then
+            ' a string: on to its closing quote ("" is a quote inside it)
+            i = i + 1
+            Do While i <= n
+                If Mid$(line, i, 1) = Chr$(34) Then
+                    If Mid$(line, i + 1, 1) = Chr$(34) Then
+                        i = i + 1
+                    Else
+                        Exit Do
+                    End If
+                End If
+                i = i + 1
+            Loop
+            i = i + 1
+        ElseIf ch = "'" Then
+            Exit Do
+        ElseIf IsWordChar(ch) Then
+            Dim start As Integer = i
+            Do While i <= n
+                If Not IsWordChar(Mid$(line, i, 1)) Then Exit Do
+                i = i + 1
+            Loop
+            Dim word As String = Mid$(line, start, i - start)
+            If word = name Then count = count + 1
+            If LCase$(word) = "rem" Then Exit Do
+        Else
+            i = i + 1
+        End If
+    Loop
+    Return count
+End Function
+
+Private Function IsWordChar(ch As String) As Boolean
+    Return (ch >= "a" And ch <= "z") Or (ch >= "A" And ch <= "Z") Or (ch >= "0" And ch <= "9") Or ch = "_"
+End Function

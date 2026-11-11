@@ -26,6 +26,12 @@ fills whatever it is given.
   in the Events list) to write an empty `Sub` for it at the end of the
   `.bas`. One already there is not written again. The status line says
   where it is.
+- **Renaming a control** renames its handlers too: the empty ones at
+  once, those with code in them if you agree. One whose new name is
+  already taken is left. Other uses of the old name in the code are not
+  changed; the status line counts them, and tfc reports them at the next
+  build. The handlers are renamed in the `.bas` straight away, so Undo
+  brings back the control's old name but not theirs.
 
 Before saving, the designer checks whether the file changed on disk since
 it was read. The `.bas` is read again so the code around the block stays

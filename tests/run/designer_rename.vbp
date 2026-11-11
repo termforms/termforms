@@ -1,0 +1,14 @@
+' Run test: tfdesign renaming a control that has handlers. cmdOK becomes
+' cmdSave in the property sheet: its empty GotFocus handler is renamed at
+' once, the Click one (with code) after the question (answered Yes);
+' cmdOKAY is not cmdOK's. The use in Form_Load (not the ones in a string
+' or a comment, nor the form block) is counted in the status line for tfc
+' to flag. Not saved: the handlers change in the .bas at once, the form
+' block only when saved, so the .bas keeps cmdOK in its block.
+Name=tfdesign
+Startup=Sub Main
+Form=../../designer/window.bas
+Module=../../designer/designer.bas
+Module=../../designer/model.bas
+Module=../../designer/catalog.bas
+Module=../../designer/files.bas

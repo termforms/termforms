@@ -707,15 +707,67 @@ Sub RenameSelected(name As String)
     End If
     Changing
     Dim was As String = sel
+    Dim kind As String = KindOf(sel)
+    Dim isForm As Boolean = was = FormName()
     RenameCtl sel, name
     sel = name
     ShowAll
-    If was <> FormName() And HandlerLine(SubName(was, FirstEvent(KindOf(name)))) > 0 Then
-        Status "Renamed " & was & " to " & name & ". Its handlers in " & ShortName(basPath) & " keep the old name: rename them there."
-    Else
+    If isForm Then
+        ' The form's handlers are Form_ whatever it is called.
         Status "Renamed " & was & " to " & name & "."
+        Exit Sub
     End If
+    Status "Renamed to " & name & "." & HandlersRenamed(was, name, kind)
+    ShowEvents
 End Sub
+
+' After a rename: its empty handlers are renamed too; those with code
+' only if the user agrees; any whose new name is taken are left. Returns
+' what to add to the status line about them and other uses of the name.
+Function HandlersRenamed(was As String, name As String, kind As String) As String
+    Dim code() As String
+    ReadLines basPath, code
+    Dim empty As String = ""
+    Dim full As String = ""
+    Dim taken As String = ""
+    For Each e As String In Split(EventOrder(kind), ",")
+        If e <> "" Then
+            Dim at As Integer = HandlerIn(code, was & "_" & e)
+            If at > 0 Then
+                If HandlerIn(code, name & "_" & e) > 0 Then
+                    taken = taken & ", " & e
+                ElseIf HandlerEmpty(code, at - 1) Then
+                    empty = empty & "," & e
+                Else
+                    full = full & "," & e
+                End If
+            End If
+        End If
+    Next
+    Dim renaming As String = empty
+    Dim note As String = ""
+    If full <> "" Then
+        Dim listed As String = Replace(Mid$(full, 2), ",", ", ")
+        Dim answer As Integer = MsgBox(was & " has handlers with code in them: " & listed & ". Rename them to " & name & "_... as well?", vbYesNo + vbQuestion, "Designer")
+        If answer = vbYes Then
+            renaming = renaming & full
+        Else
+            note = note & " Handlers left: " & listed & "."
+        End If
+    End If
+    If renaming <> "" Then
+        RenameHandlers was, name, renaming
+        note = " Handlers renamed too: " & Replace(Mid$(renaming, 2), ",", ", ") & "." & note
+    End If
+    If taken <> "" Then note = note & " Left (" & name & " has them): " & Mid$(taken, 3) & "."
+    Dim uses As Integer = UsesOf(was)
+    If uses = 1 Then
+        note = note & " 1 other use of " & was & ": tfc will flag it."
+    ElseIf uses > 1 Then
+        note = note & " " & uses & " other uses of " & was & ": tfc will flag them."
+    End If
+    Return note
+End Function
 
 ' -- Event handlers ----------------------------------------------------------
 

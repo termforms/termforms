@@ -1,0 +1,30 @@
+┌──────────────────────────── TermForms Designer: rename.bas (changed) ────────────────────────────┐
+│ File  Edit  View  Add  Help                                                                      │
+│Toolbox           ┌────────── Rename ──────────┐                    Control                       │
+│┌───────────────┐ │                            │                    cmdSave                     ▼ │
+││TextBox        │ │   < OK >                   │                    Properties                    │
+││CommandButton  │ │           ◢                │                    ┌───────────────────────────┐ │
+││Label          │ │                            │                    │Name              cmdSave  │ │
+││CheckBox       │ │                            │                    │Caption           OK       │ │
+││OptionButton   │ │                            │                    │Default           False    │ │
+││Frame          │ └────────────────────────────┘                    │Cancel            False    │ │
+││ListBox        │                                                   │CausesValidation  True     │ │
+││ComboBox       │                                                   │Left              1        │ │
+││FormView       ↓                                                   │Top               1        │ │
+│└───────────────┘                                                   │Width             10       │ │
+│Timers                                                              │Height            1        │ │
+│┌───────────────┐                                                   │Enabled           True     ↓ │
+││               │                                                   └───────────────────────────┘ │
+││               │                                                   Name:                         │
+││               │                                                   cmdSave                       │
+││               │                                                   Events (* written)            │
+│└───────────────┘                                                   ┌───────────────────────────┐ │
+│                                                                    │* Click                    │ │
+│frmRename 30x8                                                      │* GotFocus                 │ │
+│                                                                    │  LostFocus                │ │
+│< Tab order >                                                       │  Validate                 │ │
+│                                                                    │  KeyPress                 ↓ │
+│                                                                    └───────────────────────────┘ │
+│Renamed to cmdSave. Handlers renamed too: GotFocus, Click. 1 other use of cmdOK: tfc will flag it.│
+│Arrows move  Shift+arrows size  Del deletes  [ ] previous/next  Double-click: handler  F1 keys    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

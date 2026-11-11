@@ -1796,10 +1796,15 @@ layout are still to be designed with Jim before any code.
   24; a new form is named `frm` + the module's name, with that name as
   its Caption; a new control's caption is its name (VB's habit); a
   double-click writes the control's first event in the catalog (Click,
-  or Change for a TextBox, Load for the form); a renamed control's
-  handlers are not renamed (the status line says so); a `.frm` changed
+  or Change for a TextBox, Load for the form); a `.frm` changed
   on disk since it was read is replaced only after asking; tfc is
   `$TFC`, else the one beside the designer, else the PATH's.
+- **Renaming a control renames its handlers** (Jim, 11 Nov 2026): the
+  empty ones (nothing but blank lines and comments) at once; those with
+  code after asking, all together; one whose new name is taken is left.
+  Only the Sub lines change. Other uses of the old name in code are not
+  changed: the status line counts them (whole words, outside strings,
+  comments and the form block) and tfc reports them.
 
 ### Screen and Form_Resize (after v1: Settled, Jim, 11 Nov 2026)
 

@@ -685,7 +685,11 @@ authoritative for design rationale.
   Fixed (11 Nov 2026, found by that smoke test): Shell on Windows lost
   the outer quotes of a command such as `"C:\x\tfc.exe" --catalog >
   "out"` (cmd /c strips the first and last of more than two); the
-  runtime now wraps the command in quotes of its own. Also open: step 7 of the
+  runtime now wraps the command in quotes of its own.
+  Designer renames handlers with a control (Jim, 11 Nov 2026):
+  window.bas `HandlersRenamed`; files.bas `HandlerEmpty`,
+  `RenameHandlers`, `UsesOf`/`WordsIn` (counted for the status line, never
+  changed). Run test designer_rename. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on
