@@ -4,7 +4,8 @@ The `Release` workflow (`.github/workflows/release.yml`) builds an archive
 for macOS (Apple Silicon), Linux x86-64 and Windows x64 on every push to
 `main`, smoke-tests each (unpacked, its tfc builds and runs
 `examples/hello.bas`), and keeps them as the run's artifacts. A tag
-`v<version>` also publishes them as a GitHub Release, marked pre-release.
+`v<version>` also publishes them as a GitHub Release: a pre-release for a
+0.x version, a full release (shown as GitHub's latest) from 1.0.0 on.
 
 To cut a release:
 

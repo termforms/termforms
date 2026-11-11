@@ -573,8 +573,19 @@ authoritative for design rationale.
   control), runtime `tf_control_set_focus` (error 5). Run test validate;
   errors/validate; the demo's cboCity validates, its Close has
   CausesValidation False.
-- **Next:** Jim tries the new controls in real terminals (the demo);
-  then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
+- **Before v1.0.0 (Jim, 11 Nov 2026):** the controls work on the Mac
+  (Jim tried the demo); he approved the deliberate differences from VB6
+  (Validate before Enter/Esc press a button; SetFocus in Form_Load).
+  Done: GUIDE.md "Building for other machines" (zig for each target,
+  every target cross-built and checked with zig 0.16 and 0.17); the
+  release workflow publishes 0.x as pre-releases and 1.0.0 on as full
+  releases; every Proposed rule in REFERENCE.md settled for v1.0, as
+  built (Jim). Still to do: the demo cross-built for Windows and Linux
+  and tried there (conhost's font and the ▼ ░ █ characters are the risk;
+  `use_utf8`/`box()` has the ASCII fallback); then the version bump and
+  tag v1.0.0. Toolchain bundling: recommended to stay "bundles nothing"
+  for v1 (Jim to confirm).
+- **Next:** the Windows/Linux demo check; then tag v1.0.0. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

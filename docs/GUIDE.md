@@ -114,8 +114,9 @@ ssh -t server ./greet-linux
 
 Copied from Windows, the file arrives without its executable bit: run
 `chmod +x greet-linux` on the server once. Dropping the connection while
-it runs leaves the server's terminal as it was. (`aarch64-linux-musl`
-builds for ARM servers.)
+it runs leaves the server's terminal as it was. [Building for other
+machines](#building-for-other-machines) has the other targets, Windows
+among them, and how to get zig.
 
 ### Several files: modules and projects
 
@@ -977,11 +978,65 @@ highlighting, `tfc`'s errors in the Problems list and breakpoints in
 `.bas` files; with CodeLLDB, F5 builds and debugs. Its README says how to
 set it up.
 
+### Building for other machines
+
+`tfc` builds TermForms' runtime from source with every program, so it can
+build for any machine its C compiler can: a Mac or a Windows PC can build
+for a Linux server, and a Mac can build for Windows. zig is the C
+compiler that makes this easy, as it carries the C library of every
+system it targets. You need zig 0.16 or newer on the machine you build
+on:
+
+- **Windows:** `winget install zig.zig` (the zig you may already use).
+- **macOS:** `brew install zig` (the Command Line Tools build only for
+  the Mac itself).
+- **Linux:** your distribution's `zig` package, or a download from
+  ziglang.org.
+
+Then name the target with `--cc`:
+
+| To run on | `--cc` | Name the program |
+| --- | --- | --- |
+| Linux x86-64, any distribution (one static file) | `"zig cc -target x86_64-linux-musl"` | `-o greet-linux` |
+| Linux on ARM64 (a Raspberry Pi 4 or 5 running 64-bit, an ARM server) | `"zig cc -target aarch64-linux-musl"` | `-o greet-arm` |
+| Windows x64 (10 version 1809 or later) | `"zig cc -target x86_64-windows-gnu"` | `-o greet.exe` |
+
+For example, on a Mac:
+
+```sh
+tfc --cc "zig cc -target x86_64-linux-musl" --release -o greet-linux greet.bas
+tfc --cc "zig cc -target x86_64-windows-gnu" --release -o greet.exe greet.bas
+```
+
+- Give each target its own `-o` name, so one build does not overwrite
+  another (or the program for your own machine).
+- A project builds the same way: `tfc --cc "..." -o book-linux book.vbp`.
+- Setting `TFC_CC` saves typing `--cc` each time:
+  `export TFC_CC="zig cc -target x86_64-linux-musl"` (Windows PowerShell:
+  `$env:TFC_CC = "zig cc -target x86_64-linux-musl"`). Unset it to build
+  for your own machine again.
+- `--release` leaves out the debugging information, for a smaller file to
+  ship. A Windows build also writes a `.pdb` file beside the `.exe`; only
+  a debugger needs it, so ship the `.exe` alone.
+- The first build for a target is slow (a minute or more): zig builds that
+  target's C library once and keeps it, and later builds are quick.
+- A program with `Declare`s: C files of its own (`Lib "utils.c"`) are
+  compiled with the same `--cc`, so they cross-build too; a library
+  (`Lib "sqlite3"`) must be one zig can link for that target, which a
+  library installed only on your own machine is not.
+- A Mac program is built on a Mac (with the Command Line Tools).
+
+Check a cross-built program where it will run, in the terminal its users
+will have: copy it across and run it, or run it headless there
+([Testing without a terminal](#testing-without-a-terminal)) to see it
+start without a terminal at all.
+
 ### Deploying
 
 A built program is one file. For a Linux server, cross-build a static
-executable (see [Getting started](#a-program-for-a-linux-server)) and copy
-it; nothing else is needed there. On Windows, a program runs in Windows
+executable (see [Building for other machines](#building-for-other-machines))
+and copy it with `scp`; nothing else is needed there. Copied from Windows,
+it arrives without its executable bit: `chmod +x` it there once. On Windows, a program runs in Windows
 Terminal or the console (Windows 10 1809 or later); double-clicking one
 opens a window for it.
 

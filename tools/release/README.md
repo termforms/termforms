@@ -57,6 +57,10 @@ ssh -t server ./hello-linux
 
 One static file, nothing to install on the server. From Windows the file
 arrives without its executable bit: `chmod +x hello-linux` there once.
+zig also builds Windows programs from a Mac
+(`-target x86_64-windows-gnu -o hello.exe`) and Linux ARM64 ones
+(`-target aarch64-linux-musl`); on a Mac, get zig with `brew install zig`.
+`docs/GUIDE.md`, "Building for other machines", has the details.
 
 ## Learning the language
 

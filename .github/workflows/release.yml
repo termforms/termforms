@@ -8,7 +8,8 @@
 #
 # Every push to main keeps the archives as this run's artifacts. Pushing a
 # tag v<version> (matching project(VERSION) in CMakeLists.txt) also
-# publishes them as a GitHub Release, marked pre-release.
+# publishes them as a GitHub Release: a pre-release while the version is
+# 0.x, a full release (GitHub's "Latest") from 1.0.0 on.
 
 name: Release
 
@@ -128,6 +129,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --prerelease \
+          # 0.x versions are pre-releases; 1.0.0 and later are full releases.
+          kind=""
+          case "$GITHUB_REF_NAME" in v0.*) kind="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* $kind \
             --title "TermForms ${GITHUB_REF_NAME#v}" \
             --notes "TermForms ${GITHUB_REF_NAME#v}: tfc and its runtime for macOS (Apple Silicon), Linux x86-64 and Windows x64. Unpack, add bin to your PATH and install a C compiler: see README.md inside the archive."

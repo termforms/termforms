@@ -8,6 +8,9 @@ target. Each rule carries a status:
 - **Settled**: decided with Jim; change only by a new decision.
 - **Proposed**: the implementer's default, not yet confirmed by Jim.
 
+At v1.0 (11 Nov 2026) Jim settled every rule then Proposed, as built and
+tested; a rule marked Proposed now is one added since, awaiting him.
+
 When a rule differs from VB6 or VB.NET, it says so: those are the rules
 that will catch people out.
 
@@ -161,7 +164,7 @@ While cond  ...  End While     ' VB.NET spelling, same meaning
 - Step 0 loops forever (as VB). The final increment can overflow:
   `For i = 1 To 2147483647` raises Overflow, as in VB.
 
-### For Each (in v1: Settled, Jim, 27 Oct 2026; details Proposed)
+### For Each (in v1: Settled, Jim, 27 Oct 2026; details settled for v1.0, 11 Nov 2026)
 
 ```vb
 For Each w In words             ' each element of an array, in turn
@@ -211,7 +214,7 @@ End Select
 - **Values match the selector as `=` does** (Option Strict): numbers
   widen, Strings compare exactly (case matters), an Enum selector takes
   its own members, and String and number do not mix.
-- Details (Proposed): the selector may be a number, String, Boolean or
+- Details: the selector may be a number, String, Boolean or
   Enum (not a Type, Ref or array). A comparison needs its `Is`
   (`Case > 5` is an error that says so, as VB6 would have written it
   `Case Is > 5`). `Case Else` must come last. Only blank lines and
@@ -249,7 +252,7 @@ For Each w As String In words ... Next w
 - **`For i As Integer = ...` and `For Each w As String In ...`** declare
   the loop variable for the loop alone (gone after Next); it may not
   hide an enclosing local. The old form with an existing variable stays.
-- Initialiser details (Proposed): the values in one Dim are given left
+- Initialiser details: the values in one Dim are given left
   to right, so a later one may use an earlier (`Dim a As Integer = 5, b
   As Long = a * 2`). A name with a suffix needs no As of its own (`Dim
   n%, m As Integer = 3` is fine). `{}` leaves the array empty (UBound
@@ -272,7 +275,7 @@ For Each w As String In words ... Next w
 - **Closing a form during DoEvents** runs its Form_Unload (which may
   cancel) and the code after DoEvents carries on; if no form is left
   shown, the program ends when that code returns to the event loop.
-- Details (Proposed): **a form's `Visible` can be read** (True while it
+- Details: **a form's `Visible` can be read** (True while it
   is shown; Show and Hide set it, so it is read-only), for code after a
   DoEvents to see whether the user closed it. DoEvents before any form
   is shown does nothing. **In a key script**, where every key is already
@@ -565,7 +568,7 @@ copy = o                     ' a deep copy: copy.Lines is a separate array
   if r is Nothing).
 - **`With ... End With` is in v1**, for Types and Refs (details below).
 
-### Refs: details (Proposed)
+### Refs: details (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 Type Node
@@ -597,7 +600,7 @@ If head IsNot Nothing Then total = total + head.Value
 - Freeing a record frees the records only it refers to, recursively: a
   very long chain (a linked list of millions) uses as much stack.
 
-### With (Proposed, 27 Oct 2026)
+### With (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 With orders(i)
@@ -635,7 +638,7 @@ End With
 - `With` cannot follow `Then` on a one-line If. Nothing needs undoing
   when the With is left early.
 
-### Types: details (Proposed)
+### Types: details (Settled for v1.0, Jim, 11 Nov 2026)
 
 - Types are declared at module level. Members need a type (`As` or a
   suffix). A Type cannot contain itself by value, directly or through
@@ -676,7 +679,7 @@ Next
   `d.Exists(key)`, `d.Remove key`, `d.Count`, `d.Clear`, `d.Keys` (a
   String array) and `d.Items` (an array of T).
 
-### Dictionary: details (Proposed)
+### Dictionary: details (Settled for v1.0, Jim, 11 Nov 2026)
 
 - **Only `d(key) = value` (and Add) adds a key.** Any other use of an
   entry needs it to be there (error 5): reading it, changing a member of
@@ -733,7 +736,7 @@ Next
   `Exists(path)` (not VB's; True if a file or folder is there). Not VB's
   `Input #` / `Write #`.
 
-### Text files (Proposed)
+### Text files (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 n = FreeFile
@@ -772,7 +775,7 @@ Close                                   ' every open file
 - The program's current folder is where it was started; relative names
   are taken from there.
 
-### Binary files (Proposed)
+### Binary files (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 Dim buf() As Byte
@@ -797,7 +800,7 @@ Seek #1, 0                         ' set the position; Seek(1) reads it
   number) for a negative offset; 5 for a negative count; 9 for a Put count
   larger than the buffer.
 
-### The file system (Proposed)
+### The file system (Settled for v1.0, Jim, 11 Nov 2026)
 
 | Statement or function | Does |
 |---|---|
@@ -841,18 +844,18 @@ a time, so a Sub that calls itself to walk a tree would lose its place.
 - Settled: a link to a folder is not in `Folders()`, so a walk cannot
   loop; it is in `Files()`. Every name in a folder is in exactly one of
   the two lists. Syncthing does not follow links either.
-- Proposed: the pattern is `Dir$`'s: wildcards `*` and `?` in the last
+- the pattern is `Dir$`'s: wildcards `*` and `?` in the last
   part only, names only (not paths), sorted by byte order, names starting
   with `.` included. `Folders("photos")` gives `photos` itself if it is a
   folder; its contents are `Folders("photos/*")`. `""` or `"*"` is the
   current folder.
-- Proposed: unlike `Dir$` (which gives "" as VB does), a missing folder is
+- unlike `Dir$` (which gives "" as VB does), a missing folder is
   error 76 and one that cannot be read is 70, catchable, so a walk can
   report what it skipped. No match is an empty array (UBound -1).
-- Proposed: a broken link (to nothing) is in `Files()`; `IsLink` is True
+- a broken link (to nothing) is in `Files()`; `IsLink` is True
   for it and `Exists` False.
 
-### The system (Proposed)
+### The system (Settled for v1.0, Jim, 11 Nov 2026)
 
 | Function or statement | Gives or does |
 |---|---|
@@ -960,7 +963,7 @@ End Sub
   standard output goes to a console as Unicode (WriteConsoleW), to a pipe
   or file as UTF-8 bytes.
 
-### Byte (Proposed)
+### Byte (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 Dim b As Byte, buf(511) As Byte
@@ -981,7 +984,7 @@ b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outs
   variable for such ranges.
 - As text (with &, CStr, Str$) a Byte is its number.
 
-### String functions (Proposed)
+### String functions (Settled for v1.0, Jim, 11 Nov 2026)
 
 | Function | Gives |
 |---|---|
@@ -1002,8 +1005,8 @@ b = CByte(n - 100)           ' storing an Integer back needs CByte (error 6 outs
 - Each may be written with or without `$` (`Mid` = `Mid$`), except
   `String$`, since `String` alone is the type.
 - *Settled (Jim, 27 Oct 2026): the four rules below on errors,
-  comparison, case and the Mid$ statement; the rest of this section is
-  Proposed.*
+  comparison, case and the Mid$ statement; the rest settled for v1.0 (Jim, 11 Nov
+  2026).*
 - **Bad arguments are error 5**: a start before 1, a negative length or
   count, `Asc("")`, `String$(n, "")`, `Chr$` of a number that is not a
   character. A start past the end gives "" (Mid$) or 0 (InStr). A result
@@ -1081,7 +1084,7 @@ Declare Sub fill_name Lib "utils.c" (ByRef buffer As String)
   cannot go in a Const or an Enum. For choosing Shell commands, paths
   and the like.
 
-### Declare: details (Proposed)
+### Declare: details (Settled for v1.0, Jim, 11 Nov 2026)
 
 - `Declare Function name Lib "..." [Alias "cname"] ([params]) As type`,
   and `Declare Sub` for a C function returning void. Alias gives the C
@@ -1122,7 +1125,7 @@ Declare Sub fill_name Lib "utils.c" (ByRef buffer As String)
 - **`tfc a.bas b.bas` builds the files as one program** without a
   project file; a `.vbp` is for a name or settings.
 
-### Modules (Proposed)
+### Modules (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```vb
 ' stock.bas                          ' main.bas (the form's module)
@@ -1160,7 +1163,7 @@ End Sub
 - Types and Enums are named bare (`Dim p As Item`); one Public in two
   modules is ambiguous and must be made Private in one, for now.
 
-### Project files (Proposed)
+### Project files (Settled for v1.0, Jim, 11 Nov 2026)
 
 ```
 ' inventory.vbp
@@ -1261,7 +1264,7 @@ The defaults are the DOS look (the VGA palette's values):
   script in tools/ (no download); the Unicode notice ships in
   runtime/THIRD_PARTY_NOTICES.
 
-### The Option-key hint (Settled, Jim, 28 Oct 2026; details Proposed)
+### The Option-key hint (Settled, Jim, 28 Oct 2026; details settled for v1.0, 11 Nov 2026)
 
 - Out of the box macOS terminals type Option+letter as a character (˜,
   ¥, ∫) instead of sending Alt, so no access key can arrive. **When one
@@ -1269,7 +1272,7 @@ The defaults are the DOS look (the VGA palette's values):
   once a run, how to set the terminal** (iTerm2, Terminal.app, Ghostty)
   and that F10 or Ctrl+B opens the menus meanwhile. The key itself does
   nothing.
-- Details (Proposed): "where typing means nothing" is the focus on
+- Details: "where typing means nothing" is the focus on
   anything but a TextBox (a button, a CheckBox, a list), or the menus
   open; in a TextBox the character is typed, as it may be meant. The
   characters are the plain symbols of the US Option layer (˜ ¥ ∫ ∂ ƒ ©
@@ -1542,7 +1545,7 @@ off. The rest:
   with cells counted from 0,0 at the screen's top left.
 - No MouseDown/MouseUp/MouseMove events in v1 (not in the settled list).
 
-### Multi-line TextBox and ComboBox (in v1: Settled, Jim, 11 Nov 2026; details Proposed)
+### Multi-line TextBox and ComboBox (in v1: Settled, Jim, 11 Nov 2026; details settled for v1.0, 11 Nov 2026)
 
 Settled: both are in v1, which waits for them (the visual designer is
 the line after v1). In a multi-line TextBox **Enter always starts a new
@@ -1553,7 +1556,7 @@ becomes LF. The ComboBox has **Style 0** (a text box with a drop-down
 list) **and Style 2** (a drop-down list only); Style 1 (the list always
 showing) is left out. No auto-complete and no ListRows in v1.
 
-The rest is Proposed:
+The rest, settled for v1.0 (Jim, 11 Nov 2026):
 
 - **Multi-line TextBox** (built 11 Nov 2026). `MultiLine = True` is set
   in the form block only (as VB; setting it in code is a compile error,
@@ -1620,12 +1623,12 @@ The rest is Proposed:
   the menus. A list closes when its form is no longer on top, or the
   box is hidden or disabled.
 
-### Validate, CausesValidation and SetFocus (in v1: Settled, Jim, 11 Nov 2026; details Proposed)
+### Validate, CausesValidation and SetFocus (in v1: Settled, Jim, 11 Nov 2026; details settled for v1.0, 11 Nov 2026)
 
 Settled: all three are in v1, as VB6, so a program can check an entry
 (a ComboBox's typed text, say) when the user leaves it and keep them
 there. Closing the form never runs Validate, so the user can always
-leave (as VB6). The rest is Proposed:
+leave (as VB6). The rest, settled for v1.0 (Jim, 11 Nov 2026):
 
 - **Validate** `(ByRef Cancel As Boolean)`, on every control that can
   take the focus (as VB6; Unload's Cancel stays an Integer, as VB6). It
