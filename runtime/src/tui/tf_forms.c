@@ -2368,9 +2368,9 @@ static void draw_one(tf_control *form)
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
-        if (!shown(c) || c->type == TF_CTL_MENU)
+        if (!shown(c) || c->type == TF_CTL_MENU || c->type == TF_CTL_TIMER)
         {
-            continue;
+            continue; /* a Timer has no place: never drawn, never under the mouse */
         }
         const area a = inside(c->parent);
         if (c->left < 0 || c->top < 0 || c->left >= a.w || c->top >= a.h)
