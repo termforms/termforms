@@ -138,6 +138,16 @@ struct tf_control
     tf_control *open_list;
     int pop_x, pop_y, pop_w, pop_h;
 
+    /* FormView only: the form it shows (built by AddControl; NULL none),
+       ScrollX, ScrollY and TabNumbers. A control of that form (or the
+       form): whether it is selected, and where its handle was last drawn
+       (handle 0: none drawn). */
+    tf_control *guest;
+    int32_t scroll_x, scroll_y;
+    int tab_numbers;
+    int marked;
+    int handle, handle_x, handle_y;
+
     /* Where the control was last drawn on the screen (drawn 0: it was
        not), for the mouse. */
     int drawn;
@@ -212,7 +222,7 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
     control->name = copy_name(name);
     control->form = form;
     control->parent = form;
-    const int boxed = type == TF_CTL_FRAME || type == TF_CTL_LISTBOX;
+    const int boxed = type == TF_CTL_FRAME || type == TF_CTL_LISTBOX || type == TF_CTL_FORMVIEW;
     control->width = type == TF_CTL_TEXTBOX || type == TF_CTL_COMBOBOX || boxed ? 20 : 10;
     control->height = boxed ? 5 : 1;
     control->list_index = -1;
@@ -722,6 +732,15 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_CAUSESVALIDATION:
             control->causes_validation = value != 0;
             break;
+        case TF_PROP_SCROLLX:
+            control->scroll_x = value;
+            break;
+        case TF_PROP_SCROLLY:
+            control->scroll_y = value;
+            break;
+        case TF_PROP_TABNUMBERS:
+            control->tab_numbers = value != 0;
+            break;
         default:
             break;
     }
@@ -788,6 +807,12 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->style;
         case TF_PROP_CAUSESVALIDATION:
             return control->causes_validation;
+        case TF_PROP_SCROLLX:
+            return control->scroll_x;
+        case TF_PROP_SCROLLY:
+            return control->scroll_y;
+        case TF_PROP_TABNUMBERS:
+            return control->tab_numbers;
         default:
             return 0;
     }
@@ -1434,6 +1459,7 @@ static void draw_button(const tf_control *button, int x, int y, int max_width, i
 }
 
 static void draw_one(tf_control *form);
+static void draw_formview(tf_control *view, int x, int y, int w, int h);
 
 /* The backdrop and every form on the stack; or, if the terminal is too
    small for one of them, a message saying so. */
@@ -2305,15 +2331,13 @@ static void draw_drop_down(const tf_control *form, int bar_left, int bar_y)
 }
 
 /* One form, centred on the screen (the backdrop is already drawn). */
-static void draw_one(tf_control *form)
+/* A form with its top-left corner at ox, oy. Designing (a FormView
+   showing it): nothing has the focus or a popup open, and controls whose
+   Visible is False are drawn too, so they can be seen and chosen. */
+static void draw_form_at(tf_control *form, int ox, int oy, int designing)
 {
-    int cols = 0;
-    int rows = 0;
-    tf_screen_size(&cols, &rows);
     const int fw = (int)form->width;
     const int fh = (int)form->height;
-    const int ox = (cols - fw) / 2;
-    const int oy = (rows - fh) / 2;
     surface = shade_of(form->is_dialog ? TF_COLOUR_DIALOG_BACK : TF_COLOUR_FORM_BACK);
     tf_screen_fill(ox, oy, fw, fh, ' ', surface.text, surface.back);
 
@@ -2364,11 +2388,11 @@ static void draw_one(tf_control *form)
     form->at_y = form_area.y;
     form->at_w = form_area.w;
     form->at_h = form_area.h;
-    const int on_top = depth > 0 && form == stack[depth - 1];
+    const int on_top = !designing && depth > 0 && form == stack[depth - 1];
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
-        if (!shown(c) || c->type == TF_CTL_MENU || c->type == TF_CTL_TIMER)
+        if ((!designing && !shown(c)) || c->type == TF_CTL_MENU || c->type == TF_CTL_TIMER)
         {
             continue; /* a Timer has no place: never drawn, never under the mouse */
         }
@@ -2420,9 +2444,16 @@ static void draw_one(tf_control *form)
             case TF_CTL_COMBOBOX:
                 draw_combo(c, x, y, room, focused || form->open_list == c);
                 break;
+            case TF_CTL_FORMVIEW:
+                draw_formview(c, x, y, w, h);
+                break;
             default:
                 break;
         }
+    }
+    if (designing)
+    {
+        return;
     }
     /* The popup last, over the controls; only on the top form. */
     if (form->open_list != NULL && (!on_top || !form->open_list->drawn || !usable(form->open_list)))
@@ -2439,6 +2470,79 @@ static void draw_one(tf_control *form)
     }
 }
 
+/* A FormView: the backdrop, and on it the form it shows, moved by ScrollX
+   and ScrollY and cut to the view; then the marks a designer needs: the
+   selected controls in the highlight colours, each with a handle (◢)
+   just past its bottom-right corner (the form's past its own), and with
+   TabNumbers each control's place in tab order at its top left. */
+static void draw_formview(tf_control *view, int x, int y, int w, int h)
+{
+    const uint32_t backdrop = tf_colour(TF_COLOUR_BACKDROP);
+    tf_screen_fill(x, y, w, h, ' ', backdrop, backdrop);
+    tf_control *guest = view->guest;
+    if (guest == NULL || w <= 0 || h <= 0)
+    {
+        return;
+    }
+    /* Drawing the guest uses the globals of the form being drawn. */
+    const shade host_surface = surface;
+    const area host_area = form_area;
+    const int ox = x - (int)view->scroll_x;
+    const int oy = y - (int)view->scroll_y;
+    tf_screen_clip(x, y, w, h);
+    draw_form_at(guest, ox, oy, 1);
+
+    const uint32_t mark_back = tf_colour(TF_COLOUR_HIGHLIGHT_BACK);
+    const uint32_t mark_text = tf_colour(TF_COLOUR_HIGHLIGHT_TEXT);
+    const uint32_t ground = tf_colour(TF_COLOUR_FORM_BACK);
+    guest->handle = 0;
+    if (guest->marked)
+    {
+        guest->handle = 1;
+        guest->handle_x = ox + (int)guest->width;
+        guest->handle_y = oy + (int)guest->height;
+        tf_screen_put(guest->handle_x, guest->handle_y, box(0x25E2, '#'), mark_back, backdrop);
+    }
+    int place = 0;
+    for (int i = 0; i < guest->child_count; ++i)
+    {
+        tf_control *c = guest->children[i];
+        c->handle = 0;
+        if (c->type == TF_CTL_TIMER || (c->type == TF_CTL_MENU && !c->drawn))
+        {
+            continue;
+        }
+        if (c->type != TF_CTL_MENU && view->tab_numbers && c->drawn)
+        {
+            char number[16];
+            snprintf(number, sizeof number, "%d", place);
+            tf_screen_text(c->at_x, c->at_y, number, c->at_w, mark_text,
+                           tf_colour(TF_COLOUR_FORM_KEY));
+        }
+        place += c->type != TF_CTL_MENU;
+        if (c->marked && c->drawn)
+        {
+            tf_screen_paint(c->at_x, c->at_y, c->at_w, c->at_h, mark_text, mark_back);
+            c->handle = 1;
+            c->handle_x = c->at_x + c->at_w;
+            c->handle_y = c->at_y + c->at_h;
+            tf_screen_put(c->handle_x, c->handle_y, box(0x25E2, '#'), mark_back, ground);
+        }
+    }
+    tf_screen_unclip();
+    surface = host_surface;
+    form_area = host_area;
+}
+
+/* A shown form, centred on the screen. */
+static void draw_one(tf_control *form)
+{
+    int cols = 0;
+    int rows = 0;
+    tf_screen_size(&cols, &rows);
+    draw_form_at(form, (cols - (int)form->width) / 2, (rows - (int)form->height) / 2, 0);
+}
+
 /* ------------------------------------------------------------------------ */
 /* Keyboard handling                                                        */
 /* ------------------------------------------------------------------------ */
@@ -2447,7 +2551,8 @@ static int focusable(const tf_control *c)
 {
     return (c->type == TF_CTL_TEXTBOX || c->type == TF_CTL_COMMANDBUTTON ||
             c->type == TF_CTL_CHECKBOX || c->type == TF_CTL_OPTIONBUTTON ||
-            c->type == TF_CTL_LISTBOX || c->type == TF_CTL_COMBOBOX) &&
+            c->type == TF_CTL_LISTBOX || c->type == TF_CTL_COMBOBOX ||
+            c->type == TF_CTL_FORMVIEW) &&
            usable(c);
 }
 
@@ -3572,6 +3677,10 @@ static void form_mouse(tf_control *form, tf_key key)
             {
                 list_press(c, key, double_click);
             }
+            else if (c->type == TF_CTL_FORMVIEW && double_click)
+            {
+                fire(c, TF_EVENT_DBLCLICK);
+            }
             break;
         }
         case TF_MOUSE_DRAG:
@@ -3617,6 +3726,7 @@ static void form_mouse(tf_control *form, tf_key key)
             {
                 case TF_CTL_COMMANDBUTTON:
                 case TF_CTL_LABEL:
+                case TF_CTL_FORMVIEW:
                     fire(c, TF_EVENT_CLICK);
                     break;
                 case TF_CTL_CHECKBOX:
@@ -4411,6 +4521,10 @@ void tf_form_free(tf_control *form)
     for (int i = 0; i < form->child_count; ++i)
     {
         tf_control *c = form->children[i];
+        if (c->guest != NULL)
+        {
+            tf_form_free(c->guest);
+        }
         tf_list_clear(c);
         free(c->items);
         free(c->selected);
@@ -4753,4 +4867,337 @@ tf_string *tf_inputbox(const tf_string *prompt, const tf_string *title, const tf
     }
     tf_form_free(form);
     return text;
+}
+
+/* ------------------------------------------------------------------------ */
+/* FormView: a form described in code                                       */
+/* ------------------------------------------------------------------------ */
+
+/* The control and property names, from the table tfc writes (main gives
+   it before any code runs). */
+static const tf_catalog_entry *catalog = NULL;
+static int32_t catalog_count = 0;
+
+void tf_fv_catalog(const tf_catalog_entry *entries, int32_t count)
+{
+    catalog = entries;
+    catalog_count = count;
+}
+
+/* The control type named, or -1 if the catalog has none of that name. */
+static int catalog_type(const char *name)
+{
+    for (int32_t i = 0; i < catalog_count; ++i)
+    {
+        if (strcmp(catalog[i].control, name) == 0)
+        {
+            return (int)catalog[i].type;
+        }
+    }
+    return -1;
+}
+
+static const tf_catalog_entry *catalog_property(tf_control_type type, const char *name)
+{
+    for (int32_t i = 0; i < catalog_count; ++i)
+    {
+        if (catalog[i].type == type && strcmp(catalog[i].property, name) == 0)
+        {
+            return &catalog[i];
+        }
+    }
+    return NULL;
+}
+
+/* The form shown, or one of its controls, by name; NULL if none. */
+static tf_control *view_named(const tf_control *view, const char *name)
+{
+    tf_control *guest = view->guest;
+    if (guest == NULL)
+    {
+        return NULL;
+    }
+    if (strcmp(guest->name, name) == 0)
+    {
+        return guest;
+    }
+    for (int i = 0; i < guest->child_count; ++i)
+    {
+        if (strcmp(guest->children[i]->name, name) == 0)
+        {
+            return guest->children[i];
+        }
+    }
+    return NULL;
+}
+
+void tf_fv_clear(tf_control *view)
+{
+    if (view->guest != NULL)
+    {
+        tf_form_free(view->guest);
+        view->guest = NULL;
+    }
+}
+
+/* AddControl "Form", name first, then its controls in tab order; a
+   control's container is "" (the form), a Frame, or (for a menu item) a
+   bar menu. A name already used, a container that cannot hold it, or a
+   control before the form is error 5; a type the catalog lacks, 438. */
+void tf_fv_add(tf_control *view, const tf_string *type, const tf_string *name,
+               const tf_string *container)
+{
+    const char *type_name = tf_str_cstr(type);
+    const char *control_name = tf_str_cstr(name);
+    const char *container_name = tf_str_cstr(container);
+    const int kind = catalog_type(type_name);
+    if (kind < 0)
+    {
+        tf_raise(TF_ERR_NO_SUCH_MEMBER, NULL);
+        return;
+    }
+    if (control_name[0] == '\0' || view_named(view, control_name) != NULL)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    if (kind == TF_CTL_FORM)
+    {
+        if (view->guest != NULL || container_name[0] != '\0')
+        {
+            tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+            return;
+        }
+        view->guest = tf_form_new(control_name);
+        return;
+    }
+    tf_control *holder = NULL;
+    if (container_name[0] != '\0')
+    {
+        holder = view_named(view, container_name);
+        const int fits =
+            holder != NULL && holder != view->guest &&
+            (kind == TF_CTL_MENU ? holder->type == TF_CTL_MENU && holder->parent == holder->form
+                                 : holder->type == TF_CTL_FRAME);
+        if (!fits)
+        {
+            tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+            return;
+        }
+    }
+    if (view->guest == NULL)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    tf_control *c = tf_control_new(view->guest, (tf_control_type)kind, control_name);
+    if (holder != NULL)
+    {
+        tf_control_container(c, holder);
+    }
+}
+
+/* Text as a whole number for SetProperty: digits with an optional sign,
+   fitting in an Integer. */
+static int whole_number(const char *text, int32_t *value)
+{
+    const char *p = text;
+    const int negative = *p == '-';
+    p += *p == '-' || *p == '+';
+    int64_t n = 0;
+    if (*p == '\0')
+    {
+        return 0;
+    }
+    for (; *p != '\0'; ++p)
+    {
+        if (*p < '0' || *p > '9' || n > INT32_MAX)
+        {
+            return 0;
+        }
+        n = n * 10 + (*p - '0');
+    }
+    n = negative ? -n : n;
+    if (n < INT32_MIN || n > INT32_MAX)
+    {
+        return 0;
+    }
+    *value = (int32_t)n;
+    return 1;
+}
+
+static int same_ignoring_case(const char *a, const char *b)
+{
+    for (; *a != '\0' && *b != '\0'; ++a, ++b)
+    {
+        if (lower_ascii((unsigned char)*a) != lower_ascii((unsigned char)*b))
+        {
+            return 0;
+        }
+    }
+    return *a == *b;
+}
+
+/* The control or form, and the catalog's entry for its property; NULL
+   (with the error raised) if either is unknown. */
+static const tf_catalog_entry *view_property(const tf_control *view, const tf_string *name,
+                                             const tf_string *property, tf_control **target)
+{
+    *target = view_named(view, tf_str_cstr(name));
+    if (*target == NULL)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return NULL;
+    }
+    const tf_catalog_entry *entry = catalog_property((*target)->type, tf_str_cstr(property));
+    if (entry == NULL)
+    {
+        tf_raise(TF_ERR_NO_SUCH_MEMBER, NULL);
+    }
+    return entry;
+}
+
+/* SetProperty name, property, value: the value as text, converted to the
+   property's type (an Integer's digits; True or False; a String as it is).
+   One that does not convert, or is out of the property's range, is 380; a
+   read-only property, 383. */
+void tf_fv_set(tf_control *view, const tf_string *name, const tf_string *property,
+               const tf_string *value)
+{
+    tf_control *target = NULL;
+    const tf_catalog_entry *entry = view_property(view, name, property, &target);
+    if (entry == NULL)
+    {
+        return;
+    }
+    if (entry->read_only)
+    {
+        tf_raise(TF_ERR_READ_ONLY, NULL);
+        return;
+    }
+    const char *text = tf_str_cstr(value);
+    int32_t n = 0;
+    switch (entry->kind)
+    {
+        case 'S':
+            tf_set_str(target, entry->prop, value);
+            return;
+        case 'Y':
+            if (same_ignoring_case(text, "True") || same_ignoring_case(text, "False"))
+            {
+                tf_set_int(target, entry->prop, same_ignoring_case(text, "True"));
+                return;
+            }
+            break;
+        default:
+            /* The ranges the form block keeps to (sema checks them there). */
+            if (whole_number(text, &n) &&
+                (entry->prop != TF_PROP_SCROLLBARS || (n >= 0 && n <= 3)) &&
+                (entry->prop != TF_PROP_STYLE || n == 0 || n == 2) &&
+                (entry->prop != TF_PROP_MULTISELECT || (n >= 0 && n <= 2)))
+            {
+                tf_set_int(target, entry->prop, n);
+                return;
+            }
+            break;
+    }
+    tf_raise(TF_ERR_INVALID_PROPERTY, NULL);
+}
+
+/* GetProperty(name, property): its value as text, as SetProperty takes it
+   (so a control just added gives the runtime's defaults). */
+tf_string *tf_fv_get(tf_control *view, const tf_string *name, const tf_string *property)
+{
+    tf_control *target = NULL;
+    const tf_catalog_entry *entry = view_property(view, name, property, &target);
+    if (entry == NULL)
+    {
+        return NULL;
+    }
+    if (entry->kind == 'S')
+    {
+        return tf_str_ref(tf_get_str(target, entry->prop));
+    }
+    const int32_t n = tf_get_int(target, entry->prop);
+    if (entry->kind == 'Y')
+    {
+        return text_of(n != 0 ? "True" : "False");
+    }
+    char digits[16];
+    snprintf(digits, sizeof digits, "%d", (int)n);
+    return text_of(digits);
+}
+
+int tf_fv_selected(tf_control *view, const tf_string *name)
+{
+    const tf_control *c = view_named(view, tf_str_cstr(name));
+    if (c == NULL)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return 0;
+    }
+    return c->marked;
+}
+
+void tf_fv_set_selected(tf_control *view, const tf_string *name, int selected)
+{
+    tf_control *c = view_named(view, tf_str_cstr(name));
+    if (c == NULL)
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL);
+        return;
+    }
+    c->marked = selected != 0;
+}
+
+/* ControlAt(x, y), in the view's cells as last drawn: the innermost
+   control there (a Frame's control before the Frame, a bar menu), the
+   form's own name anywhere else on the form, "" off it. */
+tf_string *tf_fv_control_at(tf_control *view, int32_t x, int32_t y)
+{
+    const tf_control *guest = view->guest;
+    if (guest == NULL || !view->drawn || x < 0 || y < 0 || x >= view->at_w || y >= view->at_h)
+    {
+        return NULL;
+    }
+    const int sx = view->at_x + (int)x;
+    const int sy = view->at_y + (int)y;
+    const int hit = control_at(guest, sx, sy);
+    if (hit >= 0)
+    {
+        return text_of(guest->children[hit]->name);
+    }
+    const int ox = view->at_x - (int)view->scroll_x;
+    const int oy = view->at_y - (int)view->scroll_y;
+    if (sx >= ox && sy >= oy && sx < ox + (int)guest->width && sy < oy + (int)guest->height)
+    {
+        return text_of(guest->name);
+    }
+    return NULL;
+}
+
+/* HandleAt(x, y): whose handle (a selected control's, or the form's) was
+   drawn there; "" for none. */
+tf_string *tf_fv_handle_at(tf_control *view, int32_t x, int32_t y)
+{
+    const tf_control *guest = view->guest;
+    if (guest == NULL || !view->drawn || x < 0 || y < 0 || x >= view->at_w || y >= view->at_h)
+    {
+        return NULL;
+    }
+    const int sx = view->at_x + (int)x;
+    const int sy = view->at_y + (int)y;
+    for (int i = guest->child_count - 1; i >= 0; --i)
+    {
+        const tf_control *c = guest->children[i];
+        if (c->handle && c->handle_x == sx && c->handle_y == sy)
+        {
+            return text_of(c->name);
+        }
+    }
+    if (guest->handle && guest->handle_x == sx && guest->handle_y == sy)
+    {
+        return text_of(guest->name);
+    }
+    return NULL;
 }

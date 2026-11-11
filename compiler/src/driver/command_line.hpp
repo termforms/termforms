@@ -19,6 +19,7 @@ struct CommandLine
 {
     bool showHelp = false;           // -h, --help
     bool showVersion = false;        // --version
+    bool showCatalog = false;        // --catalog: print the controls, properties and events
     bool emitC = false;              // --emit-c: write the generated C and stop
     bool keepC = false;              // --keep-c: keep the generated C beside the program
     bool release = false;            // --release: optimise, no debug information
@@ -37,7 +38,8 @@ struct CommandLine
 // Rules:
 //   * Options and inputs may be mixed in any order.
 //   * "--" ends option processing; everything after it is an input.
-//   * -h/--help and --version need no inputs; otherwise at least one is required.
+//   * -h/--help, --version and --catalog need no inputs; otherwise at least one is
+//     required.
 //   * Options with a value take it as the next argument or after '=':
 //     "-o file", "-o=file", "--cc 'zig cc'", "--cc=zig cc". Each may appear once.
 CommandLine parseCommandLine(const std::vector<std::string> &args);

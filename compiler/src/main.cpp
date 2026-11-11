@@ -9,6 +9,7 @@
 
 #include "driver/build.hpp"
 #include "driver/command_line.hpp"
+#include "sema/catalog.hpp"
 #include "version.hpp"
 
 #include <iostream>
@@ -38,6 +39,11 @@ int main(int argc, char *argv[])
     if (cmd.showVersion)
     {
         std::cout << "tfc (TermForms) " << tf::kVersion << '\n';
+        return kExitOk;
+    }
+    if (cmd.showCatalog)
+    {
+        std::cout << tf::catalog::text();
         return kExitOk;
     }
 

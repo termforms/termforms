@@ -139,6 +139,10 @@ const char *tf_error_text(int32_t number)
             return "Input past end of file";
         case TF_ERR_INVALID_PROPERTY:
             return "Invalid property value";
+        case TF_ERR_READ_ONLY:
+            return "Set not supported (read-only property)";
+        case TF_ERR_NO_SUCH_MEMBER:
+            return "Object doesn't support this property or method";
         case TF_ERR_BAD_RECORD:
             return "Bad record number";
         case TF_ERR_TOO_MANY_FILES:

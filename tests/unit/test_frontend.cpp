@@ -6,6 +6,7 @@
 
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
+#include "sema/catalog.hpp"
 #include "sema/sema.hpp"
 
 #include <doctest.h>
@@ -714,4 +715,16 @@ TEST_CASE("form statements, Me, and events with arguments")
                        "Integer)\n    If Shift = vbCtrlMask Then Unload Me\nEnd Sub\n"
                        "Sub t_GotFocus()\n    Load f\n    f.Show vbModal\nEnd Sub\n") == "");
     CHECK(check(form + "Sub t_KeyPress(KeyAscii As Integer)\nEnd Sub\n") != "");
+}
+
+TEST_CASE("tfc --catalog lists each control, then its properties and events")
+{
+    const std::string text = tf::catalog::text();
+    CHECK(text.rfind("control Form\nproperty Caption String\n", 0) == 0);
+    CHECK(text.find("control FormView\n") != std::string::npos);
+    CHECK(text.find("property ListCount Integer read-only\n") != std::string::npos);
+    CHECK(text.find("property MultiLine Boolean form-only\n") != std::string::npos);
+    CHECK(text.find("event Unload ByRef Cancel As Integer\n") != std::string::npos);
+    CHECK(text.find("event MouseDown Button As Integer, Shift As Integer, X As Integer, "
+                    "Y As Integer\n") != std::string::npos);
 }

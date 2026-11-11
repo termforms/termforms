@@ -731,9 +731,38 @@ private:
 
     void emitMain(std::ostringstream &out)
     {
+        // A program with a FormView carries the catalog's names, for its
+        // AddControl and SetProperty to look up (the others' C is as before).
+        bool hasView = false;
+        for (const ControlDef *form : forms())
+        {
+            for (const ControlDef *child : controlsOf(*form))
+            {
+                hasView = hasView || child->typeName == "FormView";
+            }
+        }
+        glue(out);
+        int catalogSize = 0;
+        if (hasView)
+        {
+            out << "static const tf_catalog_entry tf_catalog_table[] = {\n";
+            for (const catalog::ControlType &type : catalog::allTypes())
+            {
+                for (const catalog::Property &p : type.properties)
+                {
+                    const char kind = p.type == Type::String    ? 'S'
+                                      : p.type == Type::Boolean ? 'Y'
+                                                                : 'I';
+                    out << "    {\"" << type.name << "\", " << type.cName << ", \"" << p.name
+                        << "\", " << p.cName << ", '" << kind << "', " << (p.readOnly ? 1 : 0)
+                        << "},\n";
+                    ++catalogSize;
+                }
+            }
+            out << "};\n\n";
+        }
         // Only a program that uses Command$ or CommandArgs takes main's arguments, so the
         // others' C is as before.
-        glue(out);
         out << (usesCommandLine_ ? "int main(int argc, char **argv)\n{\n" : "int main(void)\n{\n");
         out << "    tf_runtime_init(" << cString(options_.sourcePath) << ");\n";
         for (const auto &[role, rgb] : options_.colours)
@@ -745,6 +774,10 @@ private:
         if (usesCommandLine_)
         {
             out << "    tf_runtime_args(argc, argv);\n";
+        }
+        if (hasView)
+        {
+            out << "    tf_fv_catalog(tf_catalog_table, " << catalogSize << ");\n";
         }
         for (const Variable *v : allGlobals()) // in the program's order of modules
         {
@@ -2829,12 +2862,13 @@ private:
             {
                 const Expr &arg = *e.args[i];
                 const char kind = f->params[i];
-                args += (i == 0 ? "" : ", ") +
-                        (kind == 'C' || kind == 'F' || kind == 'K' ? cName(*arg.control)
-                         : kind == 'A' || kind == 'B'              ? wholeArrayRef(arg, scope)
-                         : kind == 'R'                             ? address(arg, scope)
-                         : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
-                                       : settle(arg, expr(arg, scope), scope).code);
+                args +=
+                    (i == 0 ? "" : ", ") +
+                    (kind == 'C' || kind == 'F' || kind == 'K' || kind == 'V' ? cName(*arg.control)
+                     : kind == 'A' || kind == 'B' ? wholeArrayRef(arg, scope)
+                     : kind == 'R'                ? address(arg, scope)
+                     : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
+                                   : settle(arg, expr(arg, scope), scope).code);
             }
             return {std::string(f->cName) + "(" + args + ")", f->result == Type::String};
         }

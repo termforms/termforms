@@ -119,6 +119,15 @@ enum class Builtin
     ListSetItem,
     ListSelected,
     ListSetSelected,
+    // A FormView's methods and Selected(name): args[0] is it.
+    ViewClear,
+    ViewAdd,
+    ViewSet,
+    ViewGet,
+    ViewSelected,
+    ViewSetSelected,
+    ViewControlAt,
+    ViewHandleAt,
     FileGet,
     FilePut,
     FileSeek, // Seek #n, offset
@@ -184,7 +193,8 @@ enum class Builtin
 // C; statements such as Open are made into calls of these too. Each parameter
 // S (a String), I (an Integer), L (a Long), Y (a Boolean), A (a whole String
 // array), B (a whole Byte array with one dimension), C (a ListBox or
-// ComboBox), K (a control that can take the focus), F (a form) or R (a String variable, element or
+// ComboBox), K (a control that can take the focus), F (a form), V (a
+// FormView) or R (a String variable, element or
 // field, passed by address to be changed); the first `required` must be given and the rest default
 // to `defaults` (S: text, I: a number), except that InStr's optional parameter comes first
 // (InStr([start,] s, find)). fails: a bad argument can raise an error.
@@ -245,6 +255,14 @@ inline constexpr StringFunction kStringFunctions[] = {
     {Builtin::ListSetItem, "CIS", 3, {}, Type::Void, "tf_list_set_item", true},
     {Builtin::ListSelected, "CI", 2, {}, Type::Boolean, "tf_list_selected", true},
     {Builtin::ListSetSelected, "CIY", 3, {}, Type::Void, "tf_list_set_selected", true},
+    {Builtin::ViewClear, "V", 1, {}, Type::Void, "tf_fv_clear", false},
+    {Builtin::ViewAdd, "VSSS", 3, {nullptr, nullptr, nullptr, ""}, Type::Void, "tf_fv_add", true},
+    {Builtin::ViewSet, "VSSS", 4, {}, Type::Void, "tf_fv_set", true},
+    {Builtin::ViewGet, "VSS", 3, {}, Type::String, "tf_fv_get", true},
+    {Builtin::ViewSelected, "VS", 2, {}, Type::Boolean, "tf_fv_selected", true},
+    {Builtin::ViewSetSelected, "VSY", 3, {}, Type::Void, "tf_fv_set_selected", true},
+    {Builtin::ViewControlAt, "VII", 3, {}, Type::String, "tf_fv_control_at", false},
+    {Builtin::ViewHandleAt, "VII", 3, {}, Type::String, "tf_fv_handle_at", false},
     {Builtin::FileGet, "IILBII", 6, {}, Type::Void, "tf_file_get", true},
     {Builtin::FilePut, "IILBII", 6, {}, Type::Void, "tf_file_put", true},
     {Builtin::FileSeek, "IL", 2, {}, Type::Void, "tf_file_seek", true},

@@ -1,0 +1,6 @@
+formview.bas:13:9: error: a FormView's statements are Clear, AddControl and SetProperty, not 'AddItem'
+formview.bas:14:9: error: 'SetProperty' takes 3 arguments, not 2
+formview.bas:15:23: error: argument 1 of 'ControlAt' must be an Integer, not a String; use CInt(value) to convert
+formview.bas:16:13: error: 'GetProperty' takes 2 arguments, not 1
+formview.bas:17:10: error: a ListBox's statements are AddItem, RemoveItem and Clear, not 'AddControl'
+formview.bas:18:25: error: argument 2 of 'Selected' must be a Boolean, not an Integer

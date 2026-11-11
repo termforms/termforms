@@ -71,6 +71,11 @@ CommandLine parseCommandLine(const std::vector<std::string> &args)
             result.showVersion = true;
             continue;
         }
+        if (arg == "--catalog")
+        {
+            result.showCatalog = true;
+            continue;
+        }
         if (arg == "--emit-c")
         {
             result.emitC = true;
@@ -141,8 +146,9 @@ CommandLine parseCommandLine(const std::vector<std::string> &args)
         }
     }
 
-    // Help and version are complete requests in themselves.
-    if (result.ok() && !result.showHelp && !result.showVersion && result.inputs.empty())
+    // Help, version and the catalog are complete requests in themselves.
+    if (result.ok() && !result.showHelp && !result.showVersion && !result.showCatalog &&
+        result.inputs.empty())
     {
         fail(result, "no input files");
     }
@@ -170,6 +176,8 @@ std::string usageText()
            "                    else runtime/ beside tfc's bin folder, else the runtime\n"
            "                    this tfc was built with)\n"
            "  -v, --verbose     Show the C compiler command\n"
+           "  --catalog         List the controls with their properties and events, one\n"
+           "                    a line (for tools such as a form designer), and exit\n"
            "  -h, --help        Show this help and exit\n"
            "  --version         Show the compiler version and exit\n";
 }

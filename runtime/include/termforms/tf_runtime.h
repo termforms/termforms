@@ -99,6 +99,8 @@ TF_NORETURN void tf_end(int exit_code);
 #define TF_ERR_PAST_END 62            /* Input past end of file */
 #define TF_ERR_BAD_RECORD 63          /* Bad record number */
 #define TF_ERR_INVALID_PROPERTY 380   /* Invalid property value */
+#define TF_ERR_READ_ONLY 383          /* Set not supported (read-only property) */
+#define TF_ERR_NO_SUCH_MEMBER 438     /* Object doesn't support this property or method */
 #define TF_ERR_TOO_MANY_FILES 67      /* Too many files */
 #define TF_ERR_PERMISSION 70          /* Permission denied */
 #define TF_ERR_PATH_ACCESS 75         /* Path/File access error */
@@ -642,7 +644,8 @@ typedef enum tf_control_type
     TF_CTL_LISTBOX,
     TF_CTL_COMBOBOX, /* a ListBox's items with one shown, and a list that drops down */
     TF_CTL_TIMER,
-    TF_CTL_MENU /* in the menu bar (its container the form) or in a menu */
+    TF_CTL_MENU,    /* in the menu bar (its container the form) or in a menu */
+    TF_CTL_FORMVIEW /* shows a form described in code (AddControl...), not live */
 } tf_control_type;
 
 /* Properties a control may have; the compiler checks which apply to which. */
@@ -661,23 +664,26 @@ typedef enum tf_prop
     TF_PROP_VISIBLE,
     TF_PROP_LISTCOUNT, /* ListBox, read only */
     TF_PROP_LISTINDEX, /* ListBox: the selected (or, with MultiSelect, the current) item; -1 none */
-    TF_PROP_MULTISELECT,     /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
-    TF_PROP_SORTED,          /* ListBox: AddItem keeps the items in order, ignoring case */
-    TF_PROP_SELCOUNT,        /* ListBox, read only: how many items are selected */
-    TF_PROP_TOPINDEX,        /* ListBox: the first item shown */
-    TF_PROP_INTERVAL,        /* Timer: milliseconds between Timer events; 0 stops it */
-    TF_PROP_CHECKED,         /* Menu: a check mark before the item */
-    TF_PROP_SHORTCUT,        /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
-    TF_PROP_SELSTART,        /* TextBox: where the selection starts, in code points */
-    TF_PROP_SELLENGTH,       /* TextBox: how many code points are selected */
-    TF_PROP_SELTEXT,         /* TextBox: the selected text; setting it replaces the selection */
-    TF_PROP_MAXLENGTH,       /* TextBox: code points the user may type; 0 no limit */
-    TF_PROP_LOCKED,          /* TextBox: the user may select and copy, not change */
-    TF_PROP_PASSWORDCHAR,    /* TextBox: shown for every character; "" shows the text */
-    TF_PROP_MULTILINE,       /* TextBox (form block only): Enter starts a new line */
-    TF_PROP_SCROLLBARS,      /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
-    TF_PROP_STYLE,           /* ComboBox (form block only): 0 text and list, 2 list only */
-    TF_PROP_CAUSESVALIDATION /* moving to it runs the Validate of the control left */
+    TF_PROP_MULTISELECT,  /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
+    TF_PROP_SORTED,       /* ListBox: AddItem keeps the items in order, ignoring case */
+    TF_PROP_SELCOUNT,     /* ListBox, read only: how many items are selected */
+    TF_PROP_TOPINDEX,     /* ListBox: the first item shown */
+    TF_PROP_INTERVAL,     /* Timer: milliseconds between Timer events; 0 stops it */
+    TF_PROP_CHECKED,      /* Menu: a check mark before the item */
+    TF_PROP_SHORTCUT,     /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
+    TF_PROP_SELSTART,     /* TextBox: where the selection starts, in code points */
+    TF_PROP_SELLENGTH,    /* TextBox: how many code points are selected */
+    TF_PROP_SELTEXT,      /* TextBox: the selected text; setting it replaces the selection */
+    TF_PROP_MAXLENGTH,    /* TextBox: code points the user may type; 0 no limit */
+    TF_PROP_LOCKED,       /* TextBox: the user may select and copy, not change */
+    TF_PROP_PASSWORDCHAR, /* TextBox: shown for every character; "" shows the text */
+    TF_PROP_MULTILINE,    /* TextBox (form block only): Enter starts a new line */
+    TF_PROP_SCROLLBARS,   /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
+    TF_PROP_STYLE,        /* ComboBox (form block only): 0 text and list, 2 list only */
+    TF_PROP_CAUSESVALIDATION, /* moving to it runs the Validate of the control left */
+    TF_PROP_SCROLLX,          /* FormView: how far the form shown is moved left */
+    TF_PROP_SCROLLY,          /* FormView: and up */
+    TF_PROP_TABNUMBERS        /* FormView: each control shows its place in tab order */
 } tf_prop;
 
 typedef enum tf_event
@@ -729,6 +735,34 @@ void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handl
 void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler handler);
 void tf_control_on_key(tf_control *control, tf_key_handler handler); /* KeyDown */
 void tf_control_on_mouse(tf_control *control, tf_event event, tf_mouse_handler handler);
+
+/* FormView. The runtime learns control and property names from a table
+   tfc writes, out of its own catalog, into a program that has a FormView
+   (one entry a property: kind S String, I Integer, Y Boolean; read_only
+   for ListCount and the like). */
+typedef struct tf_catalog_entry
+{
+    const char *control;
+    tf_control_type type;
+    const char *property;
+    tf_prop prop;
+    char kind;
+    char read_only;
+} tf_catalog_entry;
+void tf_fv_catalog(const tf_catalog_entry *entries, int32_t count);
+/* Clear; AddControl type, name, container ("" the form); SetProperty and
+   GetProperty by name, values as text; Selected(name); ControlAt and
+   HandleAt (cells of the view, as its mouse events give them). */
+void tf_fv_clear(tf_control *view);
+void tf_fv_add(tf_control *view, const tf_string *type, const tf_string *name,
+               const tf_string *container);
+void tf_fv_set(tf_control *view, const tf_string *name, const tf_string *property,
+               const tf_string *value);
+tf_string *tf_fv_get(tf_control *view, const tf_string *name, const tf_string *property);
+int tf_fv_selected(tf_control *view, const tf_string *name);
+void tf_fv_set_selected(tf_control *view, const tf_string *name, int selected);
+tf_string *tf_fv_control_at(tf_control *view, int32_t x, int32_t y);
+tf_string *tf_fv_handle_at(tf_control *view, int32_t x, int32_t y);
 
 /* Screen.Width and Screen.Height: the terminal's size in cells (a
    headless run's, TERMFORMS_HEADLESS_SIZE). */

@@ -9,6 +9,7 @@
 
 #include "ast/ast.hpp"
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -43,6 +44,17 @@ struct ControlType
     std::vector<Property> properties;
     std::vector<Event> events;
 };
+
+// Every control type, "Form" first (for tfc --catalog and the FormView's table).
+const std::vector<ControlType> &allTypes();
+
+// tfc --catalog: every control, then its properties and events, one a line,
+// for a tool (a form designer) to read without parsing JSON:
+//   control CommandButton
+//   property Caption String
+//   property ListCount Integer read-only      (or form-only: the form block's)
+//   event KeyDown ByRef KeyCode As Integer, Shift As Integer
+std::string text();
 
 // Looks up a control type by its exact (case-sensitive) name; "Form" included.
 const ControlType *findType(std::string_view name);

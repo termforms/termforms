@@ -150,6 +150,12 @@ void tf_screen_free(void);
 void tf_screen_size(int *cols, int *rows);
 void tf_screen_fill(int x, int y, int width, int height, uint32_t ch, uint32_t fg, uint32_t bg);
 void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg);
+/* Writes go only inside this rectangle until tf_screen_unclip (a FormView
+   drawing the form it shows); colours a rectangle, keeping its characters
+   (and their underlines). */
+void tf_screen_clip(int x, int y, int width, int height);
+void tf_screen_unclip(void);
+void tf_screen_paint(int x, int y, int width, int height, uint32_t fg, uint32_t bg);
 
 /* Writes UTF-8 text from (x, y), at most max_cells wide. Returns cells used. */
 int tf_screen_text(int x, int y, const char *utf8, int max_cells, uint32_t fg, uint32_t bg);

@@ -1385,6 +1385,33 @@ private:
             checkMidStatement(s);
             return;
         }
+        if (target.kind == ExprKind::Index && target.left != nullptr)
+        {
+            withTarget(*target.left);
+        }
+        // fv.Selected(name) = b: a call that sets it.
+        if (target.kind == ExprKind::Index && target.left != nullptr &&
+            target.left->kind == ExprKind::Member && target.left->left != nullptr &&
+            target.left->text == "Selected" && isFormView(*target.left->left))
+        {
+            auto call = std::make_unique<Expr>();
+            call->kind = ExprKind::Call;
+            call->builtin = Builtin::ViewSetSelected;
+            call->text = "Selected";
+            call->location = target.location;
+            call->args.push_back(std::move(target.left->left));
+            for (auto &index : target.args)
+            {
+                call->args.push_back(std::move(index));
+            }
+            call->args.push_back(std::move(s.value));
+            s.kind = StmtKind::Library;
+            s.target.reset();
+            s.args.clear();
+            s.args.push_back(std::move(call));
+            checkExpr(*s.args[0]);
+            return;
+        }
         // lst.List(i) = x and lst.Selected(i) = b: calls that set them.
         if (target.kind == ExprKind::Index && target.left != nullptr &&
             target.left->kind == ExprKind::Member && target.left->left != nullptr &&
@@ -2649,14 +2676,31 @@ private:
         return Type::Error;
     }
 
+    // .Member inside a With, where a control's method or indexed property
+    // is looked for before the member is resolved: the With's target.
+    void withTarget(Expr &member)
+    {
+        if (member.kind == ExprKind::Member && member.left == nullptr && !withs_.empty() &&
+            withs_.back() != nullptr)
+        {
+            member.left = clonePath(*withs_.back(), member.location);
+        }
+    }
+
     // o.Lines(i): an element of an array member.
     Type checkMemberIndex(Expr &e)
     {
+        withTarget(*e.left);
         if (e.left->kind == ExprKind::Member && e.left->left != nullptr &&
             (e.left->text == "List" || e.left->text == "Selected") &&
             isListBox(*e.left->left, e.left->text == "List"))
         {
             return listIndexed(e);
+        }
+        if (e.left->kind == ExprKind::Member && e.left->left != nullptr &&
+            viewFunction(e.left->text) != Builtin::None && isFormView(*e.left->left))
+        {
+            return viewIndexed(e);
         }
         // Utils.Clean(s) or Utils.names(2): a Function or array element of a
         // module, named through it.
@@ -2973,6 +3017,7 @@ private:
             diagnostics_.error(member->location, "expected '=' after this");
             return;
         }
+        withTarget(*member);
         // ctl.SetFocus (frmX.ctl.SetFocus too): a library statement.
         if (member->left != nullptr && member->text == "SetFocus" && isControl(*member->left) &&
             !member->left->control->isForm)
@@ -2996,6 +3041,11 @@ private:
         if (member->left != nullptr && isListBox(*member->left))
         {
             listMethod(s, *member, args);
+            return;
+        }
+        if (member->left != nullptr && isFormView(*member->left))
+        {
+            viewMethod(s, *member, args);
             return;
         }
         // frmX.Show [vbModal], frmX.Hide (and Me.Show, Me.Hide).
@@ -3165,6 +3215,77 @@ private:
         checkExpr(object);
         return object.control != nullptr && (object.control->typeName == "ListBox" ||
                                              (combo && object.control->typeName == "ComboBox"));
+    }
+
+    // object, if it is a FormView (fv, or frmMain.fv): checked, else left.
+    bool isFormView(Expr &object)
+    {
+        const bool named =
+            (object.kind == ExprKind::Name && controls_.count(object.text) != 0) ||
+            (object.kind == ExprKind::Name && object.control != nullptr) ||
+            (object.kind == ExprKind::Member && object.left != nullptr &&
+             object.left->kind == ExprKind::Name && controls_.count(object.left->text) != 0);
+        if (!named)
+        {
+            return false;
+        }
+        checkExpr(object);
+        return object.control != nullptr && object.control->typeName == "FormView";
+    }
+
+    // fv.Clear, fv.AddControl type, name [, container], fv.SetProperty
+    // name, property, value: library statements.
+    void viewMethod(Stmt &s, Expr &member, std::vector<ExprPtr> &args)
+    {
+        const std::string &m = member.text;
+        const Builtin id = m == "Clear"         ? Builtin::ViewClear
+                           : m == "AddControl"  ? Builtin::ViewAdd
+                           : m == "SetProperty" ? Builtin::ViewSet
+                                                : Builtin::None;
+        if (id == Builtin::None)
+        {
+            diagnostics_.error(member.location, "a FormView's statements are Clear, AddControl "
+                                                "and SetProperty, not '" +
+                                                    m + "'");
+            return;
+        }
+        auto call = std::make_unique<Expr>();
+        call->kind = ExprKind::Call;
+        call->builtin = id;
+        call->text = m;
+        call->location = member.location;
+        call->args.push_back(std::move(member.left));
+        for (auto &arg : args)
+        {
+            call->args.push_back(std::move(arg));
+        }
+        s.kind = StmtKind::Library;
+        s.args.clear();
+        s.args.push_back(std::move(call));
+        checkExpr(*s.args[0]);
+    }
+
+    // fv.GetProperty(name, property), fv.Selected(name), fv.ControlAt(x,
+    // y), fv.HandleAt(x, y): calls of the library's routines; Builtin::None
+    // for any other member.
+    static Builtin viewFunction(const std::string &member)
+    {
+        return member == "GetProperty" ? Builtin::ViewGet
+               : member == "Selected"  ? Builtin::ViewSelected
+               : member == "ControlAt" ? Builtin::ViewControlAt
+               : member == "HandleAt"  ? Builtin::ViewHandleAt
+                                       : Builtin::None;
+    }
+
+    Type viewIndexed(Expr &e)
+    {
+        ExprPtr view = std::move(e.left->left);
+        e.kind = ExprKind::Call;
+        e.text = e.left->text;
+        e.builtin = viewFunction(e.text);
+        e.left.reset();
+        e.args.insert(e.args.begin(), std::move(view));
+        return checkExpr(e);
     }
 
     // lst.List(i) / lst.Selected(i), read: calls of the library's routines.
@@ -4169,14 +4290,16 @@ private:
             {
                 checkExpr(*arg);
             }
-            diagnostics_.error(
-                e.location,
-                "'" + name + "' takes " +
-                    (f.required == most
-                         ? std::to_string(most)
-                         : std::to_string(f.required) + (most == f.required + 1 ? " or " : " to ") +
-                               std::to_string(most)) +
-                    (most == 1 ? " argument" : " arguments") + ", not " + std::to_string(given));
+            const int r = receiverOf(f.id);
+            diagnostics_.error(e.location,
+                               "'" + name + "' takes " +
+                                   (f.required == most
+                                        ? std::to_string(most - r)
+                                        : std::to_string(f.required - r) +
+                                              (most == f.required + 1 ? " or " : " to ") +
+                                              std::to_string(most - r)) +
+                                   (most - r == 1 ? " argument" : " arguments") + ", not " +
+                                   std::to_string(given - r));
             return Type::Error;
         }
         // Print #n, 5: a lone item that is not text becomes text, as & would
@@ -4261,7 +4384,8 @@ private:
             if (want == 'K')
             {
                 static const char *const kFocusable[] = {
-                    "TextBox", "CommandButton", "CheckBox", "OptionButton", "ListBox", "ComboBox"};
+                    "TextBox", "CommandButton", "CheckBox", "OptionButton",
+                    "ListBox", "ComboBox",      "FormView"};
                 bool fits = false;
                 for (const char *type : kFocusable)
                 {
@@ -4276,17 +4400,19 @@ private:
                 ok = ok && arg.type != Type::Error;
                 continue;
             }
-            if (want == 'C' || want == 'F')
+            if (want == 'C' || want == 'F' || want == 'V')
             {
                 const bool fits = arg.control != nullptr &&
-                                  (want == 'F' ? arg.control->isForm
-                                               : arg.control->typeName == "ListBox" ||
-                                                     arg.control->typeName == "ComboBox");
+                                  (want == 'F'   ? arg.control->isForm
+                                   : want == 'V' ? arg.control->typeName == "FormView"
+                                                 : arg.control->typeName == "ListBox" ||
+                                                       arg.control->typeName == "ComboBox");
                 if (arg.type != Type::Error && !fits)
                 {
-                    diagnostics_.error(arg.location,
-                                       "'" + name + "' is for " +
-                                           (want == 'F' ? "a form" : "a ListBox or ComboBox"));
+                    diagnostics_.error(arg.location, "'" + name + "' is for " +
+                                                         (want == 'F'   ? "a form"
+                                                          : want == 'V' ? "a FormView"
+                                                                        : "a ListBox or ComboBox"));
                     ok = false;
                 }
                 ok = ok && arg.type != Type::Error;
@@ -4379,8 +4505,18 @@ private:
             case Builtin::MidAssign: // Mid$(s, start, length) = text
                 return i == 1 ? "the start" : i == 2 ? "the text after =" : "the length";
             default:
-                return "argument " + std::to_string(i + 1);
+                // A FormView's routines count after the FormView itself.
+                return "argument " + std::to_string(i + 1 - receiverOf(id));
         }
+    }
+
+    // 1 for a routine written as a control's method (fv.AddControl ...),
+    // whose first argument is that control: the counts in messages leave it
+    // out, as the programmer never writes it among the arguments.
+    static int receiverOf(Builtin id)
+    {
+        const StringFunction *f = findStringFunction(id);
+        return f != nullptr && f->params[0] == 'V' ? 1 : 0;
     }
 
     // UBound(a [, dimension]) and LBound: an Integer.

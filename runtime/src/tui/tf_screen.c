@@ -39,6 +39,9 @@ static int cursor_x = 0;
 static int cursor_y = 0;
 static int cursor_visible = 0;
 
+/* Writes land only in [clip_x0, clip_x1) x [clip_y0, clip_y1). */
+static int clip_x0 = 0, clip_y0 = 0, clip_x1 = 1 << 20, clip_y1 = 1 << 20;
+
 /* Output is assembled here and written in one call per flush. */
 static char *out = NULL;
 static size_t out_length = 0;
@@ -204,9 +207,24 @@ static void break_wide(tf_cell *row, int x)
     }
 }
 
+void tf_screen_clip(int x, int y, int w, int h)
+{
+    clip_x0 = x;
+    clip_y0 = y;
+    clip_x1 = x + w;
+    clip_y1 = y + h;
+}
+
+void tf_screen_unclip(void)
+{
+    clip_x0 = clip_y0 = 0;
+    clip_x1 = clip_y1 = 1 << 20;
+}
+
 void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg)
 {
-    if (x < 0 || y < 0 || x >= width || y >= height)
+    if (x < 0 || y < 0 || x >= width || y >= height || x < clip_x0 || y < clip_y0 || x >= clip_x1 ||
+        y >= clip_y1)
     {
         return;
     }
@@ -216,7 +234,7 @@ void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg)
         return;
     }
     tf_cell *row = &back[y * width];
-    if (cells == 2 && x + 1 >= width)
+    if (cells == 2 && (x + 1 >= width || x + 1 >= clip_x1))
     {
         ch = ' '; /* half a wide character cannot be shown */
     }
@@ -230,6 +248,23 @@ void tf_screen_put(int x, int y, uint32_t ch, uint32_t fg, uint32_t bg)
         row[x + 1].ch = TF_CELL_TAIL;
         row[x + 1].fg = fg;
         row[x + 1].bg = bg;
+    }
+}
+
+void tf_screen_paint(int x, int y, int w, int h, uint32_t fg, uint32_t bg)
+{
+    for (int row = y; row < y + h; ++row)
+    {
+        for (int col = x; col < x + w; ++col)
+        {
+            if (col >= 0 && row >= 0 && col < width && row < height && col >= clip_x0 &&
+                row >= clip_y0 && col < clip_x1 && row < clip_y1)
+            {
+                tf_cell *cell = &back[row * width + col];
+                cell->fg = fg | (cell->fg & TF_UNDERLINE);
+                cell->bg = bg;
+            }
+        }
     }
 }
 

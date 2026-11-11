@@ -32,6 +32,8 @@ TEST_CASE("help and version need no inputs")
     CHECK(parseCommandLine({"-h"}).showHelp);
     CHECK(parseCommandLine({"--version"}).showVersion);
     CHECK(parseCommandLine({"--version"}).ok());
+    CHECK(parseCommandLine({"--catalog"}).showCatalog);
+    CHECK(parseCommandLine({"--catalog"}).ok());
 }
 
 TEST_CASE("-o takes the next argument or an = value")

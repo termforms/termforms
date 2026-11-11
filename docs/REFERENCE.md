@@ -373,6 +373,8 @@ VB documentation pay off most, so the numbering follows VB6 where it can:
 | 58 | File already exists | `Name` onto a file that is there | now |
 | 52-76 | VB6's file errors: 52 Bad file name or number, 53 File not found, 54 Bad file mode, 55 File already open, 57 Device I/O error, 61 Disk full, 62 Input past end of file, 67 Too many files, 70 Permission denied, 75 Path/File access error, 76 Path not found | files (see Text files) | now |
 | 380 | Invalid property value | a control property set out of range (a CheckBox Value outside 0-2; a Style 2 ComboBox's Text that is none of its items) | now |
+| 383 | Set not supported (read-only property) | a FormView's SetProperty of a read-only property (ListCount) | now |
+| 438 | Object doesn't support this property or method | a FormView's AddControl of an unknown control type, or SetProperty/GetProperty of a property the control lacks | now |
 
 - **Not provided: 28 Out of stack space.** Portable C cannot detect
   running out of stack, so recursion that goes too deep crashes the
@@ -1866,24 +1868,47 @@ fvForm.SetProperty "frmMain", "Width", "40"
 fvForm.AddControl "CommandButton", "cmdOK", ""      ' "" = on the form; else a Frame's name
 fvForm.SetProperty "cmdOK", "Caption", "&OK"
 fvForm.Selected("cmdOK") = True
-name = fvForm.ControlAt(x, y)                       ' innermost control there; "" = the form
+name = fvForm.ControlAt(x, y)                       ' innermost control there
+w = fvForm.GetProperty("cmdOK", "Width")            ' "10": the runtime's default
 ```
 
 - **A view, not a model.** The program keeps its own description of
   the form and rebuilds the view after each change (Clear, AddControl,
   SetProperty), which is instant for a form's few dozen controls.
-  Controls are added in tab order.
+  The form is added first (`AddControl "Form", name`), then its
+  controls in tab order; a control's container is "" (the form), a
+  Frame, or for a menu item its bar menu (built 11 Nov 2026; the menu
+  container is an addition, Proposed).
 - **Values as Strings** (there are no Variants), converted to the
   property's type: a value that does not convert or fit is error 380
   (Invalid property value); a property the control does not have, or
   an unknown control type, is 438 (Object doesn't support this property
-  or method); a name already used, or a container that is not a Frame
-  in the view, is 5.
+  or method); a name already used, a container that cannot hold the
+  control, a second form or a control before the form, or a name not in
+  the view, is 5; a read-only property (ListCount), 383 (Set not
+  supported (read-only property), VB6's). True and False ignore case;
+  an Integer is digits with an optional sign. ScrollBars, Style and
+  MultiSelect keep the form block's ranges.
+- **`GetProperty(name, property)`** gives the value as SetProperty takes
+  it, so a control just added gives the runtime's defaults (which a
+  designer compares with to write only what differs).
 - **What a running form hides is shown:** controls with Visible False
   are drawn, so they can be selected. Timers are not drawn (they have
   no place on a form); a designer lists them itself.
-- **Selection is drawn by the runtime** (`Selected(name)`, any number
-  of controls); its look is settled with the designer's screen.
+- **Selection is drawn by the runtime** (`Selected(name)`, read and
+  set, any number of controls, the form too): a selected control in the
+  highlight colours (black on cyan) with a handle `◢` in the cell past
+  its bottom-right corner; the selected form shows only its handle,
+  past its own corner. **`TabNumbers`** (True) shows each control's
+  place in tab order (from 0, menus and Timers left out) at its top
+  left.
+- **`ControlAt(x, y)`** (cells of the view, as its mouse events give
+  them, as last drawn): the innermost control there (a Frame's control
+  before the Frame; a bar menu), else the form's own name anywhere on
+  the form (its border and title too), else "" off it. **`HandleAt(x,
+  y)`**: whose handle is there, else "". (Proposed: the settled text
+  had "" for the form; its name is clearer, and "" is then off the
+  form.)
 - **ScrollX and ScrollY** move a form larger than the view; the form's
   top-left border cell is at cell (-ScrollX, -ScrollY) of the view.
 - **It takes the focus**, so it has KeyDown and KeyPress (arrows to move

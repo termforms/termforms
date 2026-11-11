@@ -1,0 +1,22 @@
+┌───────────────────────────── FormView ─────────────────────────────┐
+│                                          add x:438 add lblName:5   │
+│  File                       │            add lblIn:5 add mnuIn:5   │
+│                             │            add frmOther:5 Colour:438 │
+│  0ame:  1                   │            Width:380 ScrollBars:380  │
+│                             │            Default:380 ListCount:383 │
+│  2 Kind ──────┐ 4 ] Hidden  │            Width:5                   │
+│  │3 ) A       │             │            18/True/0/OK/True/False   │
+│  │            │   5« OK »   │            [cmdOK|] [frmG|cmdOK]     │
+│  └────────────┘           ◢ │            [|frmG] [|] [optA|]       │
+│                             │            [mnuFile|] [txtName|]     │
+│ ────────────────────────────┘            [txtName|] dbl            │
+│                              ◢                                     │
+│                                                                    │
+│                                                                    │
+│                                                                    │
+│ < Tab >                                                            │
+│                                                                    │
+│                                                                    │
+│                                                                    │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘

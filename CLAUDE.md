@@ -640,7 +640,26 @@ authoritative for design rationale.
   terminal before ui_open); TF_EVENT_RESIZE fired by tf_form_show on
   showing a hidden form and by `handle` on TF_KEY_RESIZE to every shown
   form, bottom first; key scripts `{RESIZE 100x30}`. Run test resize;
-  errors/screen. Also open: step 7 of the
+  errors/screen.
+  Fixed (11 Nov 2026): a Timer took clicks at its form's top left
+  (drawing gave it a rectangle); Timers are now skipped like menus.
+  FormView done (11 Nov 2026): TF_CTL_FORMVIEW; a FormView's `guest`
+  form built by tf_fv_add (tf_form_new/tf_control_new) and freed by
+  tf_fv_clear (tf_form_free frees a guest too); `draw_form_at(form, ox,
+  oy, designing)` is draw_one's body (designing: no focus or popup,
+  hidden controls drawn), `draw_formview` clips (tf_screen_clip/unclip)
+  and marks (tf_screen_paint; `marked`, `handle_x/y`). Names come from
+  `tf_catalog_table`, written by codegen (emitMain) only into a program
+  with a FormView, from catalog::allTypes(); tfc --catalog is
+  catalog::text(). Library kind V (a FormView); sema `isFormView`,
+  `viewMethod` (Clear/AddControl/SetProperty), `viewIndexed`
+  (GetProperty/Selected/ControlAt/HandleAt), Selected(n) = b; counts in
+  messages leave the FormView out (`receiverOf`). `withTarget` gives a
+  `.Method` inside With its target first, so ListBox methods work in a
+  With too (they did not). Errors 383 and 438 added. Run tests formview,
+  with_controls; errors/formview. **Steps 1-3 of the designer's
+  language pieces are built**; next is the designer itself (check with
+  Jim first). Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

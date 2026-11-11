@@ -134,6 +134,14 @@ const std::vector<ControlType> &types()
          focusEvents({click,
                       {"Change", EventKind::Change, "TF_EVENT_CHANGE"},
                       {"DropDown", EventKind::DropDown, "TF_EVENT_DROPDOWN"}})},
+        // Shows a form described in code (AddControl, SetProperty...), as
+        // it would run but not live: for a visual designer. Its methods
+        // are library routines (ast.hpp's kStringFunctions), checked in sema.
+        {"FormView", "TF_CTL_FORMVIEW",
+         focusable({{"ScrollX", Type::Integer, "TF_PROP_SCROLLX"},
+                    {"ScrollY", Type::Integer, "TF_PROP_SCROLLY"},
+                    {"TabNumbers", Type::Boolean, "TF_PROP_TABNUMBERS"}}),
+         focusEvents({click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}})},
         // Never shown: it raises its Timer event every Interval ms.
         {"Timer",
          "TF_CTL_TIMER",
@@ -171,6 +179,42 @@ bool equalsIgnoringCase(std::string_view a, std::string_view b)
         }
     }
     return true;
+}
+
+const std::vector<ControlType> &allTypes()
+{
+    return types();
+}
+
+std::string text()
+{
+    std::string out;
+    for (const ControlType &type : types())
+    {
+        out += std::string("control ") + type.name + "\n";
+        for (const Property &p : type.properties)
+        {
+            out += std::string("property ") + p.name + " " +
+                   (p.type == Type::String    ? "String"
+                    : p.type == Type::Boolean ? "Boolean"
+                                              : "Integer") +
+                   (p.readOnly   ? " read-only"
+                    : p.formOnly ? " form-only"
+                                 : "") +
+                   "\n";
+        }
+        for (const Event &e : type.events)
+        {
+            // The signature without its parentheses: "(ByRef Cancel As Integer)".
+            std::string params = e.signature;
+            if (params.size() >= 2 && params.front() == '(' && params.back() == ')')
+            {
+                params = params.substr(1, params.size() - 2);
+            }
+            out += std::string("event ") + e.name + (params.empty() ? "" : " " + params) + "\n";
+        }
+    }
+    return out;
 }
 
 const ControlType *findType(std::string_view name)

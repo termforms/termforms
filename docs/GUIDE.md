@@ -503,6 +503,7 @@ Tab order is the order the controls are written in.
 | ComboBox | Text, ListIndex, ListCount, Sorted, Style (form block only), SelStart, SelLength, SelText, MaxLength, Locked; `List(i)`; AddItem, RemoveItem, Clear | Click, Change, DropDown |
 | Timer | Interval (ms), Enabled | Timer |
 | Menu | Caption, Checked, Shortcut, Enabled, Visible | Click |
+| FormView | ScrollX, ScrollY, TabNumbers; Clear, AddControl, SetProperty, `GetProperty(n, p)`, `Selected(n)`, `ControlAt(x, y)`, `HandleAt(x, y)` | Click, DblClick ("A form in a form", below) |
 
 Every control that can take the focus also has CausesValidation, the
 SetFocus method, and the events GotFocus, LostFocus, Validate, KeyPress
@@ -790,6 +791,49 @@ Next
 A handler may run again inside DoEvents (a button pressed twice), as in
 VB; guard with a flag if that would be wrong. If the user closes the form
 meanwhile, its Visible is False when DoEvents returns.
+
+### A form in a form: FormView
+
+A FormView shows a form that the program describes in code, drawn
+exactly as it would run but not live: nothing in it takes the focus or
+acts on a click. It was made for a visual form designer (a program that
+lets its user lay out a form), and any program may use it the same way.
+
+```vb
+Sub ShowDesign()
+    fvForm.Clear
+    fvForm.AddControl "Form", "frmMain"            ' the form first
+    fvForm.SetProperty "frmMain", "Caption", "Address book"
+    fvForm.SetProperty "frmMain", "Width", "44"
+    fvForm.AddControl "Frame", "fraKind"
+    fvForm.AddControl "OptionButton", "optHome", "fraKind"  ' inside the Frame
+    fvForm.AddControl "CommandButton", "cmdOK"
+    fvForm.SetProperty "cmdOK", "Caption", "OK"
+    fvForm.Selected("cmdOK") = True                ' highlighted, with a handle ◢
+End Sub
+
+Sub fvForm_MouseDown(Button As Integer, Shift As Integer, X As Integer, Y As Integer)
+    lblStatus.Caption = fvForm.ControlAt(X, Y)    ' "cmdOK", "frmMain", or "" off the form
+End Sub
+```
+
+- Controls are added in tab order; a control's container is "" (the
+  form), a Frame, or for a menu item its bar menu.
+- Values go in and come out as text: `SetProperty "cmdOK", "Width",
+  "8"`, `GetProperty("cmdOK", "Default")` gives `"False"`. A control just
+  added gives the runtime's defaults.
+- Controls whose Visible is False are drawn all the same (so they can be
+  chosen); Timers are not drawn.
+- `HandleAt(x, y)` says whose handle (a selected control's, or the
+  form's) is there, for resizing by dragging; `TabNumbers = True` shows
+  each control's place in tab order; `ScrollX` and `ScrollY` move a form
+  bigger than the view.
+- Errors: 438 for a control type or property there is no such thing as,
+  380 for a value that does not fit, 383 for a read-only property, 5 for
+  a name used twice or a container that cannot hold the control.
+
+`tfc --catalog` lists every control with its properties and events, one
+a line, for such a program to read.
 
 ### Text on screen
 
