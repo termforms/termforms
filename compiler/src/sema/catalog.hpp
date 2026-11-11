@@ -29,8 +29,9 @@ struct Event
     const char *name; // e.g. "Click"
     ast::EventKind kind;
     const char *cName; // runtime enum
-    // The handler's parameters: R a ByRef Integer the handler may change, I
-    // a ByVal Integer; "" for none. signature shows them in messages.
+    // The handler's parameters: R a ByRef Integer the handler may change, Q
+    // a ByRef Boolean likewise (Validate's Cancel, as VB6), I a ByVal
+    // Integer; "" for none. signature shows them in messages.
     const char *params = "";
     const char *signature = "";
 };

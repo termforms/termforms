@@ -561,8 +561,20 @@ authoritative for design rationale.
   first; menus opening close the list; `set_focus` closes it choosing.
   The demo has a multi-line TextBox (frmControls) and both Styles
   (frmLists). Run tests combobox, combobox_popup; errors/combobox.
-- **Next:** Jim tries both controls in real terminals (the demo); then
-  tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
+  Validate, CausesValidation, SetFocus added to v1 (Jim, 11 Nov 2026,
+  after cboCity left no way to handle a typed entry; REFERENCE.md
+  "Validate, CausesValidation and SetFocus"). Built the same day:
+  Validate's Cancel is a ByRef Boolean (event param kind Q;
+  `tf_bool_handler`, `tf_control_on_bool`, a control's
+  `validate_handler`); `validate_leaving` in set_focus, which now
+  returns 0 when refused (callers then do nothing more), and before
+  Enter/Esc press the Default/Cancel button; `validating` stops nesting.
+  `ctl.SetFocus` is Builtin::SetFocus, library kind K (a focusable
+  control), runtime `tf_control_set_focus` (error 5). Run test validate;
+  errors/validate; the demo's cboCity validates, its Close has
+  CausesValidation False.
+- **Next:** Jim tries the new controls in real terminals (the demo);
+  then tag v1.0.0 and review toolchain bundling. Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

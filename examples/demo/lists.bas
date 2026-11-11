@@ -2,7 +2,9 @@
 ' the two MultiSelect kinds (1: Space toggles; 2: arrows choose, Space or
 ' Ctrl+click adds). The mouse wheel scrolls them. ComboBoxes: Style 2
 ' (choose from the list only) and Style 0 (type, or choose); F4 or
-' Alt+Down opens the list.
+' Alt+Down opens the list. cboCity's Validate handles a city typed in
+' when the user leaves the box; Close (CausesValidation False) can always
+' be pressed.
 Begin Form frmLists
     Caption = "Lists"
     Width = 66
@@ -73,6 +75,7 @@ Begin Form frmLists
         Top = 12
         Width = 10
         Cancel = True
+        CausesValidation = False
     End
     Begin Label lblCount
         Left = 1
@@ -137,6 +140,28 @@ End Sub
 
 Sub cboCity_Click()
     Note "cboCity Click: " & cboCity.Text
+End Sub
+
+' Leaving the box with a city typed rather than chosen: one already in
+' the list is chosen, a new one added, and one too short refused (the
+' focus stays in the box).
+Sub cboCity_Validate(ByRef Cancel As Boolean)
+    If cboCity.ListIndex >= 0 Or cboCity.Text = "" Then
+        Exit Sub
+    End If
+    If Len(cboCity.Text) < 2 Then
+        MsgBox "A city needs at least two letters.", vbExclamation, "Where"
+        Cancel = True
+        Exit Sub
+    End If
+    For i As Integer = 0 To cboCity.ListCount - 1
+        If cboCity.List(i) = cboCity.Text Then
+            cboCity.ListIndex = i
+            Exit Sub
+        End If
+    Next
+    cboCity.AddItem cboCity.Text
+    Note "cboCity Validate: added " & cboCity.Text
 End Sub
 
 Sub cboCity_Change()

@@ -30,12 +30,22 @@ const std::vector<ControlType> &types()
         }
         return own;
     };
+    // ...and a control that can take the focus also has CausesValidation:
+    // whether moving to it first runs the Validate of the one being left.
+    auto focusable = [&placed](std::vector<Property> own) {
+        own.push_back({"CausesValidation", Type::Boolean, "TF_PROP_CAUSESVALIDATION"});
+        return placed(own);
+    };
     const Property caption{"Caption", Type::String, "TF_PROP_CAPTION"};
     const Event click{"Click", EventKind::Click, "TF_EVENT_CLICK"};
     // What every control that can take the focus raises besides its own.
+    // Validate (as VB6) comes before the focus leaves for a control whose
+    // CausesValidation is True; Cancel keeps it.
     auto focusEvents = [](std::vector<Event> own) {
         for (const Event &e : {Event{"GotFocus", EventKind::GotFocus, "TF_EVENT_GOTFOCUS"},
                                Event{"LostFocus", EventKind::LostFocus, "TF_EVENT_LOSTFOCUS"},
+                               Event{"Validate", EventKind::Validate, "TF_EVENT_VALIDATE", "Q",
+                                     "(ByRef Cancel As Boolean)"},
                                Event{"KeyPress", EventKind::KeyPress, "TF_EVENT_KEYPRESS", "R",
                                      "(ByRef KeyAscii As Integer)"},
                                Event{"KeyDown", EventKind::KeyDown, "TF_EVENT_KEYDOWN", "RI",
@@ -58,53 +68,53 @@ const std::vector<ControlType> &types()
           {"Unload", EventKind::Unload, "TF_EVENT_UNLOAD", "R", "(ByRef Cancel As Integer)"},
           {"Activate", EventKind::Activate, "TF_EVENT_ACTIVATE"}}},
         {"TextBox", "TF_CTL_TEXTBOX",
-         placed({{"Text", Type::String, "TF_PROP_TEXT"},
-                 {"SelStart", Type::Integer, "TF_PROP_SELSTART"},
-                 {"SelLength", Type::Integer, "TF_PROP_SELLENGTH"},
-                 {"SelText", Type::String, "TF_PROP_SELTEXT"},
-                 {"MaxLength", Type::Integer, "TF_PROP_MAXLENGTH"},
-                 {"Locked", Type::Boolean, "TF_PROP_LOCKED"},
-                 {"PasswordChar", Type::String, "TF_PROP_PASSWORDCHAR"},
-                 // Fixed at design time, as VB: they shape how the box lays out.
-                 {"MultiLine", Type::Boolean, "TF_PROP_MULTILINE", false, true},
-                 {"ScrollBars", Type::Integer, "TF_PROP_SCROLLBARS", false, true}}),
+         focusable({{"Text", Type::String, "TF_PROP_TEXT"},
+                    {"SelStart", Type::Integer, "TF_PROP_SELSTART"},
+                    {"SelLength", Type::Integer, "TF_PROP_SELLENGTH"},
+                    {"SelText", Type::String, "TF_PROP_SELTEXT"},
+                    {"MaxLength", Type::Integer, "TF_PROP_MAXLENGTH"},
+                    {"Locked", Type::Boolean, "TF_PROP_LOCKED"},
+                    {"PasswordChar", Type::String, "TF_PROP_PASSWORDCHAR"},
+                    // Fixed at design time, as VB: they shape how the box lays out.
+                    {"MultiLine", Type::Boolean, "TF_PROP_MULTILINE", false, true},
+                    {"ScrollBars", Type::Integer, "TF_PROP_SCROLLBARS", false, true}}),
          focusEvents({{"Change", EventKind::Change, "TF_EVENT_CHANGE"}})},
         {"CommandButton", "TF_CTL_COMMANDBUTTON",
-         placed({caption,
-                 {"Default", Type::Boolean, "TF_PROP_DEFAULT"},
-                 {"Cancel", Type::Boolean, "TF_PROP_CANCEL"}}),
+         focusable({caption,
+                    {"Default", Type::Boolean, "TF_PROP_DEFAULT"},
+                    {"Cancel", Type::Boolean, "TF_PROP_CANCEL"}}),
          focusEvents({click})},
         {"Label", "TF_CTL_LABEL", placed({caption}), {click}},
         {"CheckBox", "TF_CTL_CHECKBOX",
-         placed({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}), focusEvents({click})},
+         focusable({caption, {"Value", Type::Integer, "TF_PROP_VALUE"}}), focusEvents({click})},
         {"OptionButton", "TF_CTL_OPTIONBUTTON",
-         placed({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}), focusEvents({click})},
+         focusable({caption, {"Value", Type::Boolean, "TF_PROP_VALUE"}}), focusEvents({click})},
         {"Frame", "TF_CTL_FRAME", placed({caption}), {}},
         // AddItem, RemoveItem, Clear, List(i) and Selected(i) are library
         // routines (ast.hpp's kStringFunctions), checked in sema.
         {"ListBox", "TF_CTL_LISTBOX",
-         placed({{"Text", Type::String, "TF_PROP_TEXT"},
-                 {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
-                 {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
-                 {"MultiSelect", Type::Integer, "TF_PROP_MULTISELECT"},
-                 {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
-                 {"SelCount", Type::Integer, "TF_PROP_SELCOUNT", true},
-                 {"TopIndex", Type::Integer, "TF_PROP_TOPINDEX"}}),
+         focusable({{"Text", Type::String, "TF_PROP_TEXT"},
+                    {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
+                    {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
+                    {"MultiSelect", Type::Integer, "TF_PROP_MULTISELECT"},
+                    {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
+                    {"SelCount", Type::Integer, "TF_PROP_SELCOUNT", true},
+                    {"TopIndex", Type::Integer, "TF_PROP_TOPINDEX"}}),
          focusEvents({click, {"DblClick", EventKind::DblClick, "TF_EVENT_DBLCLICK"}})},
         // A ListBox's items (AddItem, RemoveItem, Clear, List(i) as there),
         // one shown, with a list that drops down: Style 0 a text box too,
         // Style 2 the list only.
         {"ComboBox", "TF_CTL_COMBOBOX",
-         placed({{"Text", Type::String, "TF_PROP_TEXT"},
-                 {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
-                 {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
-                 {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
-                 {"Style", Type::Integer, "TF_PROP_STYLE", false, true},
-                 {"SelStart", Type::Integer, "TF_PROP_SELSTART"},
-                 {"SelLength", Type::Integer, "TF_PROP_SELLENGTH"},
-                 {"SelText", Type::String, "TF_PROP_SELTEXT"},
-                 {"MaxLength", Type::Integer, "TF_PROP_MAXLENGTH"},
-                 {"Locked", Type::Boolean, "TF_PROP_LOCKED"}}),
+         focusable({{"Text", Type::String, "TF_PROP_TEXT"},
+                    {"ListIndex", Type::Integer, "TF_PROP_LISTINDEX"},
+                    {"ListCount", Type::Integer, "TF_PROP_LISTCOUNT", true},
+                    {"Sorted", Type::Boolean, "TF_PROP_SORTED"},
+                    {"Style", Type::Integer, "TF_PROP_STYLE", false, true},
+                    {"SelStart", Type::Integer, "TF_PROP_SELSTART"},
+                    {"SelLength", Type::Integer, "TF_PROP_SELLENGTH"},
+                    {"SelText", Type::String, "TF_PROP_SELTEXT"},
+                    {"MaxLength", Type::Integer, "TF_PROP_MAXLENGTH"},
+                    {"Locked", Type::Boolean, "TF_PROP_LOCKED"}}),
          focusEvents({click,
                       {"Change", EventKind::Change, "TF_EVENT_CHANGE"},
                       {"DropDown", EventKind::DropDown, "TF_EVENT_DROPDOWN"}})},

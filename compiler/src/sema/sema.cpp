@@ -881,8 +881,9 @@ private:
 
     // -- Event wiring ------------------------------------------------------
 
-    // Does the handler take exactly the event's arguments: each an Integer,
-    // ByRef where the event lets it be changed (R), ByVal otherwise (I)?
+    // Does the handler take exactly the event's arguments: each an Integer
+    // (a Boolean for Q), ByRef where the event lets it be changed (R, Q),
+    // ByVal otherwise (I)?
     static bool handlerFits(const Procedure &proc, const char *params)
     {
         if (proc.parameters.size() != std::strlen(params))
@@ -892,7 +893,8 @@ private:
         for (std::size_t i = 0; i < proc.parameters.size(); ++i)
         {
             const Variable &p = *proc.parameters[i];
-            if (p.type != Type::Integer || p.rank != 0 || p.byRef != (params[i] == 'R'))
+            const Type want = params[i] == 'Q' ? Type::Boolean : Type::Integer;
+            if (p.type != want || p.rank != 0 || p.byRef != (params[i] == 'R' || params[i] == 'Q'))
             {
                 return false;
             }
@@ -2956,6 +2958,26 @@ private:
             diagnostics_.error(member->location, "expected '=' after this");
             return;
         }
+        // ctl.SetFocus (frmX.ctl.SetFocus too): a library statement.
+        if (member->left != nullptr && member->text == "SetFocus" && isControl(*member->left) &&
+            !member->left->control->isForm)
+        {
+            auto call = std::make_unique<Expr>();
+            call->kind = ExprKind::Call;
+            call->builtin = Builtin::SetFocus;
+            call->text = member->text;
+            call->location = member->location;
+            call->args.push_back(std::move(member->left));
+            for (auto &arg : args)
+            {
+                call->args.push_back(std::move(arg));
+            }
+            s.kind = StmtKind::Library;
+            s.args.clear();
+            s.args.push_back(std::move(call));
+            checkExpr(*s.args[0]);
+            return;
+        }
         if (member->left != nullptr && isListBox(*member->left))
         {
             listMethod(s, *member, args);
@@ -3094,6 +3116,22 @@ private:
     }
 
     // -- ListBox methods ----------------------------------------------------
+
+    // object, if it names a control (txt, or frmMain.txt): checked, else left.
+    bool isControl(Expr &object)
+    {
+        const bool named =
+            (object.kind == ExprKind::Name && controls_.count(object.text) != 0) ||
+            (object.kind == ExprKind::Name && object.control != nullptr) ||
+            (object.kind == ExprKind::Member && object.left != nullptr &&
+             object.left->kind == ExprKind::Name && controls_.count(object.left->text) != 0);
+        if (!named)
+        {
+            return false;
+        }
+        checkExpr(object);
+        return object.control != nullptr;
+    }
 
     // object, if it is a ListBox (lst, or frmMain.lst), or a ComboBox when
     // `combo` (they share AddItem, RemoveItem, Clear and List(i); Selected(i)
@@ -4203,6 +4241,24 @@ private:
                 {
                     ok = false;
                 }
+                continue;
+            }
+            if (want == 'K')
+            {
+                static const char *const kFocusable[] = {
+                    "TextBox", "CommandButton", "CheckBox", "OptionButton", "ListBox", "ComboBox"};
+                bool fits = false;
+                for (const char *type : kFocusable)
+                {
+                    fits = fits || (arg.control != nullptr && arg.control->typeName == type);
+                }
+                if (arg.type != Type::Error && !fits)
+                {
+                    diagnostics_.error(arg.location,
+                                       "'" + name + "' is for a control that can take the focus");
+                    ok = false;
+                }
+                ok = ok && arg.type != Type::Error;
                 continue;
             }
             if (want == 'C' || want == 'F')

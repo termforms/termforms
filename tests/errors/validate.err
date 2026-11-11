@@ -1,0 +1,2 @@
+validate.bas:11:1: error: event handler 'txtA_Validate' must be Sub txtA_Validate(ByRef Cancel As Boolean)
+validate.bas:15:5: error: 'SetFocus' is for a control that can take the focus

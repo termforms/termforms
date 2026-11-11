@@ -489,6 +489,10 @@ Tab order is the order the controls are written in.
 | Timer | Interval (ms), Enabled | Timer |
 | Menu | Caption, Checked, Shortcut, Enabled, Visible | Click |
 
+Every control that can take the focus also has CausesValidation, the
+SetFocus method, and the events GotFocus, LostFocus, Validate, KeyPress
+and KeyDown.
+
 The form itself has Caption, Width, Height, Visible (read-only) and the
 events Load, Activate and Unload. `Me` is the form whose module the code
 is in.
@@ -563,6 +567,7 @@ Sub Form_Unload(ByRef Cancel As Integer) ' Cancel = 1 refuses to close
 Sub txtQty_KeyPress(ByRef KeyAscii As Integer) ' change it, or 0 to drop the key
 Sub txtQty_KeyDown(ByRef KeyCode As Integer, Shift As Integer)
 Sub txtQty_GotFocus() / _LostFocus() / _Change()
+Sub txtQty_Validate(ByRef Cancel As Boolean)   ' before the focus leaves
 Sub lstItems_Click() / _DblClick()
 Sub tmrClock_Timer()
 ```
@@ -575,6 +580,27 @@ takes only digits:
 Sub txtQty_KeyPress(ByRef KeyAscii As Integer)
     If KeyAscii >= 32 And (KeyAscii < Asc("0") Or KeyAscii > Asc("9")) Then
         KeyAscii = 0
+    End If
+End Sub
+```
+
+**Checking an entry when the user leaves it** is Validate's job, as in
+VB6. It runs before the focus moves to another control (by Tab, a click,
+an access key or `SetFocus`) and before Enter or Esc presses the Default
+or Cancel button; `Cancel = True` keeps the user where they are, and the
+move (or the button) does not happen. A control whose `CausesValidation`
+is False is left out: give it to a Cancel or Help button so the user can
+always get away from a half-filled form. Closing the form never runs
+Validate. `ctl.SetFocus` moves the focus in code (error 5 if the control
+is hidden or disabled).
+
+```vb
+Sub cboCity_Validate(ByRef Cancel As Boolean)
+    If cboCity.ListIndex = -1 And cboCity.Text <> "" Then
+        cboCity.AddItem cboCity.Text           ' typed, not chosen: keep it
+    ElseIf cboCity.Text = "" Then
+        MsgBox "Where?", vbExclamation
+        Cancel = True                          ' the focus stays here
     End If
 End Sub
 ```

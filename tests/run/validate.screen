@@ -1,0 +1,13 @@
+
+  ┌─────────────────── Validate ───────────────────┐
+  │42        Miami          ▼   « OK »   < Cancel >│
+  │                                                │
+  │E5 | city focus | cv=True/False | empty city |  │
+  │added Miami n=3 | city focus | found Miami | bad│
+  │age x1 | bad age x1 | cancel | bad age x1 | OK  │
+  │42 Miami |                                      │
+  │                                                │
+  │                                                │
+  │                                                │
+  │                                                │
+  └────────────────────────────────────────────────┘

@@ -55,9 +55,11 @@ struct tf_control
     int is_cancel;
     int enabled;
     int visible;
+    int causes_validation; /* moving the focus to it runs the Validate of the one left */
     tf_handler handlers[TF_EVENT_COUNT];
     tf_ref_handler ref_handlers[TF_EVENT_COUNT]; /* Unload, KeyPress */
     tf_key_handler key_handler;                  /* KeyDown */
+    tf_bool_handler validate_handler;            /* Validate */
 
     /* Form only: children in tab order, and the focused child's index. */
     tf_control **children;
@@ -216,6 +218,7 @@ tf_control *tf_control_new(tf_control *form, tf_control_type type, const char *n
     control->anchor = -1;
     control->enabled = 1;
     control->visible = 1;
+    control->causes_validation = 1;
 
     if (form->child_count == form->child_capacity)
     {
@@ -240,6 +243,14 @@ void tf_control_on(tf_control *control, tf_event event, tf_handler handler)
 void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handler)
 {
     control->ref_handlers[event] = handler;
+}
+
+void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler handler)
+{
+    if (event == TF_EVENT_VALIDATE)
+    {
+        control->validate_handler = handler; /* the only event with a Boolean argument */
+    }
 }
 
 void tf_control_on_key(tf_control *control, tf_key_handler handler)
@@ -699,6 +710,9 @@ void tf_set_int(tf_control *control, tf_prop prop, int32_t value)
         case TF_PROP_STYLE:
             control->style = value == 2 ? 2 : 0; /* set only by the form block (sema) */
             break;
+        case TF_PROP_CAUSESVALIDATION:
+            control->causes_validation = value != 0;
+            break;
         default:
             break;
     }
@@ -763,6 +777,8 @@ int32_t tf_get_int(const tf_control *control, tf_prop prop)
             return control->scroll_bars;
         case TF_PROP_STYLE:
             return control->style;
+        case TF_PROP_CAUSESVALIDATION:
+            return control->causes_validation;
         default:
             return 0;
     }
@@ -2444,18 +2460,54 @@ static int tab_stop(const tf_control *form, int index)
 
 static void combo_close(tf_control *form, int choose);
 
-/* Moves the focus to child index, firing LostFocus and GotFocus. An open
-   ComboBox list closes, choosing its highlighted item (as Tab does in
+static int validating = 0; /* a Validate handler is running */
+
+/*
+ * VB6's Validate: before the focus leaves a control for `to` (by Tab, a
+ * click, an access key or SetFocus), or before Enter or Esc presses the
+ * Default or Cancel button, the focused control's Validate runs if `to`
+ * has CausesValidation True; Cancel there keeps the focus (and presses
+ * nothing). Not while a Validate is running (its own SetFocus or MsgBox
+ * must not start another), nor for a control that can no longer have the
+ * focus, nor when the form closes (so the user can always leave).
+ * Returns 0 if the handler cancelled.
+ */
+static int validate_leaving(tf_control *form, const tf_control *to)
+{
+    if (validating || !to->causes_validation || form->focus < 0 || form->focus >= form->child_count)
+    {
+        return 1;
+    }
+    tf_control *from = form->children[form->focus];
+    if (from == to || !focusable(from) || from->validate_handler == NULL)
+    {
+        return 1;
+    }
+    int cancel = 0;
+    validating = 1;
+    from->validate_handler(&cancel);
+    tf_check_uncaught();
+    validating = 0;
+    return cancel == 0;
+}
+
+/* Moves the focus to child index, firing LostFocus and GotFocus; returns
+   0 if the control being left refused it (Validate). An open ComboBox
+   list closes first, choosing its highlighted item (as Tab does in
    Windows). */
-static void set_focus(tf_control *form, int index)
+static int set_focus(tf_control *form, int index)
 {
     if (index == form->focus)
     {
-        return;
+        return 1;
     }
     if (form->open_list != NULL)
     {
         combo_close(form, 1);
+    }
+    if (index >= 0 && index < form->child_count && !validate_leaving(form, form->children[index]))
+    {
+        return 0;
     }
     const int was = form->focus;
     form->focus = index;
@@ -2467,6 +2519,7 @@ static void set_focus(tf_control *form, int index)
     {
         fire(form->children[index], TF_EVENT_GOTFOCUS);
     }
+    return 1;
 }
 
 static void move_focus(tf_control *form, int step)
@@ -2499,8 +2552,10 @@ static void move_in_group(tf_control *form, int step)
         tf_control *c = form->children[index];
         if (c->type == TF_CTL_OPTIONBUTTON && c->parent == from->parent && focusable(c))
         {
-            set_focus(form, index);
-            select_option(c);
+            if (set_focus(form, index))
+            {
+                select_option(c);
+            }
             return;
         }
     }
@@ -2537,16 +2592,22 @@ static int access(tf_control *form, uint32_t letter)
         switch (c->type)
         {
             case TF_CTL_COMMANDBUTTON:
-                set_focus(form, i);
-                fire(c, TF_EVENT_CLICK);
+                if (set_focus(form, i))
+                {
+                    fire(c, TF_EVENT_CLICK);
+                }
                 return 1;
             case TF_CTL_CHECKBOX:
-                set_focus(form, i);
-                toggle(c);
+                if (set_focus(form, i))
+                {
+                    toggle(c);
+                }
                 return 1;
             case TF_CTL_OPTIONBUTTON:
-                set_focus(form, i);
-                select_option(c);
+                if (set_focus(form, i))
+                {
+                    select_option(c);
+                }
                 return 1;
             case TF_CTL_LABEL:
             case TF_CTL_FRAME:
@@ -3346,9 +3407,10 @@ static void form_mouse(tf_control *form, tf_key key)
                 menu_open(form, hit);
                 break;
             }
-            if (focusable(c))
+            if (focusable(c) && !set_focus(form, hit))
             {
-                set_focus(form, hit);
+                pressed = NULL; /* the control left refused the focus (Validate) */
+                break;
             }
             if (c->type == TF_CTL_TEXTBOX && c->edit.multi_line)
             {
@@ -3599,7 +3661,7 @@ static int form_key(tf_control *form, tf_key key)
     if (key.kind == TF_KEY_ENTER || key.kind == TF_KEY_ESC)
     {
         tf_control *button = special_button(form, key.kind == TF_KEY_ESC);
-        if (button != NULL)
+        if (button != NULL && validate_leaving(form, button))
         {
             fire(button, TF_EVENT_CLICK);
         }
@@ -4047,6 +4109,22 @@ void tf_form_show(tf_control *form, int32_t modal)
     {
         run_loop(form);
     }
+}
+
+void tf_control_set_focus(tf_control *control)
+{
+    tf_control *form = control->form;
+    int index = -1;
+    for (int i = 0; i < form->child_count; ++i)
+    {
+        index = form->children[i] == control ? i : index;
+    }
+    if (index < 0 || !focusable(control))
+    {
+        tf_raise(TF_ERR_INVALID_ARGUMENT, NULL); /* hidden, disabled, or never focused */
+        return;
+    }
+    set_focus(form, index);
 }
 
 void tf_form_hide(tf_control *form)

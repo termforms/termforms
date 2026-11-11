@@ -816,7 +816,10 @@ private:
                     }
                     else
                     {
-                        out << "    tf_control_on" << (params == "R" ? "_ref(" : "(")
+                        out << "    tf_control_on"
+                            << (params == "R"   ? "_ref("
+                                : params == "Q" ? "_bool("
+                                                : "(")
                             << cName(*proc->eventControl) << ", " << event.cName << ", "
                             << pName(*proc) << ");\n";
                     }
@@ -2822,9 +2825,9 @@ private:
                 const Expr &arg = *e.args[i];
                 const char kind = f->params[i];
                 args += (i == 0 ? "" : ", ") +
-                        (kind == 'C' || kind == 'F'   ? cName(*arg.control)
-                         : kind == 'A' || kind == 'B' ? wholeArrayRef(arg, scope)
-                         : kind == 'R'                ? address(arg, scope)
+                        (kind == 'C' || kind == 'F' || kind == 'K' ? cName(*arg.control)
+                         : kind == 'A' || kind == 'B'              ? wholeArrayRef(arg, scope)
+                         : kind == 'R'                             ? address(arg, scope)
                          : kind == 'S' ? borrowed(settle(arg, expr(arg, scope), scope), scope).code
                                        : settle(arg, expr(arg, scope), scope).code);
             }

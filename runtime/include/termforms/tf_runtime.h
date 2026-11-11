@@ -661,22 +661,23 @@ typedef enum tf_prop
     TF_PROP_VISIBLE,
     TF_PROP_LISTCOUNT, /* ListBox, read only */
     TF_PROP_LISTINDEX, /* ListBox: the selected (or, with MultiSelect, the current) item; -1 none */
-    TF_PROP_MULTISELECT,  /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
-    TF_PROP_SORTED,       /* ListBox: AddItem keeps the items in order, ignoring case */
-    TF_PROP_SELCOUNT,     /* ListBox, read only: how many items are selected */
-    TF_PROP_TOPINDEX,     /* ListBox: the first item shown */
-    TF_PROP_INTERVAL,     /* Timer: milliseconds between Timer events; 0 stops it */
-    TF_PROP_CHECKED,      /* Menu: a check mark before the item */
-    TF_PROP_SHORTCUT,     /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
-    TF_PROP_SELSTART,     /* TextBox: where the selection starts, in code points */
-    TF_PROP_SELLENGTH,    /* TextBox: how many code points are selected */
-    TF_PROP_SELTEXT,      /* TextBox: the selected text; setting it replaces the selection */
-    TF_PROP_MAXLENGTH,    /* TextBox: code points the user may type; 0 no limit */
-    TF_PROP_LOCKED,       /* TextBox: the user may select and copy, not change */
-    TF_PROP_PASSWORDCHAR, /* TextBox: shown for every character; "" shows the text */
-    TF_PROP_MULTILINE,    /* TextBox (form block only): Enter starts a new line */
-    TF_PROP_SCROLLBARS,   /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
-    TF_PROP_STYLE         /* ComboBox (form block only): 0 text and list, 2 list only */
+    TF_PROP_MULTISELECT,     /* ListBox: 0 one item, 1 Space toggles, 2 arrows select, Space adds */
+    TF_PROP_SORTED,          /* ListBox: AddItem keeps the items in order, ignoring case */
+    TF_PROP_SELCOUNT,        /* ListBox, read only: how many items are selected */
+    TF_PROP_TOPINDEX,        /* ListBox: the first item shown */
+    TF_PROP_INTERVAL,        /* Timer: milliseconds between Timer events; 0 stops it */
+    TF_PROP_CHECKED,         /* Menu: a check mark before the item */
+    TF_PROP_SHORTCUT,        /* Menu: "Ctrl+O", "F5", "Shift+F5", ... (bad text: error 380) */
+    TF_PROP_SELSTART,        /* TextBox: where the selection starts, in code points */
+    TF_PROP_SELLENGTH,       /* TextBox: how many code points are selected */
+    TF_PROP_SELTEXT,         /* TextBox: the selected text; setting it replaces the selection */
+    TF_PROP_MAXLENGTH,       /* TextBox: code points the user may type; 0 no limit */
+    TF_PROP_LOCKED,          /* TextBox: the user may select and copy, not change */
+    TF_PROP_PASSWORDCHAR,    /* TextBox: shown for every character; "" shows the text */
+    TF_PROP_MULTILINE,       /* TextBox (form block only): Enter starts a new line */
+    TF_PROP_SCROLLBARS,      /* TextBox (form block only): 0 none, 1 across, 2 down, 3 both */
+    TF_PROP_STYLE,           /* ComboBox (form block only): 0 text and list, 2 list only */
+    TF_PROP_CAUSESVALIDATION /* moving to it runs the Validate of the control left */
 } tf_prop;
 
 typedef enum tf_event
@@ -693,6 +694,7 @@ typedef enum tf_event
     TF_EVENT_KEYPRESS, /* a tf_ref_handler of KeyAscii: 0 discards the key */
     TF_EVENT_KEYDOWN,  /* a tf_key_handler: KeyCode 0 discards the key */
     TF_EVENT_DROPDOWN, /* a ComboBox, just before its list opens */
+    TF_EVENT_VALIDATE, /* before the focus leaves; a tf_ref_handler: set *cancel to keep it */
     TF_EVENT_COUNT
 } tf_event;
 
@@ -700,6 +702,8 @@ typedef void (*tf_handler)(void);
 /* Handlers of events with arguments: Unload's and KeyPress's take the value
    the handler may change; KeyDown's, KeyCode (which it may change) and Shift. */
 typedef void (*tf_ref_handler)(int32_t *value);
+/* A handler whose ByRef argument is a Boolean (Validate's Cancel). */
+typedef void (*tf_bool_handler)(int *value);
 typedef void (*tf_key_handler)(int32_t *key_code, int32_t shift);
 
 /* Creates a form (borrowed name). The form owns its controls. */
@@ -715,6 +719,7 @@ void tf_control_container(tf_control *control, tf_control *frame);
 
 void tf_control_on(tf_control *control, tf_event event, tf_handler handler);
 void tf_control_on_ref(tf_control *control, tf_event event, tf_ref_handler handler);
+void tf_control_on_bool(tf_control *control, tf_event event, tf_bool_handler handler);
 void tf_control_on_key(tf_control *control, tf_key_handler handler); /* KeyDown */
 
 /* Property access. Setters borrow the value; tf_get_str returns borrowed. */
@@ -754,6 +759,10 @@ void tf_form_ready(tf_control *form);
 void tf_form_load(tf_control *form);
 void tf_form_show(tf_control *form, int32_t modal);
 void tf_form_hide(tf_control *form);
+/* ctl.SetFocus: the focus to a control of its form (after the Validate of
+   the one it leaves); error 5 if it cannot take the focus (hidden,
+   disabled, or a control that never does). */
+void tf_control_set_focus(tf_control *control);
 void tf_form_unload(tf_control *form);
 int tf_forms_run(void);
 

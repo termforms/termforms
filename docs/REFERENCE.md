@@ -1620,6 +1620,38 @@ The rest is Proposed:
   the menus. A list closes when its form is no longer on top, or the
   box is hidden or disabled.
 
+### Validate, CausesValidation and SetFocus (in v1: Settled, Jim, 11 Nov 2026; details Proposed)
+
+Settled: all three are in v1, as VB6, so a program can check an entry
+(a ComboBox's typed text, say) when the user leaves it and keep them
+there. Closing the form never runs Validate, so the user can always
+leave (as VB6). The rest is Proposed:
+
+- **Validate** `(ByRef Cancel As Boolean)`, on every control that can
+  take the focus (as VB6; Unload's Cancel stays an Integer, as VB6). It
+  runs on the control with the focus before the focus moves to another
+  control on the form by Tab, Shift+Tab, a click, an access key, an
+  arrow in an OptionButton group or SetFocus, if that control's
+  CausesValidation is True. `Cancel = True` keeps the focus, and what
+  would have come with the move does not happen (a click's press, an
+  access key's Click, toggle or selection). Not in VB6: it also runs
+  before Enter or Esc presses the Default or Cancel button (if that
+  button's CausesValidation is True), as otherwise Enter would act on an
+  entry never checked; Cancel then presses nothing.
+- Not while a Validate handler is running (its own SetFocus or MsgBox
+  starts no other), nor for a control that is hidden or disabled, nor
+  for the first focus a form gets. An open ComboBox list closes,
+  choosing, before the Validate of the box runs.
+- **CausesValidation** (Boolean, True by default) on every control that
+  can take the focus: False lets the focus (or Enter, Esc) reach it
+  without the Validate of the one left, for a Cancel or Help button.
+- **SetFocus** (`ctl.SetFocus`, a statement, on a control that can take
+  the focus; another is a compile error): moves the focus there, after
+  the Validate of the control left. A hidden or disabled control is
+  error 5 (VB6's number). It may be used before the form is shown (in
+  Form_Load), where VB6 gives error 5: the form then shows with the
+  focus there.
+
 ### Character widths (Settled, Jim, 28 Oct 2026)
 
 Settled: the tables come from Python's unicodedata by a script in
