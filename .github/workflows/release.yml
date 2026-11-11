@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
-# Release archives: tfc and its runtime for macOS (Apple Silicon), Linux
+# Release archives: tfc, tfdesign and the runtime for macOS (Apple Silicon), Linux
 # x86-64 (a static tfc, built with zig for musl, that runs on any x86-64
 # Linux) and Windows x64 (the C runtime linked in, so a clean machine needs
 # nothing else). Each archive is unpacked and used to build and run
@@ -83,10 +83,22 @@ jobs:
           cmake --build build/rel --config Release --target tfc
           echo "TFC=build/rel/compiler/Release/tfc.exe" >> $env:GITHUB_ENV
 
+      # The designer, built by the tfc just made, for the same platform:
+      # Apple clang on macOS, zig for the static Linux one and for Windows.
+      - name: Build tfdesign
+        shell: bash
+        env:
+          DESIGNER_CC: ${{ matrix.platform == 'linux-x86_64' && 'python -m ziglang cc -target x86_64-linux-musl' || matrix.platform == 'windows-x64' && 'python -m ziglang cc -target x86_64-windows-gnu' || 'cc' }}
+        run: |
+          exe=tfdesign
+          if [ "${{ matrix.platform }}" = windows-x64 ]; then exe=tfdesign.exe; fi
+          "$TFC" --release --cc "$DESIGNER_CC" -o "$PWD/build/$exe" designer/designer.vbp
+          echo "DESIGNER=build/$exe" >> "$GITHUB_ENV"
+
       - name: Pack
         shell: bash
         run: |
-          python tools/package.py --tfc "$TFC" --platform ${{ matrix.platform }} --out dist
+          python tools/package.py --tfc "$TFC" --designer "$DESIGNER" --platform ${{ matrix.platform }} --out dist
           ls -l dist
 
       # The unpacked release builds hello.bas with the machine's compiler:

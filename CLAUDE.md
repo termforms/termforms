@@ -676,7 +676,12 @@ authoritative for design rationale.
   from designer/ sources); tf_test.py now gives run tests `$TFC` (the
   tfc under test) and checks a NAME.after folder of files left behind.
   Language notes learnt: `And` is Boolean only; `Main` cannot be both a
-  module and Sub Main; no line continuation used. Also open: step 7 of the
+  module and Sub Main; no line continuation used.
+  Releases ship tfdesign (Jim, 11 Nov 2026): release.yml builds it with
+  the just-built tfc for each platform (`--release`; zig for Linux musl
+  and Windows), package.py `--designer` puts it in bin/ and the sources
+  in designer/; smoke_test.py runs it headless from the unpacked
+  archive with no $TFC (so it must find the tfc beside it). Also open: step 7 of the
   environment doc (console Unicode) with 0.9.1 on the laptop; the Visual
   Studio question on the ThinkPad. The terminal matrix is done except
   item 5 (Visual Studio debugging zig builds), which can be answered on

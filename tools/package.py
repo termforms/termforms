@@ -4,6 +4,8 @@
 
     termforms-<version>-<platform>/
         bin/tfc[.exe]       the compiler
+        bin/tfdesign[.exe]  the form designer, built for this platform
+        designer/           its sources
         runtime/            its sources and headers (tfc compiles them with
                             every program, for whatever target)
         debug/              lldb and gdb printers
@@ -17,7 +19,8 @@
 as a .tar.gz (macOS, Linux) or .zip (Windows). Only files git tracks go
 in, so nothing built or left over in the tree is shipped.
 
-    package.py --tfc build/rel/compiler/tfc --platform macos-arm64 --out dist
+    package.py --tfc build/rel/compiler/tfc --designer build/tfdesign \
+               --platform macos-arm64 --out dist
 """
 
 import argparse
@@ -32,7 +35,7 @@ import vsix
 
 ROOT = Path(__file__).resolve().parents[1]
 PLATFORMS = ("macos-arm64", "linux-x86_64", "windows-x64")
-TRACKED = ("runtime", "debug", "editors/vscode", "examples")
+TRACKED = ("runtime", "debug", "editors/vscode", "examples", "designer")
 DOCS = ("GUIDE.md", "LANGUAGE.md", "REFERENCE.md", "LICENSING.md")
 
 
@@ -54,6 +57,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tfc", required=True, type=Path)
+    parser.add_argument("--designer", required=True, type=Path)
     parser.add_argument("--platform", required=True, choices=PLATFORMS)
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args()
@@ -65,9 +69,10 @@ def main() -> int:
     (stage / "bin").mkdir(parents=True)
 
     windows = args.platform.startswith("windows")
-    tfc = stage / "bin" / ("tfc.exe" if windows else "tfc")
-    shutil.copy2(args.tfc, tfc)
-    tfc.chmod(tfc.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    for built, called in ((args.tfc, "tfc"), (args.designer, "tfdesign")):
+        program = stage / "bin" / (called + ".exe" if windows else called)
+        shutil.copy2(built, program)
+        program.chmod(program.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     for folder in TRACKED:
         for relative in tracked(folder):

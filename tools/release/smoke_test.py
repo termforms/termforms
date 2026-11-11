@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 """Checks a packed release as a user would get it: unpacks the archive in
 a fresh folder, then with its own bin/tfc (and the runtime beside it)
-builds examples/hello.bas and runs it headless. The C compiler is tfc's
-usual choice, or $TFC_CC.
+builds examples/hello.bas and runs it headless, and runs bin/tfdesign
+headless on it (finding the tfc beside it for its catalog). The C
+compiler is tfc's usual choice, or $TFC_CC.
 
     smoke_test.py dist/termforms-0.9.0-linux-x86_64.tar.gz
 """
@@ -45,6 +46,21 @@ def main() -> int:
         screen = run.stdout.decode("utf-8", errors="replace")
         if run.returncode != 0 or "Hello, Jim" not in screen:
             print("FAIL: hello did not greet\n" + screen + run.stderr.decode("utf-8", "replace"))
+            return 1
+        # The designer, as a user starts it: no $TFC, so it must find the
+        # tfc beside it; a key script that ends at once shows its screen.
+        designer = root / "bin" / ("tfdesign.exe" if windows else "tfdesign")
+        if not windows:
+            designer.chmod(0o755)
+        env = {k: v for k, v in os.environ.items() if k != "TFC"}
+        env.update(TERMFORMS_HEADLESS="", TERMFORMS_HEADLESS_SIZE="100x30")
+        run = subprocess.run([str(designer), "hello.bas"], cwd=examples, env=env,
+                             capture_output=True)
+        screen = run.stdout.decode("utf-8", errors="replace")
+        if run.returncode != 0 or "TermForms Designer: hello.bas" not in screen or \
+                "Greet" not in screen:
+            print("FAIL: tfdesign did not show hello's form\n" + screen +
+                  run.stderr.decode("utf-8", "replace"))
             return 1
         # The VS Code extension as a .vsix, its manifest naming this version.
         packed = list((root / "editors").glob("termforms-basic-*.vsix"))

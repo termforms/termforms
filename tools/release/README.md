@@ -45,6 +45,22 @@ Tab moves between the controls, Enter presses the button, Ctrl+F4 closes
 the form. `examples/README.md` lists the rest; `examples/demo` shows every
 control, the menus, dialogs and the mouse.
 
+## Designing forms
+
+`bin/tfdesign` is a visual form designer (itself a TermForms program):
+
+```sh
+tfdesign hello.bas
+```
+
+Lay the form out with the mouse and keys, set its properties, and
+double-click a control to write its event handler into the `.bas`. It
+saves the form block to `hello.frm` beside the `.bas` (or in place, for a
+block already in the `.bas`), which tfc reads as the module's form.
+`designer/README.md` has its keys; it needs a terminal of at least
+90 x 24. On macOS, clear the quarantine from `bin/tfdesign` as from
+`bin/tfc` (step 2 above).
+
 ## A program for a Linux server
 
 zig builds for other machines. From a Mac or Windows:
